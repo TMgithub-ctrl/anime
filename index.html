@@ -118,6 +118,9 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 @media (hover:none){.slw{max-height:150px;opacity:1}}
 .tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
 .tools .mv{color:var(--text)}
+.strm{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:.8rem;font-weight:700;padding:3px 12px;border-radius:999px;background:var(--sc);color:var(--sf);text-decoration:none;white-space:nowrap;line-height:1.4}
+.strm:hover{filter:brightness(1.12)}
+.hero p .strm{font-size:.9rem;padding:5px 14px}
 .tools button{background:none;border:0;color:var(--muted);font:inherit;font-size:.8rem;cursor:pointer;padding:2px 0}
 .tools button:hover{color:var(--text)}
 .tools .del:hover,.tools .del[data-arm]{color:var(--danger)}
@@ -340,7 +343,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-31 00:55 · Dunkelmodus-Erzwingung aus';
+const APP_VERSION = '2026-10-31 01:10 · Streaming-Button + AniList-Bewertung';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -821,8 +824,45 @@ function addItem(item, alts) {
 /* ---------- Darstellung ---------- */
 const poster = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy"${/library_600x900/.test(a.i) ? ` onerror="this.onerror=null;this.src=this.src.replace('library_600x900','header')"` : ''}>` : esc((a.t || '?').charAt(0).toUpperCase());
 const slider = (a, v) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" aria-label="Deine Bewertung für ${esc(a.t)}">`;
-const subLine = (L, a) => !game() ? '' : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
-const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
+/* Streaming-Link + Bewertung (AniList), nur lokal gecacht, nicht synchronisiert */
+const META_KEY = 'anime-meta-v1'; let META = {};
+try { META = JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch (e) { META = {}; }
+const saveMeta = () => { try { localStorage.setItem(META_KEY, JSON.stringify(META)); } catch (e) {} };
+const aliId = aid => { const m = /^al(\d+)$/.exec(aid || ''); return m ? +m[1] : 0; };
+const STRM = { cr: ['Crunchyroll', '#f47521', '#1a0f00'], nf: ['Netflix', '#e50914', '#ffffff'], pv: ['Prime Video', '#00a8e1', '#001a24'] };
+function pickStream(links) {
+  const l = (links || []).filter(x => x && /^https:\/\//i.test(x.url || '') && (!x.type || x.type === 'STREAMING'));
+  const f = re => l.find(x => re.test(x.site || ''));
+  const c = f(/crunchyroll/i); if (c) return { k: 'cr', u: c.url };
+  const n = f(/netflix/i); if (n) return { k: 'nf', u: n.url };
+  const p = f(/amazon|prime/i); if (p) return { k: 'pv', u: p.url };
+  return null;
+}
+const strmLink = a => {
+  if (game()) return ''; const m = META[a.aid]; if (!m || !m.sl || !STRM[m.sl.k]) return '';
+  const [n, bg, fg] = STRM[m.sl.k];
+  return `<a class="strm" style="--sc:${bg};--sf:${fg}" href="${esc(m.sl.u)}" target="_blank" rel="noopener noreferrer">▶ ${n}</a>`;
+};
+const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub">★ ${fmt(m.sc / 10)} <small>AniList</small></p>` : ''; };
+let metaBusy = false; const metaTry = {};
+async function enrich() {
+  if (metaBusy || game()) return;
+  const need = live(cur()).map(x => x.aid).filter(a => aliId(a) && (!META[a] || now() - META[a].t > 14 * 864e5) && now() - (metaTry[a] || 0) > 600000);
+  if (!need.length) return;
+  metaBusy = true; const ids = need.slice(0, 50); ids.forEach(a => { metaTry[a] = now(); });
+  try {
+    const r = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ query: 'query($ids:[Int]){Page(perPage:50){media(id_in:$ids,type:ANIME){id averageScore externalLinks{site url type}}}}', variables: { ids: ids.map(aliId) } }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const got = (await r.json()).data.Page.media, seen = {};
+    for (const m of got) { seen['al' + m.id] = 1; META['al' + m.id] = { t: now(), sc: m.averageScore || 0, sl: pickStream(m.externalLinks) }; }
+    ids.forEach(a => { if (!seen[a]) META[a] = { t: now(), sc: 0, sl: null }; });
+    saveMeta(); metaBusy = false; safeRender();
+  } catch (e) { metaBusy = false; }
+}
+const queueEnrich = () => { setTimeout(enrich, 50); };
+const subLine = (L, a) => !game() ? animeSub(a) : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
+const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button>${strmLink(a)}<button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
   const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
   return o.length ? `<div class="oth">${o.map(([n, v]) => `<span${v === 10 && gold10(L, aid) ? ' class="gold"' : ''}>${esc(n)} <b>${fmtG(v, gold10(L, aid))}</b></span>`).join('')}</div>` : '';
@@ -938,7 +978,7 @@ function render() {
   if (screen) { setStatus(); renderScreen(); return; }
   for (const i of ['cats', 'tabs', 'bar']) $(i).hidden = false;
   if (detail && (!L.items[detail] || L.items[detail].d)) detail = null;
-  renderTabs(); renderCats(); renderBar(); setStatus();
+  renderTabs(); renderCats(); renderBar(); setStatus(); queueEnrich();
   $('searchbox').hidden = db.cat !== 'list' || !!detail;
   if (detail) renderDetail(L, detail);
   else if (db.cat === 'watch') renderWatching(L);
@@ -1032,7 +1072,7 @@ function renderDone(L) {
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
     ${r.c != null ? ringC(r.c, 'sm', r.sc) : ''}
-    <div class="wact"><button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
+    <div class="wact">${strmLink(r)}<button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
   let h = P.length > 1 ? `<div class="ctl"><span class="lab">Anzeigen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div></div><p class="note">Die Reihenfolge richtet sich nach dem Durchschnitt der Gesamtbewertungen der Gewählten.</p>` : '';
@@ -1070,7 +1110,7 @@ function renderDetail(L, aid) {
     <div class="poster">${poster(a)}</div>
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
-      <h2>${esc(x.t)}</h2>
+      <h2>${esc(x.t)}</h2>${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
       <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Liste')}${stBtn('w', 'Am Schauen')}${stBtn('d', 'Geguckt')}</div>
       <div class="step"><span>Folge</span><button data-act="ep-" aria-label="Eine Folge zurück">−</button><input type="number" id="epIn" min="0" ${total ? `max="${total}"` : ''} value="${ep}" aria-label="Aktuelle Folge"><button data-act="ep+" aria-label="Nächste Folge">+</button><span>von</span><input type="number" id="nTot" min="1" value="${total || ''}" placeholder="?" aria-label="Folgen insgesamt"></div>
       ${total ? `<div class="pg"><div class="pbar"><i style="width:${pct}%"></i></div><span>${pct} %</span></div>` : ''}
