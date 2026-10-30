@@ -183,11 +183,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 @media (max-width:620px){.hero{flex-direction:column;align-items:flex-start}.hero .poster{flex-basis:auto;width:150px}}
 [hidden]{display:none!important}
 header{padding-top:34px}
-.sbtn{position:fixed;left:12px;top:12px;z-index:40;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(24,28,58,.85);backdrop-filter:blur(8px);cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
+.sbtn{position:fixed;left:max(12px,env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));z-index:40;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(24,28,58,.85);backdrop-filter:blur(8px);cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
 .sbtn span{display:block;width:20px;height:2px;border-radius:2px;background:var(--text)}
 .sbtn:hover{border-color:var(--accent)}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
-.side{position:fixed;left:0;top:0;bottom:0;width:250px;max-width:82vw;transform:translateX(-102%);transition:transform .22s ease;background:var(--panel);border-right:1px solid var(--line);z-index:30;padding:70px 14px 20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.side{position:fixed;left:0;top:0;bottom:0;width:250px;max-width:82vw;transform:translateX(-102%);transition:transform .22s ease;background:var(--panel);border-right:1px solid var(--line);z-index:30;padding:calc(70px + env(safe-area-inset-top)) 14px 20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
 .side.open{transform:none}
 .side h2{margin:0 0 6px;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .side button{font:inherit;font-size:1rem;font-weight:600;text-align:left;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -231,7 +231,7 @@ a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
 .achk{display:flex;gap:8px;align-items:center;color:var(--text);padding:4px 0}.achk input{width:auto;margin:0}
 .amsg{min-height:1.4em;font-size:.88rem;color:var(--accent);margin:8px 0}.amsg.bad{color:#ff8a8a}
 @media (max-width:620px){
-  body{padding:calc(20px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) calc(70px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+  body{padding:calc(62px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) calc(70px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
   input,textarea,select{font-size:16px!important}
   .cats button{padding:12px 6px;font-size:.92rem}.cats button small{display:block;margin:0}
   .bar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-right:-14px;padding-right:14px}
@@ -320,7 +320,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-30 23:05 · Steam-Bereich + Bereichs-Icons';
+const APP_VERSION = '2026-10-30 23:20 · Menü-Button unter Statusleiste';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
