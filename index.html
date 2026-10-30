@@ -311,7 +311,10 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' ? 'osu' : 'anime';
-db.reg = typeof db.reg === 'string' ? db.reg : '';
+const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
+db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
+if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 db.acct = db.acct && db.acct.name ? db.acct : null;
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
 const typeOf = L => L.type === 'osu' ? 'osu' : 'anime';
