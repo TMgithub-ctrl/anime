@@ -196,6 +196,13 @@ header{padding-top:34px}
 .side button.on small{color:#2a1c00}
 .side p{margin:10px 2px 0;color:var(--muted);font-size:.8rem;line-height:1.45}
 .ver{margin:40px 0 0;color:var(--muted);font-size:.72rem;opacity:.7}
+.mico{display:inline-flex;vertical-align:-4px;margin-right:10px;color:var(--accent)}
+.mico svg{width:30px;height:30px}
+.side .sl{display:flex;align-items:center;gap:10px}
+.side button.on .sl svg{color:inherit}
+.pbadge{position:absolute;top:58px;right:14px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#7be0a4;color:#0c2417;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.pl{display:flex;align-items:center;gap:5px;margin:0 0 4px;font-size:.78rem;color:#7be0a4;line-height:1.3}
+.pl svg{flex:0 0 auto}
 .sub{margin:2px 0 6px;color:var(--muted);font-size:.8rem;line-height:1.4}
 a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
 .acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -284,7 +291,7 @@ const hue = s => s ? Math.round((s - 1) / 9 * 130 + 5) : 0;
 const safeId = v => String(v).replace(/[^\w.~+@:-]/g, '_');
 
 /* ---------- Daten ---------- */
-function newList(name, type) { return { lid: uid(), name, key: null, nts: now(), items: {}, scores: {}, alts: {}, last: 0, ...(type === 'osu' ? { type: 'osu' } : {}) }; }
+function newList(name, type) { return { lid: uid(), name, key: null, nts: now(), items: {}, scores: {}, alts: {}, last: 0, ...(type === 'osu' || type === 'steam' ? { type } : {}) }; }
 function fromOld(name, arr, me) {
   const L = newList(name);
   for (const a of arr) {
@@ -312,22 +319,35 @@ function load() {
 let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
-db.mode = db.mode === 'osu' ? 'osu' : 'anime';
-const APP_VERSION = '2026-10-30 22:10 · Konten-Code eingebaut';
+db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
+const APP_VERSION = '2026-10-30 23:05 · Steam-Bereich + Bereichs-Icons';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 db.acct = db.acct && db.acct.name ? db.acct : null;
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
-const typeOf = L => L.type === 'osu' ? 'osu' : 'anime';
+const typeOf = L => L.type === 'osu' || L.type === 'steam' ? L.type : 'anime';
 const osu = () => db.mode === 'osu';
-const T = (a, o) => osu() ? o : a;
+const steam = () => db.mode === 'steam';
+const game = () => db.mode !== 'anime';
+const T = (a, o, st) => steam() ? (st === undefined ? o : st) : osu() ? o : a;
+const ico = d => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const MODES = {
+  anime: { name: 'Anime', side: 'Anime', h1: 'Meine Anime-Listen', ph: 'Anime suchen, z. B. Frieren', lab: 'Anime suchen', one: 'Anime', many: 'Animes', list: 'Meine Liste',
+    icon: ico('<rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M10 9l5 2-5 2z" fill="currentColor"/><path d="M8 21h8M12 17v4"/>') },
+  osu: { name: 'osu!', side: 'osu! Maps', h1: 'Meine osu!-Maps', ph: 'Map suchen oder osu!-Link einfügen', lab: 'Map suchen', one: 'Map', many: 'Maps', list: 'Meine Maps',
+    icon: ico('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>') },
+  steam: { name: 'Steam', side: 'Steam Spiele', h1: 'Meine Steam-Spiele', ph: 'Spiel suchen oder Steam-Link einfügen', lab: 'Spiel suchen', one: 'Spiel', many: 'Spiele', list: 'Meine Spiele',
+    icon: ico('<rect x="2.5" y="7" width="19" height="11" rx="5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".9" fill="currentColor"/><circle cx="18" cy="13.5" r=".9" fill="currentColor"/>') },
+};
+const MD = () => MODES[db.mode];
+const theGame = () => steam() ? 'das Spiel' : 'die Map';
 const modeLists = () => db.lists.filter(l => typeOf(l) === db.mode);
 const cur = () => {
   const ml = modeLists();
   let L = ml.find(l => l.lid === db.active) || ml[0];
-  if (!L) { L = newList(osu() ? 'Meine Maps' : 'Meine Liste', db.mode); db.lists.push(L); }
+  if (!L) { L = newList(MD().list, db.mode); db.lists.push(L); }
   db.active = L.lid; return L;
 };
 const live = L => Object.entries(L.items).filter(([, x]) => !x.d).map(([aid, x]) => ({ aid, ...x }));
@@ -337,7 +357,27 @@ const pname = (L, pid) => pid === db.me.id ? 'Du' : ((L.scores[pid] && L.scores[
 const others = L => Object.keys(L.scores).filter(p => p !== db.me.id && Object.values(L.scores[p].s).some(v => v[0] > 0));
 const parts = L => [db.me.id, ...others(L)];
 const stOf = x => x.st === 'w' || x.st === 'd' ? x.st : 't';
-const liveIn = (L, st) => live(L).filter(x => stOf(x) === st);
+function playedOf(L, pid, aid) {
+  const e = L.scores[pid]; if (!e) return false;
+  const v = e.s['p:' + aid]; if (v) return v[0] > 0;
+  const r = e.s['r:' + aid]; return !!(r && r[0] > 0);
+}
+const catOf = (L, x) => game() ? (playedOf(L, db.me.id, x.aid) ? 'd' : 't') : stOf(x);
+const liveIn = (L, st) => live(L).filter(x => catOf(L, x) === st);
+const playersOf = (L, aid) => Object.keys(L.scores).filter(p => p !== db.me.id && !(L.scores[p].d && !nRated(L.scores[p])) && playedOf(L, p, aid));
+const PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const playedHtml = (L, a) => {
+  if (!game()) return '';
+  const ps = playersOf(L, a.aid); if (!ps.length) return '';
+  const n = ps.map(p => esc(pname(L, p))).join(', ');
+  return `<p class="pl" title="${n}">${PLAY_SVG} ${n} ${ps.length === 1 ? 'hat' : 'haben'} ${theGame()} schon gespielt</p>`;
+};
+const playedBadge = (L, a) => {
+  if (!game()) return '';
+  const ps = playersOf(L, a.aid); if (!ps.length) return '';
+  const n = ps.map(p => pname(L, p)).join(', ');
+  return `<span class="pbadge" title="${esc(n)} ${ps.length === 1 ? 'hat' : 'haben'} ${theGame()} gespielt" aria-label="${esc(n)} ${ps.length === 1 ? 'hat' : 'haben'} ${theGame()} gespielt">${PLAY_SVG}</span>`;
+};
 function epStats(L, pid, aid) {
   const e = L.scores[pid]; if (!e) return null;
   const pre = `e:${aid}#`; let n = 0, sum = 0;
@@ -360,7 +400,7 @@ const admOk = async (L, pw) => !!pw && ((await okPw({ s: ADM.s, h: ADM.h }, pw))
 const okPw = async (rec, pw) => !!rec && !!pw && (await pwHash(pw, rec.s)) === rec.h;
 
 /* ---------- Personen: entfernen und Identität wählen ---------- */
-const nRated = e => Object.values(e.s).filter(v => v[0] > 0).length;
+const nRated = e => Object.entries(e.s).filter(([k, v]) => v[0] > 0 && !k.startsWith('p:')).length;
 const people = L => Object.keys(L.scores).filter(p => p !== db.me.id && (!L.scores[p].d || nRated(L.scores[p]) > 0));
 function removePerson(L, pid) {
   const e = L.scores[pid]; if (!e || pid === db.me.id) return;
@@ -563,7 +603,7 @@ function restoreBackup(b) {
       L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm; if (M.type) L.type = M.type;
       L.alts = { ...(B.alts || {}), ...(L.alts || {}) }; L.key = L.key || B.key || null; merged++;
     } else {
-      db.lists.push({ lid: B.lid || uid(), ...(B.type === 'osu' ? { type: 'osu' } : {}), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
+      db.lists.push({ lid: B.lid || uid(), ...(B.type === 'osu' || B.type === 'steam' ? { type: B.type } : {}), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
       added++;
     }
   }
@@ -677,7 +717,29 @@ async function addOsuLink(q) {
   addItem({ id: 'os' + (sid || 'b' + bid), title, img: sid ? covers(sid) : '', mapper: info ? info.mapper : '', sid, bid, sr: info ? info.sr : 0 }, []);
   if (!rest && !info) hint('Map hinzugefügt. Den Namen konnte ich nicht laden: schreib ihn beim nächsten Mal hinter den Link.');
 }
+/* Steam: Store-Suche (Steam erlaubt keinen direkten Browser-Zugriff, darum zusätzlich Weiterleitungsdienste – Erreichbarkeit nicht garantiert) */
+const steamImg = id => `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(id)}/library_600x900.jpg`;
+async function steamGet(u) {
+  const errs = [];
+  for (const [n, f] of [['direkt', u], ['proxy1', 'https://corsproxy.io/?' + encodeURIComponent(u)], ['proxy2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)]]) {
+    try { return await jget(f, 7000); } catch (err) { errs.push(n + ': ' + err.message); }
+  }
+  throw new Error(errs.join(' | '));
+}
+async function searchSteam(q) {
+  const j = await steamGet(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=german&cc=de`);
+  return ((j && j.items) || []).slice(0, 8).map(x => ({ id: 'st' + x.id, title: x.name, img: steamImg(x.id), year: 'Steam', sid: String(x.id) }));
+}
+const STEAM_RE = /store\.steampowered\.com\/app\/(\d+)(?:\/([^\/?#\s]*))?/i;
+async function addSteamLink(q) {
+  const m = q.match(STEAM_RE); if (!m) return;
+  const id = m[1], rest = q.replace(/https?:\/\/\S+/i, '').trim();
+  let title = rest || (m[2] ? decodeURIComponent(m[2]).replace(/_/g, ' ') : '');
+  if (!title) { hint('Lade Spiel …'); try { const j = await steamGet(`https://store.steampowered.com/api/appdetails?appids=${id}&l=german`); title = j && j[id] && j[id].data && j[id].data.name || ''; } catch (err) {} }
+  addItem({ id: 'st' + id, title: title || 'Steam-Spiel ' + id, img: steamImg(id), sid: id }, []);
+}
 async function search(q) {
+  if (steam()) return searchSteam(q);
   if (osu()) return searchOsu(q);
   const errs = [];
   try { return await searchAniList(q); } catch (e) { errs.push('AniList: ' + e.message); }
@@ -694,6 +756,7 @@ $('q').addEventListener('input', e => {
   clearTimeout(timer);
   const q = e.target.value.trim();
   if (q.length < 2) { results = []; showSug(); hint(''); return; }
+  if (steam() && STEAM_RE.test(q)) { results = []; showSug(); hint('Enter fügt das Spiel hinzu. Den Namen kannst du hinter den Link schreiben.'); return; }
   if (osu() && OSU_RE.test(q)) { results = []; showSug(); hint('Enter fügt die Map hinzu. Den Namen kannst du hinter den Link schreiben.'); return; }
   timer = setTimeout(async () => {
     const my = ++seq;
@@ -702,7 +765,7 @@ $('q').addEventListener('input', e => {
       const res = await search(q);
       if (my !== seq) return;
       results = res; showSug();
-      hint(res.length ? 'Treffer anklicken oder Enter für den ersten.' : T('Nichts gefunden – Enter fügt den Namen ohne Bild hinzu.', 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu. Oder füge einen osu!-Link ein.'));
+      hint(res.length ? 'Treffer anklicken oder Enter für den ersten.' : T('Nichts gefunden – Enter fügt den Namen ohne Bild hinzu.', 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu. Oder füge einen osu!-Link ein.', 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu. Oder füge einen Steam-Link ein.'));
     } catch (err) {
       if (my !== seq) return;
       results = []; showSug();
@@ -714,6 +777,7 @@ $('q').addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
     const q = e.target.value.trim();
+    if (steam() && STEAM_RE.test(q)) { addSteamLink(q); return; }
     if (osu() && OSU_RE.test(q)) { addOsuLink(q); return; }
     if (q) addItem(results[0] || { id: 'm' + now(), title: q, img: '' }, results);
   }
@@ -724,7 +788,7 @@ $('sug').addEventListener('click', e => { const b = e.target.closest('button'); 
 function addItem(item, alts) {
   const L = cur(), aid = safeId(item.id);
   if (live(L).some(x => x.aid === aid || norm(x.t) === norm(item.title))) { hint('„' + item.title + '“ ist schon in der Liste.'); return; }
-  L.items[aid] = { t: item.title, i: item.img || '', ts: now(), ...(item.episodes ? { n: item.episodes } : {}), ...xf(item), ...(osu() ? { by: db.me.id } : {}) };
+  L.items[aid] = { t: item.title, i: item.img || '', ts: now(), ...(item.episodes ? { n: item.episodes } : {}), ...xf(item), ...(game() ? { by: db.me.id } : {}) };
   L.alts[aid] = alts.filter(a => a.id !== item.id).map(a => ({ t: a.title, i: a.img }));
   touch(L);
   $('q').value = ''; results = []; showSug(); hint('„' + item.title + '“ hinzugefügt.');
@@ -732,10 +796,10 @@ function addItem(item, alts) {
 }
 
 /* ---------- Darstellung ---------- */
-const poster = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : esc((a.t || '?').charAt(0).toUpperCase());
+const poster = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy"${/library_600x900/.test(a.i) ? ` onerror="this.onerror=null;this.src=this.src.replace('library_600x900','header')"` : ''}>` : esc((a.t || '?').charAt(0).toUpperCase());
 const slider = (a, v) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" aria-label="Deine Bewertung für ${esc(a.t)}">`;
-const subLine = (L, a) => !osu() ? '' : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
-const tools = (L, a) => osu() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
+const subLine = (L, a) => !game() ? '' : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
+const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
   const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
   return o.length ? `<div class="oth">${o.map(([n, v]) => `<span>${esc(n)} <b>${v}</b></span>`).join('')}</div>` : '';
@@ -745,8 +809,8 @@ function card(L, a, rank) {
   return `<article class="card" data-aid="${esc(a.aid)}" style="--h:${hue(a.s)}">
     <div class="poster">${poster(a)}</div>
     ${rank ? `<span class="rank r${rank}">#${rank}</span>` : ''}
-    <output class="badge ${a.s ? '' : 'none'}">${a.s || '–'}</output>
-    <div class="info"><p class="title">${esc(a.t)}</p>${subLine(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
+    <output class="badge ${a.s ? '' : 'none'}">${a.s || '–'}</output>${playedBadge(L, a)}
+    <div class="info"><p class="title">${esc(a.t)}</p>${subLine(L, a)}${playedHtml(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
   </article>`;
 }
 function hero(L, a) {
@@ -754,7 +818,7 @@ function hero(L, a) {
     <div class="poster">${poster(a)}</div>
     <div class="txt">
       <span class="flag">${T('Als Nächstes gucken', 'Als Nächstes spielen')}</span>
-      <h2>${esc(a.t)}</h2>${subLine(L, a)}
+      <h2>${esc(a.t)}</h2>${subLine(L, a)}${playedHtml(L, a)}
       ${othersHtml(L, a.aid).replace('class="oth"', 'class="oth" style="font-size:.9rem;margin-bottom:12px"')}
       <div class="srow"><div class="ring"><output>${a.s}</output></div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
     </div>
@@ -768,10 +832,10 @@ function renderMine(L) {
   const avg = rated.length ? fmt(rated.reduce((s, a) => s + a.s, 0) / rated.length) : null;
   const oth = others(L).map(p => pname(L, p));
   $('stats').textContent = it.length
-    ? `${it.length} ${osu() ? (it.length === 1 ? 'Map' : 'Maps') : (it.length === 1 ? 'Anime' : 'Animes')} · ${rated.length} von dir bewertet` + (avg ? ` · Ø ${avg}` : '') + (oth.length ? ` · mit ${oth.join(', ')}` : '')
-    : T('Deine Watchlist, sortiert nach Lust aufs Gucken.', 'Maps zum Bewerten und Vorschlagen, sortiert nach deiner Bewertung.');
+    ? `${it.length} ${it.length === 1 ? MD().one : MD().many} · ${rated.length} von dir bewertet` + (avg ? ` · Ø ${avg}` : '') + (oth.length ? ` · mit ${oth.join(', ')}` : '')
+    : T('Deine Watchlist, sortiert nach Lust aufs Gucken.', 'Maps zum Bewerten und Vorschlagen, sortiert nach deiner Bewertung.', 'Spiele zum Bewerten und Vorschlagen, sortiert nach deiner Bewertung.');
   let h = '';
-  if (!it.length) h = '<div class="empty"><b>Diese Liste ist noch leer</b>' + T('Such oben nach einem Anime, importiere eine Liste oder spiele unter „Sicherung“ deine alten Daten ein.', 'Such oben nach einer Map oder füge einen osu!-Link ein. Dein Kollege sieht sie dann als Vorschlag von dir und kann sie bewerten.') + '</div>';
+  if (!it.length) h = '<div class="empty"><b>Diese Liste ist noch leer</b>' + T('Such oben nach einem Anime, importiere eine Liste oder spiele unter „Sicherung“ deine alten Daten ein.', 'Such oben nach einer Map oder füge einen osu!-Link ein. Dein Kollege sieht sie dann als Vorschlag von dir und kann sie bewerten.', 'Such oben nach einem Spiel oder füge einen Steam-Link ein. Dein Kollege sieht es dann als Vorschlag von dir und kann es bewerten.') + '</div>';
   if (rated.length) h += hero(L, rated[0]);
   if (rated.length > 1) h += `<div class="grid">${rated.slice(1).map((a, i) => card(L, a, i + 2)).join('')}</div>`;
   if (open.length) h += `<h3>Noch nicht von dir bewertet</h3><div class="grid">${open.map(a => card(L, a, 0)).join('')}</div>`;
@@ -798,7 +862,7 @@ function renderCompare(L) {
   const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${r.i ? `<img src="${esc(r.i)}" alt="" loading="lazy">` : ''}</div>
-    <div class="mid"><div class="nm">${esc(r.t)}</div>
+    <div class="mid"><div class="nm">${esc(r.t)}</div>${playedHtml(L, r)}
       <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}</div>
       ${sel.includes(db.me.id) ? `<input type="range" min="1" max="10" step="1" value="${r.mine || 5}" title="Deine Bewertung ändern" aria-label="Deine Bewertung für ${esc(r.t)}">` : ''}
     </div>
@@ -838,9 +902,10 @@ let detail = null, detailAll = false;
 function render() {
   const L = cur();
   renderAcc(); renderSide(); $('ver').textContent = 'Version ' + APP_VERSION;
-  if (osu() && db.cat === 'watch') db.cat = 'list';
-  $('h1').textContent = T('Meine Anime-Listen', 'Meine osu!-Maps'); document.title = $('h1').textContent;
-  $('q').placeholder = T('Anime suchen, z. B. Frieren', 'Map suchen oder osu!-Link einfügen'); $('q').setAttribute('aria-label', T('Anime suchen', 'Map suchen'));
+  if (game() && db.cat === 'watch') db.cat = 'list';
+  $('h1').innerHTML = `<span class="mico" aria-hidden="true">${MD().icon}</span>` + esc(MD().h1); document.title = MD().h1;
+  document.documentElement.dataset.mode = db.mode; $('sbtn').title = 'Bereich: ' + MD().name;
+  $('q').placeholder = MD().ph; $('q').setAttribute('aria-label', MD().lab);
   if (screen) { setStatus(); renderScreen(); return; }
   for (const i of ['cats', 'tabs', 'bar']) $(i).hidden = false;
   if (detail && (!L.items[detail] || L.items[detail].d)) detail = null;
@@ -861,19 +926,19 @@ document.addEventListener('pointerdown', e => { if (e.target.type === 'range') d
 document.addEventListener('pointerup', () => { dragging = false; });
 
 function renderMapDetail(L, aid) {
-  const x = L.items[aid], st = stOf(x) === 'd' ? 'd' : 't', P = parts(L), me = db.me.id, a = { aid, ...x };
+  const me = db.me.id, x = L.items[aid], st = playedOf(L, me, aid) ? 'd' : 't', P = parts(L), a = { aid, ...x };
   const key = st === 'd' ? 'r:' + aid : aid, my = scoreOf(L, me, key);
-  const link = x.bid ? `https://osu.ppy.sh/b/${encodeURIComponent(x.bid)}` : x.sid ? `https://osu.ppy.sh/beatmapsets/${encodeURIComponent(x.sid)}` : '';
+  const link = steam() ? (x.sid ? `https://store.steampowered.com/app/${encodeURIComponent(x.sid)}` : '') : x.bid ? `https://osu.ppy.sh/b/${encodeURIComponent(x.bid)}` : x.sid ? `https://osu.ppy.sh/beatmapsets/${encodeURIComponent(x.sid)}` : '';
   const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
   $('stats').textContent = x.t;
   $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
   <section class="hero" data-aid="${esc(aid)}" style="--h:${hue(my)};--art:url('${esc(x.i || '')}')">
     <div class="poster">${poster(a)}</div>
     <div class="txt">
-      <span class="flag">${st === 'd' ? 'Gespielt' : 'Vorschlag'}</span>
-      <h2>${esc(x.t)}</h2>${subLine(L, a)}
-      <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Vorschlag')}${stBtn('d', 'Gespielt')}</div>
-      ${link ? `<p><a class="lnk" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Auf osu! ansehen ↗</a></p>` : ''}
+      <span class="flag">${st === 'd' ? 'Von dir gespielt' : 'Vorschlag'}</span>
+      <h2>${esc(x.t)}</h2>${subLine(L, a)}${playedHtml(L, a)}
+      <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Noch nicht gespielt')}${stBtn('d', steam() ? 'Ich habe es gespielt' : 'Ich habe sie gespielt')}</div>
+      ${link ? `<p><a class="lnk" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${steam() ? 'Auf Steam ansehen' : 'Auf osu! ansehen'} ↗</a></p>` : ''}
       <div class="fin"><span class="lab">${st === 'd' ? 'Deine Gesamtbewertung' : 'Deine Bewertung'}</span><output class="eo ${my ? '' : 'none'}">${my || '–'}</output>${rng(my, st === 'd' ? 'r' : 's', 0, 'Deine Bewertung')}
         <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, key))).join('')}</div></div>
     </div>
@@ -892,8 +957,8 @@ function moveTo(L, aid, st) {
 function setEp(L, aid, v) { const x = L.items[aid]; if (!x) return; L.items[aid] = { ...x, ep: v, pts: now(), ts: now() }; touch(L); }
 function renderCats() {
   const L = cur(), c = { list: 0, watch: 0, done: 0 };
-  live(L).forEach(x => { const s = stOf(x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
-  $('cats').innerHTML = (osu() ? [['list', 'Vorschläge'], ['done', 'Gespielt']] : [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']]).map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
+  live(L).forEach(x => { const s = catOf(L, x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
+  $('cats').innerHTML = (game() ? [['list', 'Vorschläge'], ['done', 'Gespielt']] : [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']]).map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
 }
 const imgOf = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : '';
 const rng = (v, k, ek, label) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" data-k="${k}" ${ek ? `data-ek="${ek}"` : ''} aria-label="${esc(label)}">`;
@@ -938,7 +1003,7 @@ function renderDone(L) {
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
     ${r.c != null ? ringC(r.c, 'sm') : ''}
-    <div class="wact"><button data-act="detail">Details</button>${osu() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
+    <div class="wact"><button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
   let h = P.length > 1 ? `<div class="ctl"><span class="lab">Anzeigen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div></div><p class="note">Die Reihenfolge richtet sich nach dem Durchschnitt der Gesamtbewertungen der Gewählten.</p>` : '';
@@ -956,7 +1021,7 @@ function renderDone(L) {
 }
 
 function renderDetail(L, aid) {
-  if (osu()) return renderMapDetail(L, aid);
+  if (game()) return renderMapDetail(L, aid);
   const x = L.items[aid], st = stOf(x), P = parts(L), me = db.me.id, a = { aid, ...x };
   const total = x.n || 0, ep = x.ep || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
   const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
@@ -1007,7 +1072,7 @@ async function regCreate() {
   }
   throw new Error(errs.join(' | ') + (gsDep() ? '' : ' | Tipp: Richte unter „Online-Sync“ den eigenen Google-Speicher ein.'));
 }
-const listRec = l => ({ key: l.key, name: l.name, type: l.type === 'osu' ? 'osu' : 'anime', t: now() });
+const listRec = l => ({ key: l.key, name: l.name, type: typeOf(l), t: now() });
 async function acctCreate(name, pw, pid, lists) {
   name = String(name || '').trim().slice(0, 30);
   if (name.length < 2) throw new Error('Der Name braucht mindestens 2 Zeichen.');
@@ -1059,7 +1124,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const allPeople = L => [...new Set([db.me.id, ...Object.keys(L.scores).filter(p => !L.scores[p].d || nRated(L.scores[p]) > 0)])];
 const nameOf = (L, pid) => pid === db.me.id ? (db.me.name || 'Du') + ' (du)' : ((L.scores[pid] && L.scores[pid].n) || 'Person');
 const amsg = (t, bad) => { const m = $('aMsg'); if (m) { m.textContent = t; m.className = 'amsg' + (bad ? ' bad' : ''); } };
-const keyFor = (art, aid, k) => art === 'r' ? 'r:' + aid : art === 'e' ? `e:${aid}#${k}` : aid;
+const keyFor = (art, aid, k) => art === 'r' ? 'r:' + aid : art === 'p' ? 'p:' + aid : art === 'e' ? `e:${aid}#${k}` : aid;
 function setRating(L, pid, key, v) {
   const e = L.scores[pid] || (L.scores[pid] = { n: pid === db.me.id ? db.me.name : 'Person', s: {} });
   e.s[key] = [v, now()]; touch(L);
@@ -1146,7 +1211,7 @@ function adminHtml() {
   } else {
     const ps = allPeople(L), its = live(L).sort(byTitle);
     h += `<div class="asec">${pick}
-      <label>Art der Bewertung<select data-adm="art"><option value="w" ${adm.art === 'w' ? 'selected' : ''}>Wunsch-Score (am liebsten gucken)</option><option value="r" ${adm.art === 'r' ? 'selected' : ''}>Gesamtbewertung nach dem Schauen</option><option value="e" ${adm.art === 'e' ? 'selected' : ''}>Bewertung einer Folge</option></select></label>
+      <label>Art der Bewertung<select data-adm="art"><option value="w" ${adm.art === 'w' ? 'selected' : ''}>Wunsch-Score (am liebsten gucken)</option><option value="r" ${adm.art === 'r' ? 'selected' : ''}>Gesamtbewertung nach dem Schauen</option><option value="e" ${adm.art === 'e' ? 'selected' : ''}>Bewertung einer Folge</option>${typeOf(L) !== 'anime' ? `<option value="p" ${adm.art === 'p' ? 'selected' : ''}>Gespielt (1 = ja, leer = nein)</option>` : ''}</select></label>
       ${adm.art === 'e' ? `<label>Folge<input type="number" min="1" data-adm="ek" value="${adm.k}"></label>` : ''}
       <div class="tw"><table class="atab"><thead><tr><th>Anime</th><th>Status</th>${ps.map(pid => `<th>${esc(nameOf(L, pid))}</th>`).join('')}<th></th></tr></thead><tbody>` +
       its.map(x => `<tr><td><input class="ainp" data-adm="title" data-it="${esc(x.aid)}" value="${esc(x.t)}" aria-label="Titel"></td>
@@ -1210,7 +1275,7 @@ $('out').addEventListener('change', e => {
     if (d === 'pname') { const e2 = L.scores[t.dataset.pid], n = t.value.trim().slice(0, 30); if (e2 && n) { e2.n = n; e2.nt = now(); touch(L); amsg('Name gespeichert.'); } return; }
     if (d === 'title') { const x = L.items[t.dataset.it], n = t.value.trim(); if (x && n) { L.items[t.dataset.it] = { ...x, t: n, ts: now() }; touch(L); amsg('Titel gespeichert.'); } return; }
     if (d === 'stat') { moveTo(L, t.dataset.it, t.value); amsg('Status gespeichert.'); return; }
-    if (d === 'cell') { setRating(L, t.dataset.pid, keyFor(adm.art, t.dataset.it, adm.k), clamp(t.value)); t.value = clamp(t.value) || ''; amsg('Bewertung gespeichert.'); return; }
+    if (d === 'cell') { const v = adm.art === 'p' ? (clamp(t.value) ? 1 : 0) : clamp(t.value); setRating(L, t.dataset.pid, keyFor(adm.art, t.dataset.it, adm.k), v); t.value = v || ''; amsg('Gespeichert.'); return; }
     if (d === 'mine') { const l = listBy(t.dataset.lid); if (l) { setRating(l, db.me.id, keyFor(t.dataset.art, t.dataset.it, 0), clamp(t.value)); t.value = clamp(t.value) || ''; amsg('Gespeichert.'); } return; }
   } catch (err) { amsg(err.message, true); }
 });
@@ -1330,12 +1395,11 @@ $('out').addEventListener('click', async e => {
 });
 
 /* ---------- Seitenleiste: Anime / osu! ---------- */
-const countOf = m => db.lists.filter(l => (l.type === 'osu' ? 'osu' : 'anime') === m).reduce((n, l) => n + live(l).length, 0);
+const countOf = m => db.lists.filter(l => typeOf(l) === m).reduce((n, l) => n + live(l).length, 0);
 function renderSide() {
   $('side').innerHTML = `<h2>Bereiche</h2>
-    <button data-mode="anime" class="${db.mode === 'anime' ? 'on' : ''}">Anime<small>${countOf('anime')}</small></button>
-    <button data-mode="osu" class="${db.mode === 'osu' ? 'on' : ''}">osu! Maps<small>${countOf('osu')}</small></button>
-    <p>Jeder Bereich hat eigene Listen. Beide lassen sich online mit anderen abgleichen.</p>`;
+    ${Object.keys(MODES).map(m => `<button data-mode="${m}" class="${db.mode === m ? 'on' : ''}"${db.mode === m ? ' aria-current="true"' : ''}><span class="sl">${MODES[m].icon}${MODES[m].side}</span><small>${countOf(m)}</small></button>`).join('')}
+    <p>Jeder Bereich hat eigene Listen. Alle lassen sich online mit anderen abgleichen.</p>`;
 }
 const sideOpen = o => { $('side').classList.toggle('open', o); $('scrim').hidden = !o; $('sbtn').setAttribute('aria-expanded', String(o)); };
 $('sbtn').onclick = () => sideOpen(!$('side').classList.contains('open'));
@@ -1406,8 +1470,8 @@ $('out').addEventListener('click', e => {
   const act = b.dataset.act;
   if (act === 'watch' || act === 'done' || act === 'todo' || act === 'st') {
     const to = act === 'st' ? b.dataset.st : act === 'watch' ? 'w' : act === 'done' ? 'd' : 't';
-    moveTo(L, aid, to);
-    hint(`„${x.t}“ ist jetzt ${to === 'w' ? 'unter „Am Schauen“' : to === 'd' ? T('unter „Bewertungen“', 'unter „Gespielt“') : T('wieder in der Liste', 'wieder bei den Vorschlägen')}.`);
+    if (game()) setRating(L, db.me.id, 'p:' + aid, to === 'd' ? 1 : 0); else moveTo(L, aid, to);
+    hint(`„${x.t}“ ist jetzt ${to === 'w' ? 'unter „Am Schauen“' : to === 'd' ? T('unter „Bewertungen“', 'bei dir unter „Gespielt“') : T('wieder in der Liste', 'bei dir wieder bei den Vorschlägen')}.`);
     render(); return;
   }
   if (act === 'detail') { detail = aid; detailAll = false; render(); window.scrollTo(0, 0); return; }
@@ -1733,7 +1797,7 @@ async function runImport(entries) {
       await new Promise(ok => setTimeout(ok, 700));
     }
     if (live(L).some(x => x.aid === aid)) continue;
-    L.items[aid] = { t, i, ts: now(), ...(eps ? { n: eps } : {}), ...ex, ...(osu() ? { by: db.me.id } : {}) }; L.alts[aid] = alts;
+    L.items[aid] = { t, i, ts: now(), ...(eps ? { n: eps } : {}), ...ex, ...(game() ? { by: db.me.id } : {}) }; L.alts[aid] = alts;
     if (e.score) setScore(L, aid, e.score); else touch(L);
     added++;
     if (cur() === L) safeRender();
