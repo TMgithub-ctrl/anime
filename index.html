@@ -60,6 +60,16 @@ h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin:0;letter-spacing:-.02em
 .panel textarea{resize:vertical}
 .panel label{display:block;color:var(--muted);font-size:.85rem;margin:0 0 12px}
 .panel label input{margin-top:4px}
+.panel .chk{display:flex;gap:10px;align-items:flex-start;color:var(--muted);font-size:.82rem;margin:10px 0}
+.panel .chk input{width:auto;margin:3px 0 0}
+.panel h4{margin:20px 0 6px;font-size:.95rem;color:var(--text)}
+.panel input[type=password]{width:100%;font:inherit;font-size:.9rem;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:4px}
+.panel .prow .ppw{width:150px;margin:0;padding:6px 10px}
+.panel .prow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:8px}
+.panel .prow .pn{flex:1;min-width:120px;font-weight:600;color:var(--text)}
+.panel .prow .pn small{display:block;font-weight:400;color:var(--muted);font-size:.78rem}
+.panel .prow button{padding:5px 14px}
+.panel .dng:hover{border-color:#ff6b6b;color:#ff9a9a}
 .panel .row2{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .panel input[type=file]{color:var(--muted);font-size:.85rem;max-width:100%}
 .panel ol{margin:0 0 12px 18px;padding:0;color:var(--muted);font-size:.9rem}
@@ -273,6 +283,42 @@ function epStats(L, pid, aid) {
 }
 let view = 'mine', cmp = { mode: 'avg', sel: null }, panel = null;
 
+/* ---------- Passwörter (Hash im geteilten Speicher, Prüfung im Browser) ---------- */
+async function pwHash(pw, salt) {
+  if (!(window.crypto && crypto.subtle)) throw new Error('Dieser Browser kann hier keine Passwörter prüfen.');
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(salt), iterations: 120000, hash: 'SHA-256' }, key, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const newPw = async pw => { const s = uid() + uid(); return { s, h: await pwHash(pw, s), t: now() }; };
+const pwOn = e => !!(e && e.pw && e.pw.h);
+const okPw = async (rec, pw) => !!rec && !!pw && (await pwHash(pw, rec.s)) === rec.h;
+
+/* ---------- Personen: entfernen und Identität wählen ---------- */
+const nRated = e => Object.values(e.s).filter(v => v[0] > 0).length;
+const people = L => Object.keys(L.scores).filter(p => p !== db.me.id && (!L.scores[p].d || nRated(L.scores[p]) > 0));
+function removePerson(L, pid) {
+  const e = L.scores[pid]; if (!e || pid === db.me.id) return;
+  L.scores[pid] = { n: e.n || '', s: {}, d: now() };
+  touch(L);
+}
+function takeIdentity(pid, name, merge) {
+  const old = db.me.id; if (!pid || pid === old) return;
+  for (const L of db.lists) {
+    const e = L.scores[old]; if (!e) continue;
+    if (nRated(e) > 0 && !merge) continue;
+    const t = L.scores[pid];
+    if (!t) L.scores[pid] = { n: name || e.n || '', s: { ...e.s } };
+    else for (const [aid, v] of Object.entries(e.s)) if (!t.s[aid] || (t.s[aid][1] || 0) < (v[1] || 0)) t.s[aid] = v;
+    if (L.key) L.scores[old] = { n: e.n || '', s: {}, d: now() }; else delete L.scores[old];
+  }
+  db.me.id = pid; if (name) db.me.name = name;
+  for (const L of db.lists) { const e = L.scores[pid]; if (e && db.me.name) e.n = db.me.name; }
+  save();
+  db.lists.filter(l => l.key).forEach((l, k) => queueSync(l, 200 + k * 500));
+}
+
 function touch(L) { save(); queueSync(L); }
 function setScore(L, aid, v) {
   const e = L.scores[db.me.id] || (L.scores[db.me.id] = { n: db.me.name, s: {} });
@@ -284,11 +330,12 @@ function setScore(L, aid, v) {
 /* ---------- Abgleich: Zusammenführen ---------- */
 /*MERGE-START*/
 const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, x) => (a[x] = v[x], a), {}) : v);
-const pub = L => ({ v: 3, name: L.name, nts: L.nts, items: L.items, scores: L.scores });
+const pub = L => ({ v: 3, name: L.name, nts: L.nts, items: L.items, scores: L.scores, ...(L.adm ? { adm: L.adm } : {}) });
 function merge(L, R, meId, meName) {
   const out = { v: 3 };
   if ((R.nts || 0) > (L.nts || 0)) { out.name = R.name; out.nts = R.nts; } else { out.name = L.name; out.nts = L.nts; }
   const Ri = R.items || {}, Rs = R.scores || {};
+  { const x = L.adm, y = R.adm; const w = !x ? y : !y ? x : ((y.t || 0) > (x.t || 0) ? y : x); if (w) out.adm = w; }
   out.items = {};
   for (const aid of new Set([...Object.keys(L.items), ...Object.keys(Ri)])) {
     const a = L.items[aid], b = Ri[aid];
@@ -297,11 +344,16 @@ function merge(L, R, meId, meName) {
   out.scores = {};
   for (const pid of new Set([...Object.keys(L.scores), ...Object.keys(Rs)])) {
     const a = L.scores[pid] || { s: {} }, b = Rs[pid] || { s: {} }, s = {};
+    const dd = Math.max(a.d || 0, b.d || 0);
     for (const aid of new Set([...Object.keys(a.s), ...Object.keys(b.s)])) {
       const x = a.s[aid], y = b.s[aid];
-      s[aid] = !x ? y : !y ? x : ((y[1] || 0) >= (x[1] || 0) ? y : x);
+      const v = !x ? y : !y ? x : ((y[1] || 0) >= (x[1] || 0) ? y : x);
+      if (dd && (v[1] || 0) <= dd) continue;
+      s[aid] = v;
     }
     out.scores[pid] = { n: pid === meId ? (meName || a.n || b.n || '') : (b.n || a.n || ''), s };
+    if (dd) out.scores[pid].d = dd;
+    { const x = a.pw, y = b.pw; let w = !x ? y : !y ? x : ((y.t || 0) > (x.t || 0) ? y : x); if (w && dd && (w.t || 0) <= dd) w = null; if (w) out.scores[pid].pw = w; }
   }
   return out;
 }
@@ -436,7 +488,7 @@ function restoreBackup(b) {
     const L = db.lists.find(l => (B.key && l.key === B.key) || l.lid === B.lid);
     if (L) {
       const M = merge(L, B, newId, db.me.name);
-      L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores;
+      L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm;
       L.alts = { ...(B.alts || {}), ...(L.alts || {}) }; L.key = L.key || B.key || null; merged++;
     } else {
       db.lists.push({ lid: B.lid || uid(), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
@@ -465,8 +517,8 @@ async function syncList(L) {
   try {
     const R = await bGet(L.key);
     const M = merge(L, R, db.me.id, db.me.name);
-    const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores });
-    L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores;
+    const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores, ...(R.adm ? { adm: R.adm } : {}) });
+    L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm;
     if (differs) await bPut(L.key, M);
     st.err = null; L.last = now(); save();
   } catch (e) { st.err = e.message; }
@@ -654,7 +706,7 @@ function renderBar() {
   const L = cur();
   $('bar').innerHTML = `${db.cat === 'list' ? `<div class="seg"><button data-v="mine" class="${view === 'mine' ? 'on' : ''}">Meine Scores</button><button data-v="cmp" class="${view === 'cmp' ? 'on' : ''}">Vergleich</button></div>` : ''}
     <button data-a="share" class="${L.key ? '' : 'pri'}">${L.key ? 'Online-Sync' : 'Mit Kollegen synchronisieren'}</button>
-    <button data-a="imp">Importieren</button><button data-a="bak">Sicherung</button><button data-a="ren">Umbenennen</button><button data-a="del">Liste löschen</button>`;
+    <button data-a="ppl">Personen</button><button data-a="imp">Importieren</button><button data-a="bak">Sicherung</button><button data-a="ren">Umbenennen</button><button data-a="del">Liste löschen</button>`;
 }
 let detail = null, detailAll = false;
 function render() {
@@ -912,6 +964,34 @@ function renderPanel() {
       <p style="margin-top:18px">Sicherung einspielen: Code einfügen oder Datei wählen. Vorhandene Daten bleiben erhalten und werden zusammengeführt.</p>
       <textarea id="pBakIn" rows="3" placeholder="ANIMEBACKUP:…"></textarea>
       <div class="row2"><input type="file" id="pBakFile" accept=".json,.txt"><button class="go" data-pa="bakload">Einspielen</button></div>`;
+  } else if (panel === 'ppl') {
+    const ps = people(L), mine = L.scores[db.me.id], hasPw = pwOn(mine), adm = !!L.adm;
+    const rows = ps.map(pid => {
+      const e = L.scores[pid], n = nRated(e);
+      return `<div class="prow"><span class="pn">${esc(e.n || 'Person')}<small>${n} ${n === 1 ? 'Bewertung' : 'Bewertungen'}${pwOn(e) ? ' · mit Passwort' : ' · ohne Passwort'}</small></span>
+        ${pwOn(e) ? `<input type="password" class="ppw" data-pid="${esc(pid)}" placeholder="Passwort" autocomplete="off">` : ''}
+        <button data-pa="me" data-pid="${esc(pid)}">Das bin ich</button>
+        ${pwOn(e) ? `<button data-pa="rst" data-pid="${esc(pid)}" title="Admin: Passwort dieser Person löschen">Passwort zurücksetzen</button>` : ''}
+        <button class="dng" data-pa="rm" data-pid="${esc(pid)}">Entfernen</button></div>`;
+    }).join('');
+    h = `<p>Du bist auf diesem Gerät: <b>${esc(db.me.name || 'ohne Namen')}</b>. Die Auswahl bleibt gespeichert, du musst dich nicht neu anmelden.</p>
+      ${nameField}
+      <div class="row2" style="margin-top:0"><button class="go" data-pa="name">Namen speichern</button></div>
+      <h4>Mein Passwort</h4>
+      <p>${hasPw ? 'Dein Passwort schützt „Das bin ich“ für dich auf anderen Geräten.' : 'Du hast noch kein Passwort. Ohne Passwort kann sich jeder in dieser Liste als du eintragen.'}</p>
+      ${hasPw ? '<label>Aktuelles Passwort<input type="password" id="pPwOld" autocomplete="off"></label>' : ''}
+      <label>${hasPw ? 'Neues Passwort' : 'Passwort festlegen'} (mindestens 4 Zeichen)<input type="password" id="pPwNew" autocomplete="off"></label>
+      <div class="row2" style="margin-top:0"><button class="go" data-pa="pwset">${hasPw ? 'Passwort ändern' : 'Passwort festlegen'}</button></div>
+      <h4>Personen in „${esc(L.name)}“</h4>
+      <p><b>Das bin ich</b> übernimmt diese Person auf diesem Gerät (Passwort nötig, falls sie eines hat). Deine bisherigen Bewertungen werden ihr zugeschlagen.</p>
+      ${nRated(mine || { s: {} }) > 0 ? `<label class="chk"><input type="checkbox" id="pMerge"> Meine bisherigen ${nRated(mine)} Bewertungen als „${esc(db.me.name || 'Person')}“ in die gewählte Person übernehmen und „${esc(db.me.name || 'Person')}“ entfernen. Nur ankreuzen, wenn „${esc(db.me.name || 'Person')}“ nur dieses Gerät ist und kein anderes Gerät dieselbe Person benutzt.</label>` : ''}
+      ${rows || '<p>Noch keine anderen Personen in dieser Liste.</p>'}
+      <h4>Admin</h4>
+      <p>${adm ? 'Entfernen und Passwort zurücksetzen brauchen das Admin-Passwort.' : 'Lege ein Admin-Passwort fest. Erst dann kann jemand Personen entfernen.'}</p>
+      ${adm ? '<label>Admin-Passwort<input type="password" id="pAdm" autocomplete="off"></label>' : ''}
+      <label>${adm ? 'Neues Admin-Passwort (nur zum Ändern)' : 'Admin-Passwort festlegen'}<input type="password" id="pAdmNew" autocomplete="off"></label>
+      <div class="row2" style="margin-top:0"><button class="go" data-pa="admset">${adm ? 'Admin-Passwort ändern' : 'Admin-Passwort festlegen'}</button></div>
+      <p class="warn">Hinweis: Es gibt keinen Server. Die Passwörter werden in der App geprüft, in der Liste liegt nur ein verschlüsselter Prüfwert. Das hält Versehen und Neugierige ab, aber keinen, der den Programmcode ändert. Ein vergessenes Passwort lässt sich nicht zurücksetzen. Das Admin-Passwort solltest du dir aufschreiben.</p>`;
   } else if (panel === 'new') {
     h = `<label>Name der neuen Liste<input type="text" id="pName2" maxlength="40" placeholder="z. B. Winter-Season"></label>
       <div class="row2"><button class="go" data-pa="create">Liste anlegen</button><button data-pa="close">Abbrechen</button></div>`;
@@ -937,6 +1017,51 @@ $('panel').addEventListener('click', async e => {
   const L = cur(), a = b.dataset.pa;
   const takeName = () => { const n = ($('pName') || {}).value; if (n && n.trim()) { db.me.name = n.trim().slice(0, 30); const en = L.scores[db.me.id]; if (en) en.n = db.me.name; save(); } return db.me.name; };
   if (a === 'close') { panel = null; renderPanel(); return; }
+  if (a === 'name') {
+    const n = (($('pName') || {}).value || '').trim().slice(0, 30);
+    if (!n) { msg('Bitte einen Namen eingeben.', true); return; }
+    db.me.name = n;
+    for (const l of db.lists) { const e = l.scores[db.me.id]; if (e) e.n = n; }
+    save(); db.lists.filter(l => l.key).forEach((l, k) => queueSync(l, 200 + k * 500));
+    renderPanel(); render(); msg('Name gespeichert.'); return;
+  }
+  const val = id => (($(id) || {}).value || '');
+  const bad = t => { msg(t, true); };
+  try {
+    if (a === 'me') {
+      const pid = b.dataset.pid, e = L.scores[pid]; if (!e) return;
+      if (pwOn(e)) {
+        const f = [...document.querySelectorAll('#panel .ppw')].find(x => x.dataset.pid === pid);
+        if (!f || !f.value) return bad('Bitte das Passwort dieser Person eingeben.');
+        if (!(await okPw(e.pw, f.value))) return bad('Falsches Passwort.');
+      }
+      takeIdentity(pid, e.n || '', !!($('pMerge') && $('pMerge').checked));
+      panel = 'ppl'; renderPanel(); render(); msg(`Du bist jetzt „${db.me.name || 'Person'}“.`); return;
+    }
+    if (a === 'pwset') {
+      const nw = val('pPwNew'); if (nw.length < 4) return bad('Das Passwort braucht mindestens 4 Zeichen.');
+      const e = L.scores[db.me.id] || (L.scores[db.me.id] = { n: db.me.name, s: {} });
+      if (pwOn(e) && !(await okPw(e.pw, val('pPwOld')))) return bad('Das aktuelle Passwort stimmt nicht.');
+      e.pw = await newPw(nw); touch(L);
+      renderPanel(); msg('Passwort gespeichert.'); return;
+    }
+    if (a === 'admset') {
+      const nw = val('pAdmNew'); if (nw.length < 4) return bad('Das Admin-Passwort braucht mindestens 4 Zeichen.');
+      if (L.adm && !(await okPw(L.adm, val('pAdm')))) return bad('Das aktuelle Admin-Passwort stimmt nicht.');
+      L.adm = await newPw(nw); touch(L);
+      renderPanel(); msg('Admin-Passwort gespeichert. Gut aufschreiben.'); return;
+    }
+    if (a === 'rm' || a === 'rst') {
+      if (!L.adm) return bad('Lege zuerst unten ein Admin-Passwort fest.');
+      if (!(await okPw(L.adm, val('pAdm')))) return bad('Falsches Admin-Passwort.');
+      if (a === 'rm') {
+        if (!b.dataset.arm) { b.dataset.arm = 1; b.textContent = 'Wirklich entfernen?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = 'Entfernen'; } }, 3500); return; }
+        removePerson(L, b.dataset.pid); renderPanel(); render(); msg('Person entfernt.'); return;
+      }
+      const e = L.scores[b.dataset.pid]; if (!e) return;
+      e.pw = { t: now() }; touch(L); renderPanel(); msg('Passwort der Person zurückgesetzt.'); return;
+    }
+  } catch (err) { bad(err.message); return; }
   if (a === 'create') {
     const n = $('pName2').value.trim(); if (!n) { msg('Gib der Liste einen Namen.', true); return; }
     const nl = newList(n); db.lists.push(nl); db.active = nl.lid; panel = null; view = 'mine'; save(); renderPanel(); render(); return;
@@ -1036,11 +1161,11 @@ async function joinCode(key, nm) {
   try {
     const R = await bGet(key);
     const L = newList(R.name || 'Gemeinsame Liste');
-    L.key = key; L.items = R.items || {}; L.scores = R.scores || {}; L.nts = R.nts || 0; L.last = now();
+    L.key = key; L.items = R.items || {}; L.scores = R.scores || {}; L.nts = R.nts || 0; if (R.adm) L.adm = R.adm; L.last = now();
     L.scores[db.me.id] = L.scores[db.me.id] || { n: nm, s: {} }; L.scores[db.me.id].n = nm;
     db.lists.push(L); db.active = L.lid; view = 'mine'; panel = null; save(); renderPanel(); render();
     queueSync(L, 300);
-    hint(`Du bist der Liste „${L.name}“ beigetreten.`);
+    hint(`Du bist der Liste „${L.name}“ beigetreten. Falls du dort schon eingetragen bist: Personen → „Das bin ich“.`);
   } catch (err) { msg(err.message, true); }
 }
 
@@ -1117,6 +1242,11 @@ $('themes').onclick = e => {
 save();
 render();
 db.lists.filter(l => l.key).forEach((l, i) => setTimeout(() => syncList(l), 300 + i * 600));
+try {
+  const mq = matchMedia('(max-width:620px), (hover:none) and (pointer:coarse)');
+  const dev = () => document.documentElement.classList.toggle('phone', mq.matches);
+  dev(); (mq.addEventListener ? mq.addEventListener('change', dev) : mq.addListener(dev));
+} catch (e) {}
 </script>
 </body>
 </html>
