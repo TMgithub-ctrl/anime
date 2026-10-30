@@ -334,7 +334,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-30 23:55 · Gold-Effekt bei zweimal 10';
+const APP_VERSION = '2026-10-31 00:10 · Gold-Ring bei zweimal 10';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -865,7 +865,7 @@ const SPK = '<i class="sp a"></i><i class="sp b"></i><i class="sp c"></i><i clas
 const fmtG = (v, g) => g && v === 10 ? '10+' : fmt(v);
 const gArr = g => Array.isArray(g) ? tens(g) : !!g;
 const chip = (n, s, g) => { const go = s === 10 && gArr(g); return `<span class="chip${go ? ' gold' : ''}" style="--h:${hue(s)}">${esc(n)} <b>${s ? fmtG(s, go) : '–'}</b></span>`; };
-const ringC = (c, cls, g) => { const go = c === 10 && gArr(g); return `<div class="ring ${cls || ''}${go ? ' gold' : ''}" style="--h:${hue(c)};--s:${c}"><output>${fmtG(c, go)}</output>${go ? SPK : ''}</div>`; };
+const ringC = (c, cls, g) => { const go = gArr(g); return `<div class="ring ${cls || ''}${go ? ' gold' : ''}" style="--h:${hue(c)};--s:${c}"><output>${fmtG(c, go)}</output>${go ? SPK : ''}</div>`; };
 const eoG = (v, g) => { const go = v === 10 && g; return `<output class="eo ${v ? '' : 'none'}${go ? ' gold' : ''}">${v ? fmtG(v, go) : '–'}</output>`; };
 function renderCompare(L) {
   const P = parts(L);
