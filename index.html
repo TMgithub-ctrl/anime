@@ -181,6 +181,32 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .erow .eo{min-width:2ch;font-weight:800;color:hsl(var(--h) 85% 66%)}.erow .eo.none{color:var(--muted)}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:620px){.hero{flex-direction:column;align-items:flex-start}.hero .poster{flex-basis:auto;width:150px}}
+[hidden]{display:none!important}
+.acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.acc button{font:inherit;font-size:.82rem;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:4px 14px;cursor:pointer}
+.acc button:hover{color:var(--text);border-color:var(--accent)}
+.acc .on{color:#2a1c00;background:var(--accent);border-color:var(--accent);font-weight:600}
+.admbox{max-width:380px;background:var(--panel);border-radius:16px;padding:18px 20px}
+.admbox label,.asec label{display:block;color:var(--muted);font-size:.85rem;margin:0 0 12px}
+.ainp,.admbox input,.asec select,.asec input[type=text],.asec input[type=number],.asec input[type=password]{width:100%;font:inherit;font-size:.9rem;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:4px}
+.asec{margin:18px 0}.asec h3{margin:0 0 8px}
+.arow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--panel);border-radius:12px;padding:8px 12px;margin-top:8px}
+.arow .ainp{flex:1;min-width:150px;width:auto;margin:0}
+.arow input[type=password]{width:140px;margin:0}
+.arow .meta{color:var(--muted);font-size:.8rem}
+.asec button,.arow button,.admbox button,.dback button{font:inherit;font-size:.85rem;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+.asec button:hover,.arow button:hover{border-color:var(--accent)}
+.asec .pri,.admbox .pri{background:var(--accent);color:#2a1c00;border-color:var(--accent);font-weight:600}
+.asec .dng:hover,.arow .dng:hover{border-color:#ff6b6b;color:#ff9a9a}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.atab{border-collapse:collapse;min-width:100%}
+.atab th{font-weight:600;color:var(--muted);font-size:.8rem;text-align:left;padding:6px 8px;white-space:nowrap}
+.atab td{padding:4px 6px;border-top:1px solid var(--line)}
+.atab .ainp{min-width:170px;margin:0}
+.atab .cell{width:64px;text-align:center;margin:0}
+.atab select{margin:0}
+.achk{display:flex;gap:8px;align-items:center;color:var(--text);padding:4px 0}.achk input{width:auto;margin:0}
+.amsg{min-height:1.4em;font-size:.88rem;color:var(--accent);margin:8px 0}.amsg.bad{color:#ff8a8a}
 @media (max-width:620px){
   body{padding:calc(20px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) calc(70px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
   input,textarea,select{font-size:16px!important}
@@ -203,6 +229,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
     <h1>Meine Anime-Listen</h1>
     <p class="stats" id="stats"></p>
     <p class="sync" id="sync"></p>
+    <div class="acc" id="acc"></div>
     <div class="themes" id="themes" aria-label="Farbschema">
       <button data-t="" style="--c:#ffb347" title="Bernstein"></button>
       <button data-t="sakura" style="--c:#ff7eb6" title="Sakura"></button>
@@ -351,7 +378,12 @@ function merge(L, R, meId, meName) {
       if (dd && (v[1] || 0) <= dd) continue;
       s[aid] = v;
     }
-    out.scores[pid] = { n: pid === meId ? (meName || a.n || b.n || '') : (b.n || a.n || ''), s };
+    const nta = a.nt || 0, ntb = b.nt || 0;
+    let nn;
+    if (ntb > nta) nn = b.n; else if (nta > ntb) nn = pid === meId ? (meName || a.n) : a.n;
+    else nn = pid === meId ? (meName || a.n || b.n || '') : (b.n || a.n || '');
+    out.scores[pid] = { n: nn || '', s };
+    if (Math.max(nta, ntb)) out.scores[pid].nt = Math.max(nta, ntb);
     if (dd) out.scores[pid].d = dd;
     { const x = a.pw, y = b.pw; let w = !x ? y : !y ? x : ((y.t || 0) > (x.t || 0) ? y : x); if (w && dd && (w.t || 0) <= dd) w = null; if (w) out.scores[pid].pw = w; }
   }
@@ -516,9 +548,11 @@ async function syncList(L) {
   st.busy = true; setStatus();
   try {
     const R = await bGet(L.key);
+    const oldNt = (L.scores[db.me.id] || {}).nt || 0;
     const M = merge(L, R, db.me.id, db.me.name);
     const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores, ...(R.adm ? { adm: R.adm } : {}) });
     L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm;
+    { const mm = M.scores[db.me.id]; if (mm && mm.n && (mm.nt || 0) > oldNt && mm.n !== db.me.name) db.me.name = mm.n; }
     if (differs) await bPut(L.key, M);
     st.err = null; L.last = now(); save();
   } catch (e) { st.err = e.message; }
@@ -711,6 +745,9 @@ function renderBar() {
 let detail = null, detailAll = false;
 function render() {
   const L = cur();
+  renderAcc();
+  if (screen) { setStatus(); renderScreen(); return; }
+  for (const i of ['cats', 'tabs', 'bar']) $(i).hidden = false;
   if (detail && (!L.items[detail] || L.items[detail].d)) detail = null;
   renderTabs(); renderCats(); renderBar(); setStatus();
   $('searchbox').hidden = db.cat !== 'list' || !!detail;
@@ -721,6 +758,7 @@ function render() {
 }
 let lastIn = 0, dragging = false, rt = null;
 function safeRender() {
+  if (screen && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
   if (dragging || now() - lastIn < 2500) { clearTimeout(rt); rt = setTimeout(safeRender, 800); return; }
   render();
 }
@@ -833,6 +871,194 @@ function renderDetail(L, aid) {
   <h3>Folgen bewerten</h3>
   ${ep ? `<div class="elist">${rows}</div>${more}` : '<p class="note">Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.</p>'}`;
 }
+
+/* ---------- Admin-Bereich und Konto ---------- */
+/* Zugang nur als gesalzener Prüfwert, nicht im Klartext. Es ist eine Oberfläche, kein Server-Schutz. */
+const ADM = { u: 'admin', s: 'axtc-37a43f51fceedec0', h: 'ec32c07a9e24716d1299cb0b8d01c85760603be811c77f77a2c36c098fe4efdc' };
+let screen = null, adminOn = false;
+const adm = { tab: 'lists', lid: null, art: 'w', k: 1, src: null, dst: null };
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const allPeople = L => [...new Set([db.me.id, ...Object.keys(L.scores).filter(p => !L.scores[p].d || nRated(L.scores[p]) > 0)])];
+const nameOf = (L, pid) => pid === db.me.id ? (db.me.name || 'Du') + ' (du)' : ((L.scores[pid] && L.scores[pid].n) || 'Person');
+const amsg = (t, bad) => { const m = $('aMsg'); if (m) { m.textContent = t; m.className = 'amsg' + (bad ? ' bad' : ''); } };
+const keyFor = (art, aid, k) => art === 'r' ? 'r:' + aid : art === 'e' ? `e:${aid}#${k}` : aid;
+function setRating(L, pid, key, v) {
+  const e = L.scores[pid] || (L.scores[pid] = { n: pid === db.me.id ? db.me.name : 'Person', s: {} });
+  e.s[key] = [v, now()]; touch(L);
+}
+const byTitle = (a, b) => a.t.localeCompare(b.t, 'de');
+const optList = (sel) => db.lists.map(l => `<option value="${esc(l.lid)}" ${l.lid === sel ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+
+function renderAcc() {
+  $('acc').innerHTML = `<button data-s="acct" class="${screen === 'acct' ? 'on' : ''}">Mein Konto</button><button data-s="admin" class="${screen === 'admin' ? 'on' : ''}">Admin${adminOn ? ' ✓' : ''}</button>${adminOn ? '<button data-s="logout">Admin abmelden</button>' : ''}`;
+}
+$('acc').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.s === 'logout') { adminOn = false; if (screen === 'admin') screen = null; }
+  else screen = screen === b.dataset.s ? null : b.dataset.s;
+  render(); renderPanel();
+};
+function renderScreen() {
+  for (const i of ['cats', 'tabs', 'bar', 'searchbox']) $(i).hidden = true;
+  $('panel').hidden = true;
+  $('stats').textContent = screen === 'admin' ? 'Admin-Bereich' : 'Mein Konto';
+  $('out').innerHTML = screen === 'admin' ? (adminOn ? adminHtml() : loginHtml()) : acctHtml();
+}
+const backBtn = '<div class="dback"><button data-adm="close">← Zurück</button></div>';
+const loginHtml = () => `${backBtn}<div class="admbox"><h3 style="margin-top:0">Admin-Anmeldung</h3>
+  <label>Name<input id="aU" type="text" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+  <label>Passwort<input id="aP" type="password" autocomplete="off"></label>
+  <button class="pri" data-adm="login">Anmelden</button><div class="amsg" id="aMsg"></div>
+  <p style="color:var(--muted);font-size:.8rem;margin:10px 0 0">Die Anmeldung gilt nur, bis du die Seite neu lädst oder dich abmeldest.</p></div>`;
+
+function adminHtml() {
+  const Ls = db.lists;
+  if (!adm.lid || !Ls.some(l => l.lid === adm.lid)) adm.lid = db.active && Ls.some(l => l.lid === db.active) ? db.active : Ls[0].lid;
+  const L = Ls.find(l => l.lid === adm.lid);
+  const tab = (k, t) => `<button data-adm="tab" data-tab="${k}" class="${adm.tab === k ? 'on' : ''}">${t}</button>`;
+  let h = `${backBtn}<div class="seg" style="display:inline-flex;margin-bottom:6px">${tab('lists', 'Listen')}${tab('ppl', 'Personen')}${tab('rat', 'Bewertungen')}</div>
+    <div class="amsg" id="aMsg"></div>`;
+  const pick = `<label>Liste<select data-adm="lsel">${optList(adm.lid)}</select></label>`;
+  if (adm.tab === 'lists') {
+    const src = Ls.find(l => l.lid === adm.src) || Ls[0], dst = Ls.find(l => l.lid === adm.dst) || Ls[Math.min(1, Ls.length - 1)];
+    adm.src = src.lid; adm.dst = dst.lid;
+    h += `<div class="asec"><h3>Alle Listen auf diesem Gerät</h3>` + Ls.map(l => `<div class="arow"><input class="ainp" data-adm="lname" data-lid="${esc(l.lid)}" value="${esc(l.name)}" maxlength="40" aria-label="Listenname">
+      <span class="meta">${live(l).length} Einträge · ${allPeople(l).length} Personen · ${l.key ? 'online' : 'nur lokal'}</span>
+      <button data-adm="open" data-lid="${esc(l.lid)}">Öffnen</button><button class="dng" data-adm="ldel" data-lid="${esc(l.lid)}">Entfernen</button></div>`).join('') +
+      `<p style="color:var(--muted);font-size:.82rem">Es gibt keinen zentralen Speicher. Hier erscheinen die Listen, die auf diesem Gerät eingetragen sind. Eine weitere Liste kommt über ihren Code dazu: <button data-adm="addcode">Liste per Code hinzufügen</button></p></div>
+      <div class="asec"><h3>Einträge samt Bewertungen in eine andere Liste übernehmen</h3>
+      <label>Von<select data-adm="src">${optList(src.lid)}</select></label><label>Nach<select data-adm="dst">${optList(dst.lid)}</select></label>
+      <div>${live(src).sort(byTitle).map(x => `<label class="achk"><input type="checkbox" data-adm="pick" value="${esc(x.aid)}"> ${esc(x.t)}</label>`).join('') || '<p style="color:var(--muted)">Diese Liste ist leer.</p>'}</div>
+      <label class="achk"><input type="checkbox" id="cpR" checked> Bewertungen aller Personen mitnehmen (vorhandene Bewertungen im Ziel bleiben)</label>
+      <button class="pri" data-adm="copy">Übernehmen</button></div>`;
+  } else if (adm.tab === 'ppl') {
+    const ps = allPeople(L);
+    h += `<div class="asec">${pick}<h3>Personen in „${esc(L.name)}“</h3>` + ps.map(pid => {
+      const e = L.scores[pid] || { s: {}, n: '' }, me = pid === db.me.id, n = nRated(e);
+      return `<div class="arow"><input class="ainp" data-adm="pname" data-pid="${esc(pid)}" value="${esc(me ? db.me.name : (e.n || ''))}" maxlength="30" ${me ? 'disabled title="Deinen eigenen Namen änderst du unter Personen"' : ''} aria-label="Name">
+        <span class="meta">${n} ${n === 1 ? 'Bewertung' : 'Bewertungen'} · ${pwOn(e) ? 'mit' : 'ohne'} Passwort${me ? ' · das bist du' : ''}</span>
+        ${me ? '' : `<input type="password" data-adm="pwin" data-pid="${esc(pid)}" placeholder="Neues Passwort" autocomplete="off"><button data-adm="pwset" data-pid="${esc(pid)}">Setzen</button>${pwOn(e) ? `<button data-adm="pwrst" data-pid="${esc(pid)}">Passwort löschen</button>` : ''}<button class="dng" data-adm="prm" data-pid="${esc(pid)}">Entfernen</button>`}</div>`;
+    }).join('') + `<div class="arow"><input class="ainp" id="aNew" maxlength="30" placeholder="Neue Person (Name)"><button class="pri" data-adm="padd">Person hinzufügen</button></div></div>`;
+  } else {
+    const ps = allPeople(L), its = live(L).sort(byTitle);
+    h += `<div class="asec">${pick}
+      <label>Art der Bewertung<select data-adm="art"><option value="w" ${adm.art === 'w' ? 'selected' : ''}>Wunsch-Score (am liebsten gucken)</option><option value="r" ${adm.art === 'r' ? 'selected' : ''}>Gesamtbewertung nach dem Schauen</option><option value="e" ${adm.art === 'e' ? 'selected' : ''}>Bewertung einer Folge</option></select></label>
+      ${adm.art === 'e' ? `<label>Folge<input type="number" min="1" data-adm="ek" value="${adm.k}"></label>` : ''}
+      <div class="tw"><table class="atab"><thead><tr><th>Anime</th><th>Status</th>${ps.map(pid => `<th>${esc(nameOf(L, pid))}</th>`).join('')}<th></th></tr></thead><tbody>` +
+      its.map(x => `<tr><td><input class="ainp" data-adm="title" data-it="${esc(x.aid)}" value="${esc(x.t)}" aria-label="Titel"></td>
+        <td><select data-adm="stat" data-it="${esc(x.aid)}"><option value="t" ${stOf(x) === 't' ? 'selected' : ''}>Liste</option><option value="w" ${stOf(x) === 'w' ? 'selected' : ''}>Am Schauen</option><option value="d" ${stOf(x) === 'd' ? 'selected' : ''}>Geguckt</option></select></td>
+        ${ps.map(pid => { const v = scoreOf(L, pid, keyFor(adm.art, x.aid, adm.k)); return `<td><input type="number" class="cell" min="1" max="10" data-adm="cell" data-it="${esc(x.aid)}" data-pid="${esc(pid)}" value="${v || ''}" aria-label="Bewertung"></td>`; }).join('')}
+        <td><button class="dng" data-adm="idel" data-it="${esc(x.aid)}" title="Eintrag entfernen">✕</button></td></tr>`).join('') +
+      `</tbody></table></div>${its.length ? '' : '<p style="color:var(--muted)">Diese Liste ist leer.</p>'}
+      <div class="arow"><input class="ainp" id="aItem" maxlength="120" placeholder="Neuer Eintrag (Titel)"><button class="pri" data-adm="iadd">Eintrag hinzufügen</button></div></div>`;
+  }
+  return h;
+}
+
+function acctHtml() {
+  const me = db.me.id;
+  let h = `${backBtn}<p style="color:var(--muted)">Du bist <b style="color:var(--text)">${esc(db.me.name || 'ohne Namen')}</b>. Hier siehst und änderst du alle deine Bewertungen. Änderungen werden sofort gespeichert und mit deinem Kollegen abgeglichen.</p>
+    <div class="wact" style="display:flex;gap:8px;margin-bottom:6px"><button data-adm="toppl" style="font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer">Name, Passwort und Personen</button></div><div class="amsg" id="aMsg"></div>`;
+  for (const L of db.lists) {
+    const its = live(L).sort((a, b) => (scoreOf(L, me, b.aid) ? 1 : 0) - (scoreOf(L, me, a.aid) ? 1 : 0) || byTitle(a, b));
+    h += `<div class="asec"><h3>${esc(L.name)}</h3>` + (its.length ? `<div class="tw"><table class="atab"><thead><tr><th>Anime</th><th>Status</th><th>Wunsch</th><th>Gesamt</th><th>Folgen</th></tr></thead><tbody>` +
+      its.map(x => { const es = epStats(L, me, x.aid); return `<tr><td>${esc(x.t)}</td><td>${{ t: 'Liste', w: 'Am Schauen', d: 'Geguckt' }[stOf(x)]}</td>
+        <td><input type="number" class="cell" min="1" max="10" data-adm="mine" data-art="w" data-lid="${esc(L.lid)}" data-it="${esc(x.aid)}" value="${scoreOf(L, me, x.aid) || ''}" aria-label="Wunsch-Score"></td>
+        <td><input type="number" class="cell" min="1" max="10" data-adm="mine" data-art="r" data-lid="${esc(L.lid)}" data-it="${esc(x.aid)}" value="${scoreOf(L, me, 'r:' + x.aid) || ''}" aria-label="Gesamtbewertung"></td>
+        <td>${es ? `${es.n} bewertet, Ø ${fmt(es.avg)}` : '–'}</td></tr>`; }).join('') + '</tbody></table></div>' : '<p style="color:var(--muted)">Diese Liste ist leer.</p>') + '</div>';
+  }
+  return h;
+}
+
+const clamp = v => { v = Math.round(+v); return v >= 1 ? Math.min(10, v) : 0; };
+const listBy = lid => db.lists.find(l => l.lid === lid);
+$('out').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.target.id === 'aU' || e.target.id === 'aP')) { e.preventDefault(); const b = $('out').querySelector('[data-adm=login]'); if (b) b.click(); }
+});
+$('out').addEventListener('change', e => {
+  const t = e.target, d = t.dataset.adm; if (!d || !screen) return;
+  const L = listBy(adm.lid);
+  try {
+    if (d === 'lsel') { adm.lid = t.value; renderScreen(); return; }
+    if (d === 'src') { adm.src = t.value; renderScreen(); return; }
+    if (d === 'dst') { adm.dst = t.value; renderScreen(); return; }
+    if (d === 'art') { adm.art = t.value; renderScreen(); return; }
+    if (d === 'ek') { adm.k = Math.max(1, Math.floor(+t.value || 1)); renderScreen(); return; }
+    if (d === 'lname') { const l = listBy(t.dataset.lid), n = t.value.trim().slice(0, 40); if (l && n) { l.name = n; l.nts = now(); touch(l); amsg('Name gespeichert.'); } return; }
+    if (d === 'pname') { const e2 = L.scores[t.dataset.pid], n = t.value.trim().slice(0, 30); if (e2 && n) { e2.n = n; e2.nt = now(); touch(L); amsg('Name gespeichert.'); } return; }
+    if (d === 'title') { const x = L.items[t.dataset.it], n = t.value.trim(); if (x && n) { L.items[t.dataset.it] = { ...x, t: n, ts: now() }; touch(L); amsg('Titel gespeichert.'); } return; }
+    if (d === 'stat') { moveTo(L, t.dataset.it, t.value); amsg('Status gespeichert.'); return; }
+    if (d === 'cell') { setRating(L, t.dataset.pid, keyFor(adm.art, t.dataset.it, adm.k), clamp(t.value)); t.value = clamp(t.value) || ''; amsg('Bewertung gespeichert.'); return; }
+    if (d === 'mine') { const l = listBy(t.dataset.lid); if (l) { setRating(l, db.me.id, keyFor(t.dataset.art, t.dataset.it, 0), clamp(t.value)); t.value = clamp(t.value) || ''; amsg('Gespeichert.'); } return; }
+  } catch (err) { amsg(err.message, true); }
+});
+$('out').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b || !b.dataset.adm || !screen) return;
+  const d = b.dataset.adm, L = listBy(adm.lid);
+  const arm = (txt) => { if (!b.dataset.arm) { b.dataset.arm = 1; const o = b.textContent; b.textContent = 'Sicher?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = o; } }, 3000); return false; } return true; };
+  try {
+    if (d === 'close') { screen = null; render(); renderPanel(); return; }
+    if (d === 'login') {
+      const u = ($('aU').value || '').trim().toLowerCase(), pw = $('aP').value || '';
+      const ok = u === ADM.u && pw && (await pwHash(pw, ADM.s)) === ADM.h;
+      if (!ok) { await wait(700); amsg('Name oder Passwort falsch.', true); return; }
+      adminOn = true; render(); return;
+    }
+    if (d === 'toppl') { screen = null; panel = 'ppl'; render(); renderPanel(); return; }
+    if (!adminOn) return;
+    if (d === 'tab') { adm.tab = b.dataset.tab; renderScreen(); return; }
+    if (d === 'open') { db.active = b.dataset.lid; screen = null; detail = null; save(); render(); renderPanel(); return; }
+    if (d === 'addcode') { screen = null; panel = 'imp'; render(); renderPanel(); return; }
+    if (d === 'ldel') {
+      if (!arm()) return;
+      db.lists = db.lists.filter(l => l.lid !== b.dataset.lid);
+      if (!db.lists.length) db.lists.push(newList('Meine Liste'));
+      if (!db.lists.some(l => l.lid === db.active)) db.active = db.lists[0].lid;
+      save(); renderScreen(); amsg('Liste von diesem Gerät entfernt. Online-Daten bleiben bestehen.'); return;
+    }
+    if (d === 'copy') {
+      const S = listBy(adm.src), D = listBy(adm.dst);
+      if (!S || !D || S === D) { amsg('Wähle zwei verschiedene Listen.', true); return; }
+      const picks = [...$('out').querySelectorAll('[data-adm=pick]:checked')].map(x => x.value);
+      if (!picks.length) { amsg('Kreuze mindestens einen Eintrag an.', true); return; }
+      const withR = $('cpR').checked; let n = 0, r = 0;
+      for (const aid of picks) {
+        const x = S.items[aid]; if (!x || x.d) continue;
+        if (!(D.items[aid] && !D.items[aid].d)) { D.items[aid] = { ...x, ts: now() }; n++; }
+        if (S.alts[aid] && !D.alts[aid]) D.alts[aid] = S.alts[aid];
+        if (withR) for (const [pid, e2] of Object.entries(S.scores)) {
+          for (const [k, v] of Object.entries(e2.s)) {
+            if (!(k === aid || k === 'r:' + aid || k.startsWith(`e:${aid}#`)) || !(v[0] > 0)) continue;
+            const t2 = D.scores[pid] || (D.scores[pid] = { n: e2.n || 'Person', s: {} });
+            if (!t2.s[k] || !(t2.s[k][0] > 0)) { t2.s[k] = [v[0], now()]; r++; }
+          }
+        }
+      }
+      touch(D); renderScreen(); amsg(`${n} neue Einträge und ${r} Bewertungen nach „${D.name}“ übernommen.`); return;
+    }
+    if (d === 'pwset') {
+      const f = [...$('out').querySelectorAll('[data-adm=pwin]')].find(x => x.dataset.pid === b.dataset.pid), v = f ? f.value : '';
+      if (v.length < 4) { amsg('Das Passwort braucht mindestens 4 Zeichen.', true); return; }
+      const e2 = L.scores[b.dataset.pid]; if (!e2) return;
+      e2.pw = await newPw(v); touch(L); renderScreen(); amsg('Passwort gesetzt.'); return;
+    }
+    if (d === 'pwrst') { const e2 = L.scores[b.dataset.pid]; if (e2) { e2.pw = { t: now() }; touch(L); renderScreen(); amsg('Passwort gelöscht.'); } return; }
+    if (d === 'prm') { if (!arm()) return; removePerson(L, b.dataset.pid); renderScreen(); amsg('Person entfernt.'); return; }
+    if (d === 'padd') {
+      const n = ($('aNew').value || '').trim().slice(0, 30); if (!n) { amsg('Bitte einen Namen eingeben.', true); return; }
+      L.scores['p' + uid()] = { n, nt: now(), s: {} }; touch(L); renderScreen(); amsg('Person hinzugefügt.'); return;
+    }
+    if (d === 'iadd') {
+      const n = ($('aItem').value || '').trim(); if (!n) { amsg('Bitte einen Titel eingeben.', true); return; }
+      if (live(L).some(x => norm(x.t) === norm(n))) { amsg('Diesen Titel gibt es schon.', true); return; }
+      L.items['m' + uid()] = { t: n, i: '', ts: now() }; touch(L); renderScreen(); amsg('Eintrag hinzugefügt.'); return;
+    }
+    if (d === 'idel') {
+      if (!arm()) return;
+      const x = L.items[b.dataset.it]; if (x) { L.items[b.dataset.it] = { ...x, d: 1, ts: now() }; touch(L); renderScreen(); amsg('Eintrag entfernt.'); } return;
+    }
+  } catch (err) { amsg(err.message, true); }
+});
 
 /* ---------- Bedienung ---------- */
 $('tabs').onclick = e => {
@@ -1021,7 +1247,7 @@ $('panel').addEventListener('click', async e => {
     const n = (($('pName') || {}).value || '').trim().slice(0, 30);
     if (!n) { msg('Bitte einen Namen eingeben.', true); return; }
     db.me.name = n;
-    for (const l of db.lists) { const e = l.scores[db.me.id]; if (e) e.n = n; }
+    for (const l of db.lists) { const e = l.scores[db.me.id]; if (e) { e.n = n; e.nt = now(); } }
     save(); db.lists.filter(l => l.key).forEach((l, k) => queueSync(l, 200 + k * 500));
     renderPanel(); render(); msg('Name gespeichert.'); return;
   }
@@ -1052,8 +1278,10 @@ $('panel').addEventListener('click', async e => {
       renderPanel(); msg('Admin-Passwort gespeichert. Gut aufschreiben.'); return;
     }
     if (a === 'rm' || a === 'rst') {
-      if (!L.adm) return bad('Lege zuerst unten ein Admin-Passwort fest.');
-      if (!(await okPw(L.adm, val('pAdm')))) return bad('Falsches Admin-Passwort.');
+      if (!adminOn) {
+        if (!L.adm) return bad('Lege zuerst unten ein Admin-Passwort fest.');
+        if (!(await okPw(L.adm, val('pAdm')))) return bad('Falsches Admin-Passwort.');
+      }
       if (a === 'rm') {
         if (!b.dataset.arm) { b.dataset.arm = 1; b.textContent = 'Wirklich entfernen?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = 'Entfernen'; } }, 3500); return; }
         removePerson(L, b.dataset.pid); renderPanel(); render(); msg('Person entfernt.'); return;
