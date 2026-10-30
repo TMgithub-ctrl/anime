@@ -320,7 +320,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-30 23:20 · Menü-Button unter Statusleiste';
+const APP_VERSION = '2026-10-30 23:40 · Steam-Suche über Google-Script';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -479,7 +479,7 @@ const BK = {
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
-const GS_CODE = `function doGet(e){return out_(read_(key_(e.parameter.k)));}
+const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
 function key_(k){return String(k||'').replace(/\\W/g,'');}
 function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
@@ -721,8 +721,11 @@ async function addOsuLink(q) {
 const steamImg = id => `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(id)}/library_600x900.jpg`;
 async function steamGet(u) {
   const errs = [];
-  for (const [n, f] of [['direkt', u], ['proxy1', 'https://corsproxy.io/?' + encodeURIComponent(u)], ['proxy2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)]]) {
-    try { return await jget(f, 7000); } catch (err) { errs.push(n + ': ' + err.message); }
+  const dep = gsDep(), tries = [];
+  if (dep) tries.push(['Google-Script', GS(dep) + '?u=' + encodeURIComponent(u)]);
+  tries.push(['direkt', u], ['proxy1', 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)], ['proxy2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)], ['proxy3', 'https://corsproxy.io/?' + encodeURIComponent(u)]);
+  for (const [n, f] of tries) {
+    try { const j = await jget(f, 8000); if (j && (Array.isArray(j.items) || (j && typeof j === 'object' && Object.keys(j).length && !j.items && n !== 'Google-Script'))) return j; throw new Error(n === 'Google-Script' ? 'Script noch ohne Steam-Funktion' : 'leere Antwort'); } catch (err) { errs.push(n + ': ' + err.message); }
   }
   throw new Error(errs.join(' | '));
 }
