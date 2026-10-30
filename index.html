@@ -195,6 +195,7 @@ header{padding-top:34px}
 .side button.on{background:var(--accent);color:#2a1c00;border-color:var(--accent)}
 .side button.on small{color:#2a1c00}
 .side p{margin:10px 2px 0;color:var(--muted);font-size:.8rem;line-height:1.45}
+.ver{margin:40px 0 0;color:var(--muted);font-size:.72rem;opacity:.7}
 .sub{margin:2px 0 6px;color:var(--muted);font-size:.8rem;line-height:1.4}
 a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
 .acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -268,6 +269,7 @@ a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
   <div class="bar" id="bar"></div>
   <div class="panel" id="panel" hidden></div>
   <div id="out"></div>
+  <p class="ver" id="ver"></p>
 </main>
 <script>
 const KEY = 'anime-lists-v3';
@@ -311,6 +313,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' ? 'osu' : 'anime';
+const APP_VERSION = '2026-10-30 22:10 · Konten-Code eingebaut';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -834,7 +837,7 @@ function renderBar() {
 let detail = null, detailAll = false;
 function render() {
   const L = cur();
-  renderAcc(); renderSide();
+  renderAcc(); renderSide(); $('ver').textContent = 'Version ' + APP_VERSION;
   if (osu() && db.cat === 'watch') db.cat = 'list';
   $('h1').textContent = T('Meine Anime-Listen', 'Meine osu!-Maps'); document.title = $('h1').textContent;
   $('q').placeholder = T('Anime suchen, z. B. Frieren', 'Map suchen oder osu!-Link einfügen'); $('q').setAttribute('aria-label', T('Anime suchen', 'Map suchen'));
