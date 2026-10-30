@@ -182,6 +182,21 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:620px){.hero{flex-direction:column;align-items:flex-start}.hero .poster{flex-basis:auto;width:150px}}
 [hidden]{display:none!important}
+header{padding-top:34px}
+.sbtn{position:fixed;left:12px;top:12px;z-index:40;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(24,28,58,.85);backdrop-filter:blur(8px);cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0}
+.sbtn span{display:block;width:20px;height:2px;border-radius:2px;background:var(--text)}
+.sbtn:hover{border-color:var(--accent)}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
+.side{position:fixed;left:0;top:0;bottom:0;width:250px;max-width:82vw;transform:translateX(-102%);transition:transform .22s ease;background:var(--panel);border-right:1px solid var(--line);z-index:30;padding:70px 14px 20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.side.open{transform:none}
+.side h2{margin:0 0 6px;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.side button{font:inherit;font-size:1rem;font-weight:600;text-align:left;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.side button small{font-weight:400;color:var(--muted)}
+.side button.on{background:var(--accent);color:#2a1c00;border-color:var(--accent)}
+.side button.on small{color:#2a1c00}
+.side p{margin:10px 2px 0;color:var(--muted);font-size:.8rem;line-height:1.45}
+.sub{margin:2px 0 6px;color:var(--muted);font-size:.8rem;line-height:1.4}
+a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
 .acc{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .acc button{font:inherit;font-size:.82rem;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:4px 14px;cursor:pointer}
 .acc button:hover{color:var(--text);border-color:var(--accent)}
@@ -224,9 +239,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 </style>
 </head>
 <body>
+<button id="sbtn" class="sbtn" aria-label="Menü öffnen" aria-expanded="false" aria-controls="side"><span></span><span></span><span></span></button>
+<div id="scrim" class="scrim" hidden></div>
+<aside id="side" class="side" aria-label="Bereiche"></aside>
 <main>
   <header>
-    <h1>Meine Anime-Listen</h1>
+    <h1 id="h1">Meine Anime-Listen</h1>
     <p class="stats" id="stats"></p>
     <p class="sync" id="sync"></p>
     <div class="acc" id="acc"></div>
@@ -264,7 +282,7 @@ const hue = s => s ? Math.round((s - 1) / 9 * 130 + 5) : 0;
 const safeId = v => String(v).replace(/[^\w.~+@:-]/g, '_');
 
 /* ---------- Daten ---------- */
-function newList(name) { return { lid: uid(), name, key: null, nts: now(), items: {}, scores: {}, alts: {}, last: 0 }; }
+function newList(name, type) { return { lid: uid(), name, key: null, nts: now(), items: {}, scores: {}, alts: {}, last: 0, ...(type === 'osu' ? { type: 'osu' } : {}) }; }
 function fromOld(name, arr, me) {
   const L = newList(name);
   for (const a of arr) {
@@ -292,8 +310,20 @@ function load() {
 let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
+db.mode = db.mode === 'osu' ? 'osu' : 'anime';
+db.reg = typeof db.reg === 'string' ? db.reg : '';
+db.acct = db.acct && db.acct.name ? db.acct : null;
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
-const cur = () => db.lists.find(l => l.lid === db.active) || db.lists[0];
+const typeOf = L => L.type === 'osu' ? 'osu' : 'anime';
+const osu = () => db.mode === 'osu';
+const T = (a, o) => osu() ? o : a;
+const modeLists = () => db.lists.filter(l => typeOf(l) === db.mode);
+const cur = () => {
+  const ml = modeLists();
+  let L = ml.find(l => l.lid === db.active) || ml[0];
+  if (!L) { L = newList(osu() ? 'Meine Maps' : 'Meine Liste', db.mode); db.lists.push(L); }
+  db.active = L.lid; return L;
+};
 const live = L => Object.entries(L.items).filter(([, x]) => !x.d).map(([aid, x]) => ({ aid, ...x }));
 const scoreOf = (L, pid, aid) => { const e = L.scores[pid], v = e && e.s[aid]; return v && v[0] > 0 ? v[0] : null; };
 const myScore = (L, aid) => scoreOf(L, db.me.id, aid);
@@ -339,6 +369,7 @@ function takeIdentity(pid, name, merge) {
     const t = L.scores[pid];
     if (!t) L.scores[pid] = { n: name || e.n || '', s: { ...e.s } };
     else for (const [aid, v] of Object.entries(e.s)) if (!t.s[aid] || (t.s[aid][1] || 0) < (v[1] || 0)) t.s[aid] = v;
+    for (const k of Object.keys(L.items)) if (L.items[k].by === old) L.items[k] = { ...L.items[k], by: pid };
     if (L.key) L.scores[old] = { n: e.n || '', s: {}, d: now() }; else delete L.scores[old];
   }
   db.me.id = pid; if (name) db.me.name = name;
@@ -358,11 +389,12 @@ function setScore(L, aid, v) {
 /* ---------- Abgleich: Zusammenführen ---------- */
 /*MERGE-START*/
 const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, x) => (a[x] = v[x], a), {}) : v);
-const pub = L => ({ v: 3, name: L.name, nts: L.nts, items: L.items, scores: L.scores, ...(L.adm ? { adm: L.adm } : {}) });
+const pub = L => ({ v: 3, name: L.name, nts: L.nts, items: L.items, scores: L.scores, ...(L.adm ? { adm: L.adm } : {}), ...(L.type ? { type: L.type } : {}) });
 function merge(L, R, meId, meName) {
   const out = { v: 3 };
   if ((R.nts || 0) > (L.nts || 0)) { out.name = R.name; out.nts = R.nts; } else { out.name = L.name; out.nts = L.nts; }
   const Ri = R.items || {}, Rs = R.scores || {};
+  if (L.type || R.type) out.type = L.type || R.type;
   { const x = L.adm, y = R.adm; const w = !x ? y : !y ? x : ((y.t || 0) > (x.t || 0) ? y : x); if (w) out.adm = w; }
   out.items = {};
   for (const aid of new Set([...Object.keys(L.items), ...Object.keys(Ri)])) {
@@ -493,7 +525,7 @@ const parseKey = t => { const m = String(t).match(/\b(jb|gs):([A-Za-z0-9._~+@-]{
 /* ---------- Sicherung ---------- */
 function makeBackup() {
   let theme = ''; try { theme = localStorage.getItem('anime-theme') || ''; } catch (e) {}
-  return { app: 'anime-liste', v: 1, saved: now(), me: db.me, gsUrl: db.gsUrl, theme, active: db.active, lists: db.lists };
+  return { app: 'anime-liste', v: 1, saved: now(), me: db.me, gsUrl: db.gsUrl, reg: db.reg, theme, active: db.active, lists: db.lists };
 }
 const encBackup = () => 'ANIMEBACKUP:' + btoa(unescape(encodeURIComponent(JSON.stringify(makeBackup()))));
 function parseBackup(t) {
@@ -516,15 +548,16 @@ function restoreBackup(b) {
   }
   db.me.name = b.me.name || db.me.name;
   if (b.gsUrl && !db.gsUrl) db.gsUrl = b.gsUrl;
+  if (b.reg && !db.reg) db.reg = b.reg;
   let added = 0, merged = 0;
   for (const B of b.lists) {
     const L = db.lists.find(l => (B.key && l.key === B.key) || l.lid === B.lid);
     if (L) {
       const M = merge(L, B, newId, db.me.name);
-      L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm;
+      L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm; if (M.type) L.type = M.type;
       L.alts = { ...(B.alts || {}), ...(L.alts || {}) }; L.key = L.key || B.key || null; merged++;
     } else {
-      db.lists.push({ lid: B.lid || uid(), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
+      db.lists.push({ lid: B.lid || uid(), ...(B.type === 'osu' ? { type: 'osu' } : {}), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
       added++;
     }
   }
@@ -551,8 +584,8 @@ async function syncList(L) {
     const R = await bGet(L.key);
     const oldNt = (L.scores[db.me.id] || {}).nt || 0;
     const M = merge(L, R, db.me.id, db.me.name);
-    const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores, ...(R.adm ? { adm: R.adm } : {}) });
-    L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm;
+    const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores, ...(R.adm ? { adm: R.adm } : {}), ...(R.type ? { type: R.type } : {}) });
+    L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores; if (M.adm) L.adm = M.adm; if (M.type) L.type = M.type;
     { const mm = M.scores[db.me.id]; if (mm && mm.n && (mm.nt || 0) > oldNt && mm.n !== db.me.name) db.me.name = mm.n; }
     if (differs) await bPut(L.key, M);
     st.err = null; L.last = now(); save();
@@ -590,7 +623,56 @@ async function searchJikan(q) {
   const d = await r.json();
   return d.data.map(a => ({ id: 'mal' + a.mal_id, title: a.title_english || a.title, img: a.images.jpg.large_image_url || a.images.jpg.image_url || '', year: a.year || '', episodes: a.episodes || 0 }));
 }
+/* osu!-Maps: öffentliche Spiegelserver (nicht offiziell, Erreichbarkeit nicht garantiert) */
+const covers = sid => `https://assets.ppy.sh/beatmaps/${encodeURIComponent(sid)}/covers/list@2x.jpg`;
+async function jget(url, ms = 6000) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const setList = d => Array.isArray(d) ? d : (d && (d.beatmapsets || d.data || d.results || d.sets)) || (d && d.id ? [d] : []);
+function setInfo(o) {
+  if (!o || typeof o !== 'object') return null;
+  const sid = o.id || o.beatmapset_id; if (!sid) return null;
+  const st = (o.beatmaps || []).map(b => +(b.difficulty_rating ?? b.star_rating ?? b.difficultyrating)).filter(n => isFinite(n) && n > 0);
+  const title = [o.artist, o.title].filter(Boolean).join(' - ') || ('osu! Map ' + sid);
+  const sr = st.length ? Math.max(...st) : 0;
+  return { id: 'os' + sid, sid: String(sid), title, mapper: o.creator || '', sr, img: covers(sid), year: [o.creator ? 'Mapper ' + o.creator : '', sr ? '★ ' + fmt(sr) : ''].filter(Boolean).join(' · ') };
+}
+async function searchOsu(q) {
+  const e = encodeURIComponent(q), errs = [];
+  for (const [name, u] of [['nerinyan', `https://api.nerinyan.moe/search?q=${e}&ps=8`], ['osu.direct', `https://osu.direct/api/v2/search?query=${e}&amount=8`]]) {
+    try { return setList(await jget(u)).map(setInfo).filter(Boolean).slice(0, 8); } catch (err) { errs.push(name + ': ' + err.message); }
+  }
+  throw new Error(errs.join(' | '));
+}
+async function fetchSet(sid) {
+  for (const u of [`https://osu.direct/api/v2/s/${encodeURIComponent(sid)}`, `https://api.nerinyan.moe/search?q=${encodeURIComponent(sid)}&ps=5`]) {
+    try { const l = setList(await jget(u)).map(setInfo).filter(Boolean); const hit = l.find(x => x.sid === String(sid)) || (l.length === 1 ? l[0] : null); if (hit) return hit; } catch (err) {}
+  }
+  return null;
+}
+async function fetchBeatmap(bid) {
+  try { const o = await jget(`https://osu.direct/api/v2/b/${encodeURIComponent(bid)}`); const i = setInfo(o.beatmapset || { id: o.beatmapset_id }); if (i) { if (!i.sr && o.difficulty_rating) i.sr = +o.difficulty_rating; return i; } } catch (err) {}
+  return null;
+}
+const OSU_RE = /osu\.ppy\.sh\/(beatmapsets|beatmaps|b|s)\/(\d+)(?:#[a-z]+\/(\d+))?/i;
+const xf = r => ({ ...(r.mapper ? { m: r.mapper } : {}), ...(r.sid ? { sid: String(r.sid) } : {}), ...(r.sr ? { sr: r.sr } : {}), ...(r.bid ? { bid: String(r.bid) } : {}) });
+async function addOsuLink(q) {
+  const m = q.match(OSU_RE); if (!m) return;
+  let sid = null, bid = null;
+  if (m[1] === 'beatmapsets' || m[1] === 's') { sid = m[2]; bid = m[3] || null; } else bid = m[2];
+  const rest = q.replace(/https?:\/\/\S+/i, '').trim();
+  hint('Lade Map …');
+  let info = null;
+  try { info = sid ? await fetchSet(sid) : await fetchBeatmap(bid); } catch (err) {}
+  if (info && info.sid) sid = info.sid;
+  const title = rest || (info && info.title) || `osu! Map ${sid || bid}`;
+  addItem({ id: 'os' + (sid || 'b' + bid), title, img: sid ? covers(sid) : '', mapper: info ? info.mapper : '', sid, bid, sr: info ? info.sr : 0 }, []);
+  if (!rest && !info) hint('Map hinzugefügt. Den Namen konnte ich nicht laden: schreib ihn beim nächsten Mal hinter den Link.');
+}
 async function search(q) {
+  if (osu()) return searchOsu(q);
   const errs = [];
   try { return await searchAniList(q); } catch (e) { errs.push('AniList: ' + e.message); }
   try { return await searchJikan(q); } catch (e) { errs.push('Jikan: ' + e.message); }
@@ -606,6 +688,7 @@ $('q').addEventListener('input', e => {
   clearTimeout(timer);
   const q = e.target.value.trim();
   if (q.length < 2) { results = []; showSug(); hint(''); return; }
+  if (osu() && OSU_RE.test(q)) { results = []; showSug(); hint('Enter fügt die Map hinzu. Den Namen kannst du hinter den Link schreiben.'); return; }
   timer = setTimeout(async () => {
     const my = ++seq;
     hint('Suche …');
@@ -613,7 +696,7 @@ $('q').addEventListener('input', e => {
       const res = await search(q);
       if (my !== seq) return;
       results = res; showSug();
-      hint(res.length ? 'Treffer anklicken oder Enter für den ersten.' : 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu.');
+      hint(res.length ? 'Treffer anklicken oder Enter für den ersten.' : T('Nichts gefunden – Enter fügt den Namen ohne Bild hinzu.', 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu. Oder füge einen osu!-Link ein.'));
     } catch (err) {
       if (my !== seq) return;
       results = []; showSug();
@@ -625,6 +708,7 @@ $('q').addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
     const q = e.target.value.trim();
+    if (osu() && OSU_RE.test(q)) { addOsuLink(q); return; }
     if (q) addItem(results[0] || { id: 'm' + now(), title: q, img: '' }, results);
   }
   if (e.key === 'Escape') { results = []; showSug(); }
@@ -634,7 +718,7 @@ $('sug').addEventListener('click', e => { const b = e.target.closest('button'); 
 function addItem(item, alts) {
   const L = cur(), aid = safeId(item.id);
   if (live(L).some(x => x.aid === aid || norm(x.t) === norm(item.title))) { hint('„' + item.title + '“ ist schon in der Liste.'); return; }
-  L.items[aid] = { t: item.title, i: item.img || '', ts: now(), ...(item.episodes ? { n: item.episodes } : {}) };
+  L.items[aid] = { t: item.title, i: item.img || '', ts: now(), ...(item.episodes ? { n: item.episodes } : {}), ...xf(item), ...(osu() ? { by: db.me.id } : {}) };
   L.alts[aid] = alts.filter(a => a.id !== item.id).map(a => ({ t: a.title, i: a.img }));
   touch(L);
   $('q').value = ''; results = []; showSug(); hint('„' + item.title + '“ hinzugefügt.');
@@ -644,7 +728,8 @@ function addItem(item, alts) {
 /* ---------- Darstellung ---------- */
 const poster = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : esc((a.t || '?').charAt(0).toUpperCase());
 const slider = (a, v) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" aria-label="Deine Bewertung für ${esc(a.t)}">`;
-const tools = (L, a) => `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
+const subLine = (L, a) => !osu() ? '' : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
+const tools = (L, a) => osu() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
   const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
   return o.length ? `<div class="oth">${o.map(([n, v]) => `<span>${esc(n)} <b>${v}</b></span>`).join('')}</div>` : '';
@@ -655,15 +740,15 @@ function card(L, a, rank) {
     <div class="poster">${poster(a)}</div>
     ${rank ? `<span class="rank r${rank}">#${rank}</span>` : ''}
     <output class="badge ${a.s ? '' : 'none'}">${a.s || '–'}</output>
-    <div class="info"><p class="title">${esc(a.t)}</p>${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
+    <div class="info"><p class="title">${esc(a.t)}</p>${subLine(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
   </article>`;
 }
 function hero(L, a) {
   return `<section class="hero" data-aid="${esc(a.aid)}" style="--h:${hue(a.s)};--s:${a.s};--art:url('${esc(a.i)}')">
     <div class="poster">${poster(a)}</div>
     <div class="txt">
-      <span class="flag">Als Nächstes gucken</span>
-      <h2>${esc(a.t)}</h2>
+      <span class="flag">${T('Als Nächstes gucken', 'Als Nächstes spielen')}</span>
+      <h2>${esc(a.t)}</h2>${subLine(L, a)}
       ${othersHtml(L, a.aid).replace('class="oth"', 'class="oth" style="font-size:.9rem;margin-bottom:12px"')}
       <div class="srow"><div class="ring"><output>${a.s}</output></div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
     </div>
@@ -677,10 +762,10 @@ function renderMine(L) {
   const avg = rated.length ? fmt(rated.reduce((s, a) => s + a.s, 0) / rated.length) : null;
   const oth = others(L).map(p => pname(L, p));
   $('stats').textContent = it.length
-    ? `${it.length} ${it.length === 1 ? 'Anime' : 'Animes'} · ${rated.length} von dir bewertet` + (avg ? ` · Ø ${avg}` : '') + (oth.length ? ` · mit ${oth.join(', ')}` : '')
-    : 'Deine Watchlist, sortiert nach Lust aufs Gucken.';
+    ? `${it.length} ${osu() ? (it.length === 1 ? 'Map' : 'Maps') : (it.length === 1 ? 'Anime' : 'Animes')} · ${rated.length} von dir bewertet` + (avg ? ` · Ø ${avg}` : '') + (oth.length ? ` · mit ${oth.join(', ')}` : '')
+    : T('Deine Watchlist, sortiert nach Lust aufs Gucken.', 'Maps zum Bewerten und Vorschlagen, sortiert nach deiner Bewertung.');
   let h = '';
-  if (!it.length) h = '<div class="empty"><b>Diese Liste ist noch leer</b>Such oben nach einem Anime, importiere eine Liste oder spiele unter „Sicherung“ deine alten Daten ein.</div>';
+  if (!it.length) h = '<div class="empty"><b>Diese Liste ist noch leer</b>' + T('Such oben nach einem Anime, importiere eine Liste oder spiele unter „Sicherung“ deine alten Daten ein.', 'Such oben nach einer Map oder füge einen osu!-Link ein. Dein Kollege sieht sie dann als Vorschlag von dir und kann sie bewerten.') + '</div>';
   if (rated.length) h += hero(L, rated[0]);
   if (rated.length > 1) h += `<div class="grid">${rated.slice(1).map((a, i) => card(L, a, i + 2)).join('')}</div>`;
   if (open.length) h += `<h3>Noch nicht von dir bewertet</h3><div class="grid">${open.map(a => card(L, a, 0)).join('')}</div>`;
@@ -723,7 +808,7 @@ function renderCompare(L) {
     const t = both[0];
     h += `<section class="hero" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
       <div class="poster">${poster(t)}</div>
-      <div class="txt"><span class="flag">Das solltet ihr zuerst gucken</span><h2>${esc(t.t)}</h2>
+      <div class="txt"><span class="flag">${T('Das solltet ihr zuerst gucken', 'Das solltet ihr zuerst spielen')}</span><h2>${esc(t.t)}</h2>
         <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i])).join('')}</div>
         <div class="srow">${ringC(t.c)}</div></div></section>`;
     h += section('Eure Rangliste', both.slice(1), 2);
@@ -735,7 +820,7 @@ function renderCompare(L) {
 }
 
 function renderTabs() {
-  $('tabs').innerHTML = db.lists.map(l => `<button class="tab ${l.lid === db.active ? 'on' : ''}" data-l="${esc(l.lid)}">${esc(l.name)}${l.key ? '<i title="Online synchronisiert">●</i>' : ''}</button>`).join('') + '<button class="tab add" data-l="+">+ Neue Liste</button>';
+  $('tabs').innerHTML = modeLists().map(l => `<button class="tab ${l.lid === db.active ? 'on' : ''}" data-l="${esc(l.lid)}">${esc(l.name)}${l.key ? '<i title="Online synchronisiert">●</i>' : ''}</button>`).join('') + '<button class="tab add" data-l="+">+ Neue Liste</button>';
 }
 function renderBar() {
   const L = cur();
@@ -746,7 +831,10 @@ function renderBar() {
 let detail = null, detailAll = false;
 function render() {
   const L = cur();
-  renderAcc();
+  renderAcc(); renderSide();
+  if (osu() && db.cat === 'watch') db.cat = 'list';
+  $('h1').textContent = T('Meine Anime-Listen', 'Meine osu!-Maps'); document.title = $('h1').textContent;
+  $('q').placeholder = T('Anime suchen, z. B. Frieren', 'Map suchen oder osu!-Link einfügen'); $('q').setAttribute('aria-label', T('Anime suchen', 'Map suchen'));
   if (screen) { setStatus(); renderScreen(); return; }
   for (const i of ['cats', 'tabs', 'bar']) $(i).hidden = false;
   if (detail && (!L.items[detail] || L.items[detail].d)) detail = null;
@@ -766,6 +854,26 @@ function safeRender() {
 document.addEventListener('pointerdown', e => { if (e.target.type === 'range') dragging = true; });
 document.addEventListener('pointerup', () => { dragging = false; });
 
+function renderMapDetail(L, aid) {
+  const x = L.items[aid], st = stOf(x) === 'd' ? 'd' : 't', P = parts(L), me = db.me.id, a = { aid, ...x };
+  const key = st === 'd' ? 'r:' + aid : aid, my = scoreOf(L, me, key);
+  const link = x.bid ? `https://osu.ppy.sh/b/${encodeURIComponent(x.bid)}` : x.sid ? `https://osu.ppy.sh/beatmapsets/${encodeURIComponent(x.sid)}` : '';
+  const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
+  $('stats').textContent = x.t;
+  $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
+  <section class="hero" data-aid="${esc(aid)}" style="--h:${hue(my)};--art:url('${esc(x.i || '')}')">
+    <div class="poster">${poster(a)}</div>
+    <div class="txt">
+      <span class="flag">${st === 'd' ? 'Gespielt' : 'Vorschlag'}</span>
+      <h2>${esc(x.t)}</h2>${subLine(L, a)}
+      <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Vorschlag')}${stBtn('d', 'Gespielt')}</div>
+      ${link ? `<p><a class="lnk" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Auf osu! ansehen ↗</a></p>` : ''}
+      <div class="fin"><span class="lab">${st === 'd' ? 'Deine Gesamtbewertung' : 'Deine Bewertung'}</span><output class="eo ${my ? '' : 'none'}">${my || '–'}</output>${rng(my, st === 'd' ? 'r' : 's', 0, 'Deine Bewertung')}
+        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, key))).join('')}</div></div>
+    </div>
+  </section>`;
+}
+
 /* ---------- Kategorien: Am Schauen, Bewertungen, Details ---------- */
 function moveTo(L, aid, st) {
   const x = L.items[aid]; if (!x) return;
@@ -779,7 +887,7 @@ function setEp(L, aid, v) { const x = L.items[aid]; if (!x) return; L.items[aid]
 function renderCats() {
   const L = cur(), c = { list: 0, watch: 0, done: 0 };
   live(L).forEach(x => { const s = stOf(x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
-  $('cats').innerHTML = [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']].map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
+  $('cats').innerHTML = (osu() ? [['list', 'Vorschläge'], ['done', 'Gespielt']] : [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']]).map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
 }
 const imgOf = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : '';
 const rng = (v, k, ek, label) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" data-k="${k}" ${ek ? `data-ek="${ek}"` : ''} aria-label="${esc(label)}">`;
@@ -813,18 +921,18 @@ function renderDone(L) {
   });
   const ranked = it.filter(r => r.c != null).sort((a, b) => b.c - a.c || b.cnt - a.cnt || a.t.localeCompare(b.t));
   const open = it.filter(r => r.c == null).sort((a, b) => a.t.localeCompare(b.t));
-  $('stats').textContent = it.length ? `${it.length} geguckt · ${ranked.length} bewertet` : 'Noch nichts geguckt.';
-  if (!it.length) { $('out').innerHTML = '<div class="empty"><b>Noch keine Bewertungen</b>Markiere in der Liste oder unter „Am Schauen“ einen Anime als geguckt.</div>'; return; }
+  $('stats').textContent = it.length ? `${it.length} ${T('geguckt', 'gespielt')} · ${ranked.length} bewertet` : T('Noch nichts geguckt.', 'Noch nichts gespielt.');
+  if (!it.length) { $('out').innerHTML = '<div class="empty"><b>Noch keine Bewertungen</b>' + T('Markiere in der Liste oder unter „Am Schauen“ einen Anime als geguckt.', 'Markiere bei den Vorschlägen eine Map als gespielt.') + '</div>'; return; }
   const epChip = r => r.ea ? `<span class="chip" style="--h:${hue(r.ea.avg)}">Ø deiner Folgen <b>${fmt(r.ea.avg)}</b></span>` : '';
   const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${imgOf(r)}</div>
     <div class="mid"><div class="nm">${esc(r.t)}</div>
-      <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}${epChip(r)}</div>
+      ${subLine(L, r)}<div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}${epChip(r)}</div>
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
     ${r.c != null ? ringC(r.c, 'sm') : ''}
-    <div class="wact"><button data-act="detail">Details</button><button data-act="watch">Weiter schauen</button><button data-act="todo">Zur Liste</button></div>
+    <div class="wact"><button data-act="detail">Details</button>${osu() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
   let h = P.length > 1 ? `<div class="ctl"><span class="lab">Anzeigen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div></div><p class="note">Die Reihenfolge richtet sich nach dem Durchschnitt der Gesamtbewertungen der Gewählten.</p>` : '';
@@ -842,6 +950,7 @@ function renderDone(L) {
 }
 
 function renderDetail(L, aid) {
+  if (osu()) return renderMapDetail(L, aid);
   const x = L.items[aid], st = stOf(x), P = parts(L), me = db.me.id, a = { aid, ...x };
   const total = x.n || 0, ep = x.ep || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
   const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
@@ -873,6 +982,68 @@ function renderDetail(L, aid) {
   ${ep ? `<div class="elist">${rows}</div>${more}` : '<p class="note">Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.</p>'}`;
 }
 
+/* ---------- Konten: Name + Passwort, Person und Listen auf jedem Gerät ---------- */
+/* Ein gemeinsamer Konten-Speicher (wie eine Liste) enthält pro Konto: Name, Prüfwert des Passworts, Personen-Kennung, Listen-Codes. */
+const acctKey = n => String(n || '').trim().toLowerCase();
+const parseReg = t => { const m = String(t).match(/\b(jb|gs):([A-Za-z0-9._~+@-]{4,})/); return m ? m[1] + ':' + m[2] : null; };
+let regCache = null, acctBusy = false;
+async function regRead() {
+  if (!db.reg) throw new Error('Kein Konten-Speicher verbunden.');
+  const j = await bGet(db.reg); j.accts = j.accts || {}; return j;
+}
+async function regWrite(reg) { await bPut(db.reg, { v: 1, items: {}, scores: {}, reg: 1, accts: reg.accts }); regCache = reg; }
+async function regCreate() {
+  const errs = [];
+  for (const k of Object.keys(BK)) {
+    if (k === 'gs' && !gsDep()) continue;
+    try { const key = await bCreate(k, { v: 1, items: {}, scores: {}, reg: 1, accts: {} }); await bGet(key); db.reg = key; save(); return key; }
+    catch (e) { errs.push(e.message); }
+  }
+  throw new Error(errs.join(' | ') + (gsDep() ? '' : ' | Tipp: Richte unter „Online-Sync“ den eigenen Google-Speicher ein.'));
+}
+const listRec = l => ({ key: l.key, name: l.name, type: l.type === 'osu' ? 'osu' : 'anime', t: now() });
+async function acctCreate(name, pw, pid, lists) {
+  name = String(name || '').trim().slice(0, 30);
+  if (name.length < 2) throw new Error('Der Name braucht mindestens 2 Zeichen.');
+  if (String(pw || '').length < 4) throw new Error('Das Passwort braucht mindestens 4 Zeichen.');
+  const reg = await regRead(), k = acctKey(name);
+  if (reg.accts[k] && !reg.accts[k].d) throw new Error('Diesen Konto-Namen gibt es schon.');
+  if (pid && Object.values(reg.accts).some(a => !a.d && a.pid === pid)) throw new Error('Diese Person hat schon ein Konto.');
+  reg.accts[k] = { name, pid: pid || 'p' + uid(), pw: await newPw(pw), ts: now(), lists: (lists || []).filter(l => l.key).map(listRec) };
+  await regWrite(reg);
+}
+async function acctLogin(name, pw) {
+  const reg = await regRead(), a = reg.accts[acctKey(name)];
+  if (!a || a.d) { await wait(600); throw new Error('Konto nicht gefunden.'); }
+  if (!(await okPw(a.pw, pw))) { await wait(600); throw new Error('Falsches Passwort.'); }
+  regCache = reg; return a;
+}
+async function applyAcct(a, merge) {
+  takeIdentity(a.pid, a.name, merge);
+  db.me.id = a.pid; db.me.name = a.name;
+  for (const L of db.lists) { const e = L.scores[db.me.id]; if (e) { e.n = a.name; e.nt = now(); } }
+  db.acct = { name: a.name }; save();
+  for (const l of a.lists || []) if (!l.d && !db.lists.some(x => x.key === l.key)) { try { await joinCode(l.key, a.name); } catch (e) {} }
+  db.lists.filter(l => l.key).forEach((l, k) => queueSync(l, 300 + k * 400));
+  save();
+}
+async function acctSync() {
+  if (!db.acct || !db.reg || acctBusy) return;
+  acctBusy = true;
+  try {
+    const reg = await regRead(), a = reg.accts[acctKey(db.acct.name)];
+    if (!a || a.d || a.pid !== db.me.id) { if (!a || a.d) { db.acct = null; save(); render(); } return; }
+    for (const l of a.lists || []) if (!l.d && !db.lists.some(x => x.key === l.key)) { try { await joinCode(l.key, a.name); } catch (e) {} }
+    const have = new Map((a.lists || []).map(l => [l.key, l]));
+    const add = db.lists.filter(l => l.key && !have.has(l.key));
+    if (add.length) { a.lists = [...(a.lists || []), ...add.map(listRec)]; await regWrite(reg); }
+    regCache = reg;
+  } catch (e) {} finally { acctBusy = false; }
+}
+setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) acctSync(); });
+setTimeout(acctSync, 2500);
+
 /* ---------- Admin-Bereich und Konto ---------- */
 /* Zugang nur als gesalzener Prüfwert, nicht im Klartext. Es ist eine Oberfläche, kein Server-Schutz. */
 const ADM = { u: 'admin', s: 'axtc-37a43f51fceedec0', h: 'ec32c07a9e24716d1299cb0b8d01c85760603be811c77f77a2c36c098fe4efdc' };
@@ -891,7 +1062,7 @@ const byTitle = (a, b) => a.t.localeCompare(b.t, 'de');
 const optList = (sel) => db.lists.map(l => `<option value="${esc(l.lid)}" ${l.lid === sel ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
 
 function renderAcc() {
-  $('acc').innerHTML = `<button data-s="acct" class="${screen === 'acct' ? 'on' : ''}">Mein Konto</button><button data-s="admin" class="${screen === 'admin' ? 'on' : ''}">Admin${adminOn ? ' ✓' : ''}</button>${adminOn ? '<button data-s="logout">Admin abmelden</button>' : ''}`;
+  $('acc').innerHTML = `<button data-s="acct" class="${screen === 'acct' ? 'on' : ''}">${db.acct ? esc(db.acct.name) : 'Mein Konto'}</button><button data-s="admin" class="${screen === 'admin' ? 'on' : ''}">Admin${adminOn ? ' ✓' : ''}</button>${adminOn ? '<button data-s="logout">Admin abmelden</button>' : ''}`;
 }
 $('acc').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -917,7 +1088,7 @@ function adminHtml() {
   if (!adm.lid || !Ls.some(l => l.lid === adm.lid)) adm.lid = db.active && Ls.some(l => l.lid === db.active) ? db.active : Ls[0].lid;
   const L = Ls.find(l => l.lid === adm.lid);
   const tab = (k, t) => `<button data-adm="tab" data-tab="${k}" class="${adm.tab === k ? 'on' : ''}">${t}</button>`;
-  let h = `${backBtn}<div class="seg" style="display:inline-flex;margin-bottom:6px">${tab('lists', 'Listen')}${tab('ppl', 'Personen')}${tab('rat', 'Bewertungen')}</div>
+  let h = `${backBtn}<div class="seg" style="display:inline-flex;margin-bottom:6px">${tab('lists', 'Listen')}${tab('ppl', 'Personen')}${tab('rat', 'Bewertungen')}${tab('accts', 'Konten')}</div>
     <div class="amsg" id="aMsg"></div>`;
   const pick = `<label>Liste<select data-adm="lsel">${optList(adm.lid)}</select></label>`;
   if (adm.tab === 'lists') {
@@ -932,13 +1103,39 @@ function adminHtml() {
       <div>${live(src).sort(byTitle).map(x => `<label class="achk"><input type="checkbox" data-adm="pick" value="${esc(x.aid)}"> ${esc(x.t)}</label>`).join('') || '<p style="color:var(--muted)">Diese Liste ist leer.</p>'}</div>
       <label class="achk"><input type="checkbox" id="cpR" checked> Bewertungen aller Personen mitnehmen (vorhandene Bewertungen im Ziel bleiben)</label>
       <button class="pri" data-adm="copy">Übernehmen</button></div>`;
+  } else if (adm.tab === 'accts') {
+    const keyed = db.lists.filter(l => l.key);
+    h += `<div class="asec"><h3>Konten</h3>`;
+    if (!db.reg) {
+      h += `<p style="color:var(--muted)">Noch kein Konten-Speicher. Er speichert alle Konten (Name, Passwort-Prüfwert, Person, Listen). Lege ihn einmal an oder verbinde einen vorhandenen.</p>
+        <button class="pri" data-adm="regcreate">Konten-Speicher anlegen</button>
+        <label style="margin-top:14px">Vorhandenen Konten-Code einfügen<input id="aRegIn" type="text" placeholder="ANIMEREG:…"></label><button data-adm="regjoin">Verbinden</button>`;
+    } else {
+      const accts = regCache ? Object.values(regCache.accts || {}).filter(a => !a.d).sort((a, b) => a.name.localeCompare(b.name, 'de')) : null;
+      h += `<label>Konten-Code (jeder neue Nutzer fügt ihn einmal beim Anmelden ein)<textarea readonly rows="2" id="aRegOut">${esc('ANIMEREG:' + db.reg)}</textarea></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-adm="regcopy">Code kopieren</button><button data-adm="regload">Aktualisieren</button></div>
+        <h3 style="margin-top:18px">Vorhandene Konten</h3>` +
+        (accts === null ? '<p style="color:var(--muted)">Lade …</p>' : accts.length ? accts.map(a => {
+          const ls = (a.lists || []).filter(l => !l.d);
+          return `<div class="arow"><span class="pn" style="flex:1;min-width:140px;font-weight:600">${esc(a.name)}<small style="display:block;font-weight:400;color:var(--muted);font-size:.78rem">${ls.length ? ls.map(l => esc(l.name)).join(', ') : 'keine Listen'}</small></span>
+            <input type="password" data-adm="apwin" data-ak="${esc(acctKey(a.name))}" placeholder="Neues Passwort" autocomplete="off"><button data-adm="apwset" data-ak="${esc(acctKey(a.name))}">Setzen</button>
+            ${keyed.length ? `<select data-ak="${esc(acctKey(a.name))}">${keyed.map(l => `<option value="${esc(l.key)}">${esc(l.name)}</option>`).join('')}</select><button data-adm="aadd" data-ak="${esc(acctKey(a.name))}">Liste zuordnen</button>` : ''}
+            <button class="dng" data-adm="adel" data-ak="${esc(acctKey(a.name))}">Löschen</button></div>`;
+        }).join('') : '<p style="color:var(--muted)">Noch keine Konten.</p>') +
+        `<h3 style="margin-top:18px">Neues Konto</h3>
+        <label>Name<input id="aAcN" type="text" maxlength="30"></label><label>Passwort (mindestens 4 Zeichen)<input id="aAcP" type="password" autocomplete="off"></label>
+        ${keyed.length ? '<div style="color:var(--muted);font-size:.85rem">Listen zuordnen:</div>' + keyed.map(l => `<label class="achk"><input type="checkbox" data-adm="alchk" value="${esc(l.key)}" checked> ${esc(l.name)}</label>`).join('') : ''}
+        <button class="pri" data-adm="acreate">Konto anlegen</button>
+        <p style="color:var(--muted);font-size:.82rem;margin-top:12px">Eine vorhandene Person machst du im Reiter „Personen“ mit „Als Konto anlegen“ zum Konto. Sie behält dann ihre Bewertungen.</p>`;
+    }
+    h += `</div>`;
   } else if (adm.tab === 'ppl') {
     const ps = allPeople(L);
     h += `<div class="asec">${pick}<h3>Personen in „${esc(L.name)}“</h3>` + ps.map(pid => {
       const e = L.scores[pid] || { s: {}, n: '' }, me = pid === db.me.id, n = nRated(e);
       return `<div class="arow"><input class="ainp" data-adm="pname" data-pid="${esc(pid)}" value="${esc(me ? db.me.name : (e.n || ''))}" maxlength="30" ${me ? 'disabled title="Deinen eigenen Namen änderst du unter Personen"' : ''} aria-label="Name">
         <span class="meta">${n} ${n === 1 ? 'Bewertung' : 'Bewertungen'} · ${pwOn(e) ? 'mit' : 'ohne'} Passwort${me ? ' · das bist du' : ''}</span>
-        ${me ? '' : `<input type="password" data-adm="pwin" data-pid="${esc(pid)}" placeholder="Neues Passwort" autocomplete="off"><button data-adm="pwset" data-pid="${esc(pid)}">Setzen</button>${pwOn(e) ? `<button data-adm="pwrst" data-pid="${esc(pid)}">Passwort löschen</button>` : ''}<button class="dng" data-adm="prm" data-pid="${esc(pid)}">Entfernen</button>`}</div>`;
+        ${me ? (db.reg ? `<input type="password" data-adm="pwin" data-pid="${esc(pid)}" placeholder="Passwort fürs Konto" autocomplete="off"><button data-adm="pacc" data-pid="${esc(pid)}" title="Dich selbst als Konto anlegen">Als Konto anlegen</button>` : '') : `<input type="password" data-adm="pwin" data-pid="${esc(pid)}" placeholder="Neues Passwort" autocomplete="off"><button data-adm="pwset" data-pid="${esc(pid)}">Setzen</button>${pwOn(e) ? `<button data-adm="pwrst" data-pid="${esc(pid)}">Passwort löschen</button>` : ''}${db.reg ? `<button data-adm="pacc" data-pid="${esc(pid)}" title="Mit dem Passwort aus dem Feld als Konto anlegen">Als Konto anlegen</button>` : ''}<button class="dng" data-adm="prm" data-pid="${esc(pid)}">Entfernen</button>`}</div>`;
     }).join('') + `<div class="arow"><input class="ainp" id="aNew" maxlength="30" placeholder="Neue Person (Name)"><button class="pri" data-adm="padd">Person hinzufügen</button></div></div>`;
   } else {
     const ps = allPeople(L), its = live(L).sort(byTitle);
@@ -956,9 +1153,26 @@ function adminHtml() {
   return h;
 }
 
+function acctBox() {
+  const rated = db.lists.some(l => l.scores[db.me.id] && nRated(l.scores[db.me.id]) > 0);
+  if (db.acct) {
+    const ls = db.lists.filter(l => l.key);
+    return `<div class="asec"><h3>Konto</h3><p style="color:var(--muted)">Angemeldet als <b style="color:var(--text)">${esc(db.acct.name)}</b>. Deine Listen mit Online-Sync werden im Konto gespeichert und auf jedem neuen Gerät automatisch geladen. Du bleibst angemeldet.</p>
+      <p style="color:var(--muted);font-size:.85rem">Gespeicherte Listen auf diesem Gerät: ${ls.length ? ls.map(l => esc(l.name)).join(', ') : 'noch keine (starte bei einer Liste „Online-Sync“)'}</p>
+      <div class="wact" style="display:flex;gap:8px;flex-wrap:wrap"><button data-adm="async">Jetzt abgleichen</button><button data-adm="alogout">Abmelden</button></div>
+      <label style="margin-top:14px">Altes Passwort<input id="cOld" type="password" autocomplete="off"></label><label>Neues Passwort<input id="cNew" type="password" autocomplete="off"></label>
+      <button data-adm="apw">Passwort ändern</button></div>`;
+  }
+  return `<div class="asec"><h3>Konto</h3><p style="color:var(--muted)">Mit einem Konto bekommst du auf jedem Gerät deine Person, deine Bewertungen und deine Listen zurück. Das Konto legt der Admin an.</p>
+    ${db.reg ? '' : '<label>Konten-Code (vom Admin)<input id="cRg" type="text" placeholder="ANIMEREG:…" autocomplete="off"></label>'}
+    <label>Name<input id="cN" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+    <label>Passwort<input id="cP" type="password" autocomplete="current-password"></label>
+    ${rated ? '<label class="achk"><input type="checkbox" id="cMerge" checked> Meine bisherigen Bewertungen auf diesem Gerät ins Konto übernehmen</label>' : ''}
+    <button class="pri" data-adm="alogin">Anmelden</button></div>`;
+}
 function acctHtml() {
   const me = db.me.id;
-  let h = `${backBtn}<p style="color:var(--muted)">Du bist <b style="color:var(--text)">${esc(db.me.name || 'ohne Namen')}</b>. Hier siehst und änderst du alle deine Bewertungen. Änderungen werden sofort gespeichert und mit deinem Kollegen abgeglichen.</p>
+  let h = `${backBtn}${acctBox()}<p style="color:var(--muted)">Du bist <b style="color:var(--text)">${esc(db.me.name || 'ohne Namen')}</b>. Hier siehst und änderst du alle deine Bewertungen. Änderungen werden sofort gespeichert und mit deinem Kollegen abgeglichen.</p>
     <div class="wact" style="display:flex;gap:8px;margin-bottom:6px"><button data-adm="toppl" style="font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer">Name, Passwort und Personen</button></div><div class="amsg" id="aMsg"></div>`;
   for (const L of db.lists) {
     const its = live(L).sort((a, b) => (scoreOf(L, me, b.aid) ? 1 : 0) - (scoreOf(L, me, a.aid) ? 1 : 0) || byTitle(a, b));
@@ -971,6 +1185,7 @@ function acctHtml() {
   return h;
 }
 
+async function regLoad() { try { regCache = await regRead(); } catch (err) { regCache = { accts: {} }; setTimeout(() => amsg(err.message, true), 0); } renderScreen(); }
 const clamp = v => { v = Math.round(+v); return v >= 1 ? Math.min(10, v) : 0; };
 const listBy = lid => db.lists.find(l => l.lid === lid);
 $('out').addEventListener('keydown', e => {
@@ -996,6 +1211,7 @@ $('out').addEventListener('change', e => {
 $('out').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || !b.dataset.adm || !screen) return;
   const d = b.dataset.adm, L = listBy(adm.lid);
+  const val = id => (($(id) || {}).value || '');
   const arm = (txt) => { if (!b.dataset.arm) { b.dataset.arm = 1; const o = b.textContent; b.textContent = 'Sicher?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = o; } }, 3000); return false; } return true; };
   try {
     if (d === 'close') { screen = null; render(); renderPanel(); return; }
@@ -1006,9 +1222,55 @@ $('out').addEventListener('click', async e => {
       adminOn = true; render(); return;
     }
     if (d === 'toppl') { screen = null; panel = 'ppl'; render(); renderPanel(); return; }
+    if (d === 'alogin') {
+      const nm = val('cN'), pw = val('cP'), prev = db.reg;
+      if (!db.reg) { const k = parseReg(val('cRg')); if (!k) { amsg('Bitte den Konten-Code vom Admin einfügen.', true); return; } db.reg = k; }
+      amsg('Melde an …');
+      let a; try { a = await acctLogin(nm, pw); } catch (err) { db.reg = prev; throw err; }
+      await applyAcct(a, !!($('cMerge') && $('cMerge').checked));
+      render(); amsg(`Angemeldet als ${a.name}.`); return;
+    }
+    if (d === 'alogout') { db.acct = null; save(); render(); amsg('Abgemeldet. Deine Daten bleiben auf diesem Gerät.'); return; }
+    if (d === 'async') { amsg('Gleiche ab …'); await acctSync(); render(); amsg('Abgeglichen.'); return; }
+    if (d === 'apw') {
+      const o = val('cOld'), n = val('cNew'); if (n.length < 4) { amsg('Das neue Passwort braucht mindestens 4 Zeichen.', true); return; }
+      const reg = await regRead(), a = reg.accts[acctKey(db.acct && db.acct.name)];
+      if (!a || !(await okPw(a.pw, o))) { amsg('Das alte Passwort stimmt nicht.', true); return; }
+      a.pw = await newPw(n); a.ts = now(); await regWrite(reg); render(); amsg('Passwort geändert.'); return;
+    }
     if (!adminOn) return;
-    if (d === 'tab') { adm.tab = b.dataset.tab; renderScreen(); return; }
-    if (d === 'open') { db.active = b.dataset.lid; screen = null; detail = null; save(); render(); renderPanel(); return; }
+    if (d === 'tab') { adm.tab = b.dataset.tab; renderScreen(); if (adm.tab === 'accts' && db.reg && !regCache) regLoad(); return; }
+    if (d === 'regcreate') { amsg('Lege Konten-Speicher an …'); await regCreate(); regCache = await regRead(); renderScreen(); amsg('Konten-Speicher angelegt. Kopiere den Code.'); return; }
+    if (d === 'regjoin') { const k = parseReg(val('aRegIn')); if (!k) { amsg('Das ist kein gültiger Konten-Code.', true); return; } const prev = db.reg; db.reg = k; try { regCache = await regRead(); } catch (err) { db.reg = prev; throw err; } save(); renderScreen(); amsg('Verbunden.'); return; }
+    if (d === 'regcopy') { const t = $('aRegOut'); try { await navigator.clipboard.writeText(t.value); amsg('Konten-Code kopiert.'); } catch (err) { t.select(); amsg('Bitte den markierten Code kopieren.'); } return; }
+    if (d === 'regload') { await regLoad(); return; }
+    if (d === 'acreate') {
+      const picks = [...$('out').querySelectorAll('[data-adm=alchk]:checked')].map(x => db.lists.find(l => l.key === x.value)).filter(Boolean);
+      await acctCreate(val('aAcN'), val('aAcP'), null, picks); renderScreen(); amsg('Konto angelegt.'); return;
+    }
+    if (d === 'pacc') {
+      const e2 = L.scores[b.dataset.pid] || {}, nm = b.dataset.pid === db.me.id ? db.me.name : e2.n;
+      if (!nm) { amsg('Die Person braucht einen Namen.', true); return; }
+      const f = [...$('out').querySelectorAll('[data-adm=pwin]')].find(x => x.dataset.pid === b.dataset.pid);
+      await acctCreate(nm, f ? f.value : '', b.dataset.pid, L.key ? [L] : []); amsg(`Konto „${nm}“ angelegt.`); return;
+    }
+    if (d === 'apwset') {
+      const f = [...$('out').querySelectorAll('[data-adm=apwin]')].find(x => x.dataset.ak === b.dataset.ak), v = f ? f.value : '';
+      if (v.length < 4) { amsg('Das Passwort braucht mindestens 4 Zeichen.', true); return; }
+      const reg = await regRead(), a = reg.accts[b.dataset.ak]; if (!a) return;
+      a.pw = await newPw(v); a.ts = now(); await regWrite(reg); renderScreen(); amsg('Passwort gesetzt.'); return;
+    }
+    if (d === 'aadd') {
+      const sel = b.closest('.arow').querySelector('select'), l = db.lists.find(x => x.key === (sel && sel.value));
+      const reg = await regRead(), a = reg.accts[b.dataset.ak]; if (!a || !l) return;
+      a.lists = (a.lists || []).filter(x => x.key !== l.key).concat(listRec(l)); await regWrite(reg); renderScreen(); amsg('Liste zugeordnet.'); return;
+    }
+    if (d === 'adel') {
+      if (!arm()) return;
+      const reg = await regRead(), a = reg.accts[b.dataset.ak]; if (!a) return;
+      reg.accts[b.dataset.ak] = { name: a.name, pid: a.pid, d: now(), ts: now(), lists: [] }; await regWrite(reg); renderScreen(); amsg('Konto gelöscht.'); return;
+    }
+    if (d === 'open') { db.active = b.dataset.lid; { const l0 = listBy(db.active); if (l0) db.mode = typeOf(l0); } screen = null; detail = null; save(); render(); renderPanel(); return; }
     if (d === 'addcode') { screen = null; panel = 'imp'; render(); renderPanel(); return; }
     if (d === 'ldel') {
       if (!arm()) return;
@@ -1060,6 +1322,24 @@ $('out').addEventListener('click', async e => {
     }
   } catch (err) { amsg(err.message, true); }
 });
+
+/* ---------- Seitenleiste: Anime / osu! ---------- */
+const countOf = m => db.lists.filter(l => (l.type === 'osu' ? 'osu' : 'anime') === m).reduce((n, l) => n + live(l).length, 0);
+function renderSide() {
+  $('side').innerHTML = `<h2>Bereiche</h2>
+    <button data-mode="anime" class="${db.mode === 'anime' ? 'on' : ''}">Anime<small>${countOf('anime')}</small></button>
+    <button data-mode="osu" class="${db.mode === 'osu' ? 'on' : ''}">osu! Maps<small>${countOf('osu')}</small></button>
+    <p>Jeder Bereich hat eigene Listen. Beide lassen sich online mit anderen abgleichen.</p>`;
+}
+const sideOpen = o => { $('side').classList.toggle('open', o); $('scrim').hidden = !o; $('sbtn').setAttribute('aria-expanded', String(o)); };
+$('sbtn').onclick = () => sideOpen(!$('side').classList.contains('open'));
+$('scrim').onclick = () => sideOpen(false);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') sideOpen(false); });
+$('side').onclick = e => {
+  const b = e.target.closest('button[data-mode]'); if (!b) return;
+  if (db.mode !== b.dataset.mode) { db.mode = b.dataset.mode; db.cat = 'list'; detail = null; screen = null; panel = null; results = []; showSug(); $('q').value = ''; hint(''); save(); cur(); }
+  sideOpen(false); render(); renderPanel();
+};
 
 /* ---------- Bedienung ---------- */
 $('tabs').onclick = e => {
@@ -1121,7 +1401,7 @@ $('out').addEventListener('click', e => {
   if (act === 'watch' || act === 'done' || act === 'todo' || act === 'st') {
     const to = act === 'st' ? b.dataset.st : act === 'watch' ? 'w' : act === 'done' ? 'd' : 't';
     moveTo(L, aid, to);
-    hint(`„${x.t}“ ist jetzt ${to === 'w' ? 'unter „Am Schauen“' : to === 'd' ? 'unter „Bewertungen“' : 'wieder in der Liste'}.`);
+    hint(`„${x.t}“ ist jetzt ${to === 'w' ? 'unter „Am Schauen“' : to === 'd' ? T('unter „Bewertungen“', 'unter „Gespielt“') : T('wieder in der Liste', 'wieder bei den Vorschlägen')}.`);
     render(); return;
   }
   if (act === 'detail') { detail = aid; detailAll = false; render(); window.scrollTo(0, 0); return; }
@@ -1294,7 +1574,7 @@ $('panel').addEventListener('click', async e => {
   } catch (err) { bad(err.message); return; }
   if (a === 'create') {
     const n = $('pName2').value.trim(); if (!n) { msg('Gib der Liste einen Namen.', true); return; }
-    const nl = newList(n); db.lists.push(nl); db.active = nl.lid; panel = null; view = 'mine'; save(); renderPanel(); render(); return;
+    const nl = newList(n, db.mode); db.lists.push(nl); db.active = nl.lid; panel = null; view = 'mine'; save(); renderPanel(); render(); return;
   }
   if (a === 'rename') {
     const n = $('pName2').value.trim(); if (!n) { msg('Gib der Liste einen Namen.', true); return; }
@@ -1371,7 +1651,7 @@ $('panel').addEventListener('click', async e => {
       const d = $('gsd'); if (d) d.open = true;
       return;
     }
-    L.last = now(); save(); panel = 'share'; renderPanel(); render(); syncList(L); return;
+    L.last = now(); save(); panel = 'share'; renderPanel(); render(); syncList(L); setTimeout(acctSync, 1200); return;
   }
   if (a === 'import') {
     const t = ($('pTxt').value || '').trim(); if (!t) { msg('Nichts eingefügt.', true); return; }
@@ -1390,11 +1670,12 @@ async function joinCode(key, nm) {
   msg('Lade Liste …');
   try {
     const R = await bGet(key);
-    const L = newList(R.name || 'Gemeinsame Liste');
+    const L = newList(R.name || 'Gemeinsame Liste', R.type);
+    db.mode = typeOf(L);
     L.key = key; L.items = R.items || {}; L.scores = R.scores || {}; L.nts = R.nts || 0; if (R.adm) L.adm = R.adm; L.last = now();
     L.scores[db.me.id] = L.scores[db.me.id] || { n: nm, s: {} }; L.scores[db.me.id].n = nm;
     db.lists.push(L); db.active = L.lid; view = 'mine'; panel = null; save(); renderPanel(); render();
-    queueSync(L, 300);
+    queueSync(L, 300); setTimeout(acctSync, 1500);
     hint(`Du bist der Liste „${L.name}“ beigetreten. Falls du dort schon eingetragen bist: Personen → „Das bin ich“.`);
   } catch (err) { msg(err.message, true); }
 }
@@ -1435,18 +1716,18 @@ async function runImport(entries) {
     n++;
     hint(`Importiere ${n}/${entries.length}: ${e.title}`);
     if (live(L).some(x => norm(x.t) === norm(e.title))) continue;
-    let aid, t = e.title, i = e.img || '', alts = [], n = null;
+    let aid, t = e.title, i = e.img || '', alts = [], eps = null, ex = {};
     if (e.img) aid = safeId(e.id != null ? e.id : 'i' + now() + n);
     else {
       let res = [];
       try { res = await search(e.title); } catch (err) {}
       const r = res[0] || { id: 'm' + now() + n, title: e.title, img: '' };
-      aid = safeId(r.id); t = r.title; i = r.img; n = r.episodes || null;
+      aid = safeId(r.id); t = r.title; i = r.img; eps = r.episodes || null; ex = xf(r);
       alts = res.filter(x => x.id !== r.id).map(x => ({ t: x.title, i: x.img }));
       await new Promise(ok => setTimeout(ok, 700));
     }
     if (live(L).some(x => x.aid === aid)) continue;
-    L.items[aid] = { t, i, ts: now(), ...(n ? { n } : {}) }; L.alts[aid] = alts;
+    L.items[aid] = { t, i, ts: now(), ...(eps ? { n: eps } : {}), ...ex, ...(osu() ? { by: db.me.id } : {}) }; L.alts[aid] = alts;
     if (e.score) setScore(L, aid, e.score); else touch(L);
     added++;
     if (cur() === L) safeRender();
