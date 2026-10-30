@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f1226">
+<meta name="color-scheme" content="dark">
+<meta name="darkreader-lock">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,6 +22,7 @@ body{margin:0;color:var(--text);font:16px/1.5 "Outfit","Trebuchet MS",system-ui,
   background:radial-gradient(900px 420px at 80% -10%,var(--g1) 0%,transparent 70%),radial-gradient(700px 400px at -10% 10%,var(--g2) 0%,transparent 65%),var(--bg);background-attachment:fixed}
 main{max-width:1060px;margin:0 auto}
 header{margin-bottom:18px}
+:root{color-scheme:dark}
 h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin:0;letter-spacing:-.02em;line-height:1.1;background:linear-gradient(90deg,#fff,var(--accent) 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .stats{color:var(--muted);margin:6px 0 0}
 .sync{margin:2px 0 0;font-size:.85rem;color:var(--muted)}
@@ -337,7 +340,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-31 00:40 · Gold-Ring Safari-fest';
+const APP_VERSION = '2026-10-31 00:55 · Dunkelmodus-Erzwingung aus';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
