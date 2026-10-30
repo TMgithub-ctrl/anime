@@ -207,7 +207,8 @@ header{padding-top:34px}
 .badge.gold,.ring.gold{--gold:linear-gradient(115deg,#b8860b 0%,#ffd95e 25%,#fff6c2 40%,#ffd95e 55%,#e0a100 80%,#b8860b 100%)}
 .badge.gold{background:var(--gold);background-size:250% 100%;color:#3a2600;animation:gshine 2.6s linear infinite,gglow 1.8s ease-in-out infinite;font-size:1rem}
 .ring.gold{background:var(--gold);background-size:250% 100%;animation:gshine 2.6s linear infinite,gglow 1.8s ease-in-out infinite}
-.ring.gold output{color:#ffd95e;text-shadow:0 0 10px rgba(255,200,40,.8)}
+.ring.gold::before{background:radial-gradient(circle at 32% 28%,#fff6c2 0%,#ffd95e 42%,#e0a100 100%)}
+.ring.gold output{color:#3a2600;text-shadow:0 1px 0 rgba(255,255,255,.45)}
 .chip.gold{border-color:#ffd95e;background:linear-gradient(115deg,rgba(255,217,94,.12),rgba(255,246,194,.28),rgba(255,217,94,.12));background-size:250% 100%;animation:gshine 3s linear infinite}
 .chip.gold b,.oth .gold b,.eo.gold{color:#ffd95e;text-shadow:0 0 8px rgba(255,200,40,.7)}
 .sp{position:absolute;width:11px;height:11px;pointer-events:none;background:#fffbe0;clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);opacity:0;animation:gtw 1.6s ease-in-out infinite;z-index:3;filter:drop-shadow(0 0 3px #ffd95e)}
@@ -334,7 +335,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-31 00:10 · Gold-Ring bei zweimal 10';
+const APP_VERSION = '2026-10-31 00:25 · Ring komplett gold';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
