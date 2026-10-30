@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1226">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anime">
+<title>Meine Anime-Listen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1024;--panel:#181c3a;--line:#2b3160;--text:#eef0fb;--muted:#8d93bd;--accent:#ffb347;--danger:#ff6b81;--ok:#6ee7a8;--r:16px;--g1:#2a2470;--g2:#4a1d5c}
+[data-theme=sakura]{--bg:#1a0f1c;--panel:#2b1a30;--line:#4a2a52;--accent:#ff7eb6;--g1:#5a1f4a;--g2:#2e1a5c}
+[data-theme=mint]{--bg:#0a1a1c;--panel:#12292c;--line:#1f4a4c;--accent:#5eead4;--g1:#0f4a4a;--g2:#1c3a5c}
+*{box-sizing:border-box}
+body{margin:0;color:var(--text);font:16px/1.5 "Outfit","Trebuchet MS",system-ui,sans-serif;padding:32px 18px 80px;
+  background:radial-gradient(900px 420px at 80% -10%,var(--g1) 0%,transparent 70%),radial-gradient(700px 400px at -10% 10%,var(--g2) 0%,transparent 65%),var(--bg);background-attachment:fixed}
+main{max-width:1060px;margin:0 auto}
+header{margin-bottom:18px}
+h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin:0;letter-spacing:-.02em;line-height:1.1;background:linear-gradient(90deg,#fff,var(--accent) 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stats{color:var(--muted);margin:6px 0 0}
+.sync{margin:2px 0 0;font-size:.85rem;color:var(--muted)}
+.sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:8px}
+.sync.ok{color:var(--ok)}.sync.ok::before{background:var(--ok)}
+.sync.bad{color:var(--danger)}.sync.bad::before{background:var(--danger)}
+.themes{display:flex;gap:10px;margin-top:12px}
+.themes button{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:var(--c);cursor:pointer;padding:0}
+.themes button.on{outline:2px solid var(--text);outline-offset:2px}
+
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.tab{font:inherit;font-size:.95rem;color:var(--muted);background:rgba(24,28,58,.7);border:1px solid var(--line);border-radius:999px;padding:6px 16px;cursor:pointer}
+.tab i{font-style:normal;color:var(--ok);margin-left:6px}
+.tab:hover{color:var(--text)}
+.tab.on{color:#2a1c00;background:var(--accent);border-color:var(--accent);font-weight:600}
+.tab.on i{color:#2a1c00}
+.tab.add{border-style:dashed}
+
+.search{position:relative;margin-bottom:6px}
+.search svg{position:absolute;left:16px;top:16px;width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:2;pointer-events:none}
+.search input{width:100%;padding:15px 18px 15px 46px;font:inherit;color:var(--text);background:rgba(24,28,58,.8);backdrop-filter:blur(8px);border:2px solid var(--line);border-radius:999px;transition:border-color .2s,box-shadow .2s}
+.search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 18%,transparent)}
+.hint{color:var(--muted);font-size:.85rem;margin:6px 0 14px 18px;min-height:1.3em}
+.sug{position:absolute;left:0;right:0;top:58px;z-index:10;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);overflow:hidden;display:none;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.sug button{display:flex;gap:14px;align-items:center;width:100%;text-align:left;background:none;border:0;color:var(--text);font:inherit;padding:8px 14px;cursor:pointer}
+.sug button:hover,.sug button:focus{background:var(--line);outline:none}
+.sug img{width:40px;height:58px;object-fit:cover;border-radius:6px;background:var(--line)}
+.sug small{color:var(--muted)}
+
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 22px;align-items:center}
+.bar button,.panel button{font:inherit;font-size:.9rem;color:var(--text);background:rgba(24,28,58,.8);border:1px solid var(--line);border-radius:999px;padding:6px 16px;cursor:pointer}
+.bar button:hover,.panel button:hover{border-color:var(--accent)}
+.bar .pri,.panel .go{background:var(--accent);color:#2a1c00;border-color:var(--accent);font-weight:600}
+.panel{background:rgba(24,28,58,.9);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin:0 0 24px}
+.panel p{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+.panel p.warn{margin:12px 0 0;font-size:.82rem}
+.panel textarea,.panel input[type=text]{width:100%;font:inherit;font-size:.9rem;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+.panel textarea{resize:vertical}
+.panel label{display:block;color:var(--muted);font-size:.85rem;margin:0 0 12px}
+.panel label input{margin-top:4px}
+.panel .row2{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.panel input[type=file]{color:var(--muted);font-size:.85rem;max-width:100%}
+.panel ol{margin:0 0 12px 18px;padding:0;color:var(--muted);font-size:.9rem}
+.panel summary{cursor:pointer;color:var(--text);margin-top:14px}
+.panel pre{white-space:pre-wrap;word-break:break-word;font:inherit;font-size:.8rem;color:var(--muted);margin:10px 0 0}
+.panel .msg{margin-top:10px;font-size:.88rem;color:var(--muted);word-break:break-word}
+.panel .msg.bad{color:var(--danger)}
+.panel .msg:empty{display:none}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.bar .seg button{border:0;border-radius:0;background:var(--panel);color:var(--muted);padding:7px 18px}
+.bar .seg button.on{background:var(--accent);color:#2a1c00;font-weight:600}
+
+.hero{position:relative;display:flex;gap:28px;align-items:center;padding:26px;border-radius:24px;overflow:hidden;margin-bottom:34px;border:1px solid var(--line);isolation:isolate}
+.hero::before{content:"";position:absolute;inset:-30px;background:var(--art) center/cover;filter:blur(36px) saturate(1.3);opacity:.55;z-index:-2}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,color-mix(in srgb,var(--bg) 82%,transparent),color-mix(in srgb,var(--bg) 35%,transparent));z-index:-1}
+.hero .poster{flex:0 0 190px;aspect-ratio:2/3;border-radius:var(--r);overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.55);background:var(--line);display:flex;align-items:center;justify-content:center;font-size:4rem;color:var(--muted)}
+.hero .poster img{width:100%;height:100%;object-fit:cover;display:block}
+.hero .txt{flex:1;min-width:230px}
+.flag{display:inline-block;background:var(--accent);color:#2a1c00;font-weight:600;font-size:.85rem;padding:3px 12px;border-radius:999px;margin-bottom:10px}
+.hero h2{font-size:clamp(1.5rem,4vw,2.4rem);line-height:1.15;margin:0 0 16px;font-weight:800}
+.hero .tools{justify-content:flex-start;gap:18px;margin-top:10px}
+.hero input[type=range]{max-width:340px}
+.hero .scs{margin-bottom:14px}
+
+h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:18px}
+.card{position:relative;aspect-ratio:2/3;border-radius:var(--r);overflow:hidden;background:var(--panel);box-shadow:0 8px 24px rgba(0,0,0,.35);transition:transform .2s,box-shadow .2s}
+.card:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(0,0,0,.5)}
+.card .poster{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.5rem;color:var(--muted);background:var(--line)}
+.card .poster img{width:100%;height:100%;object-fit:cover;display:block}
+.rank{position:absolute;top:10px;left:10px;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(6px);font-weight:800;border-radius:999px;padding:1px 11px;font-size:.95rem}
+.rank.r2{background:#c9d1e8;color:#14172e}
+.rank.r3{background:#d9a066;color:#2a1700}
+.badge{position:absolute;top:10px;right:10px;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.15rem;background:hsl(var(--h) 85% 58%);color:#14102a;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.badge.none{background:color-mix(in srgb,var(--bg) 80%,transparent);color:var(--muted)}
+.info{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 10px;background:linear-gradient(to top,color-mix(in srgb,var(--bg) 97%,transparent) 35%,transparent)}
+.title{font-weight:600;font-size:.95rem;line-height:1.25;margin:0 0 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oth{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.78rem;color:var(--muted);margin-bottom:4px}
+.oth b{color:hsl(var(--h) 85% 66%)}
+.slw{max-height:0;opacity:0;overflow:hidden;transition:max-height .25s,opacity .2s}
+.card:hover .slw,.card:focus-within .slw{max-height:150px;opacity:1}
+@media (hover:none){.slw{max-height:150px;opacity:1}}
+.tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
+.tools .mv{color:var(--text)}
+.tools button{background:none;border:0;color:var(--muted);font:inherit;font-size:.8rem;cursor:pointer;padding:2px 0}
+.tools button:hover{color:var(--text)}
+.tools .del:hover,.tools .del[data-arm]{color:var(--danger)}
+
+.srow{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.sctl{flex:1;min-width:200px}
+.ring{--p:calc(var(--s) * 10%);position:relative;flex:none;width:112px;height:112px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(hsl(var(--h) 85% 60%) var(--p),rgba(255,255,255,.14) 0)}
+.ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--bg)}
+.ring output{position:relative;font-size:2.5rem;font-weight:800;line-height:1;color:hsl(var(--h) 85% 66%)}
+.ring.sm{width:70px;height:70px}.ring.sm::before{inset:6px}.ring.sm output{font-size:1.25rem}
+
+.ctl{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.ctl .lab{color:var(--muted);font-size:.85rem}
+.who{display:flex;gap:8px;flex-wrap:wrap}
+.who button{font:inherit;font-size:.9rem;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
+.who button.on{color:var(--text);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.ctl .seg button{font:inherit;font-size:.9rem;color:var(--muted);background:var(--panel);border:0;padding:7px 18px;cursor:pointer}
+.ctl .seg button.on{background:var(--accent);color:#2a1c00;font-weight:600}
+.note{color:var(--muted);font-size:.9rem;margin:6px 0 26px}
+.rows{display:grid;gap:12px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;background:var(--panel);border-radius:var(--r);padding:10px 16px 10px 12px}
+.row .rk{font-weight:800;font-size:1.2rem;color:var(--muted);min-width:2.4ch}
+.row .pst{width:54px;height:78px;border-radius:8px;overflow:hidden;background:var(--line);flex:none}
+.row .pst img{width:100%;height:100%;object-fit:cover;display:block}
+.row .mid{flex:1;min-width:190px}
+.row .nm{font-weight:600;margin-bottom:4px}
+.scs{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border-radius:999px;padding:1px 11px;font-size:.85rem;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+.chip b{color:hsl(var(--h) 85% 66%);font-size:1rem}
+.row input[type=range]{max-width:200px;margin-top:6px}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,.18);cursor:pointer;margin:6px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--bg)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid var(--bg)}
+.empty{color:var(--muted);text-align:center;padding:70px 0}.empty b{display:block;color:var(--text);font-size:1.5rem;font-weight:800;margin-bottom:4px}
+.cats{display:flex;margin:0 0 18px;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel);width:100%;max-width:560px}
+.cats button{flex:1;font:inherit;font-size:1rem;font-weight:600;color:var(--muted);background:none;border:0;padding:10px 12px;cursor:pointer;white-space:nowrap}
+.cats button small{font-weight:400;opacity:.85;margin-left:6px}
+.cats button.on{background:var(--accent);color:#2a1c00}
+.cats button:hover:not(.on){color:var(--text)}
+.pbar{height:8px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.pg{display:flex;gap:12px;align-items:center;margin:2px 0 8px;font-size:.88rem;color:var(--muted)}
+.pg .pbar{flex:1;max-width:260px}
+.minilab{display:block;color:var(--muted);font-size:.8rem;margin-top:6px}
+.wact{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.wact button,.dback button,.step button,.lnk{font:inherit;font-size:.85rem;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
+.wact button:hover,.dback button:hover,.step button:hover,.lnk:hover{border-color:var(--accent)}
+.wact .pri{background:var(--accent);color:#2a1c00;border-color:var(--accent);font-weight:600}
+.dback{margin-bottom:14px}
+.lnk{margin-top:12px}
+.hero .seg{display:inline-flex;margin:0 0 14px}
+.hero .seg button{font:inherit;font-size:.9rem;color:var(--muted);background:var(--panel);border:0;border-radius:0;padding:7px 18px;cursor:pointer}
+.hero .seg button.on{background:var(--accent);color:#2a1c00;font-weight:600}
+.step{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px;color:var(--muted)}
+.step button{width:38px;height:38px;padding:0;font-size:1.25rem;border-radius:50%}
+.step input[type=number]{width:78px;font:inherit;font-size:1.05rem;font-weight:600;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.fin{margin-top:16px}.fin .lab{color:var(--muted);font-size:.9rem;margin-right:8px}
+.fin .eo{font-weight:800;font-size:1.3rem;color:hsl(var(--h) 85% 66%)}.fin .eo.none{color:var(--muted)}
+.elist{display:grid;gap:8px}
+.erow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border-radius:12px;padding:8px 14px}
+.erow .ek{min-width:80px;font-weight:600}
+.erow input[type=range]{flex:1;min-width:140px;max-width:260px;margin:0}
+.erow .eo{min-width:2ch;font-weight:800;color:hsl(var(--h) 85% 66%)}.erow .eo.none{color:var(--muted)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:620px){.hero{flex-direction:column;align-items:flex-start}.hero .poster{flex-basis:auto;width:150px}}
+@media (max-width:620px){
+  body{padding:calc(20px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) calc(70px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+  input,textarea,select{font-size:16px!important}
+  .cats button{padding:12px 6px;font-size:.92rem}.cats button small{display:block;margin:0}
+  .bar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-right:-14px;padding-right:14px}
+  .bar::-webkit-scrollbar{display:none}.bar>*{flex:0 0 auto;white-space:nowrap}
+  .row{flex-wrap:wrap}.row .wact{width:100%}
+  .wact button,.tools button{min-height:40px}
+  .erow input[type=range]{max-width:none}
+  input[type=range]{height:10px}
+  input[type=range]::-webkit-slider-thumb{width:28px;height:28px}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Meine Anime-Listen</h1>
+    <p class="stats" id="stats"></p>
+    <p class="sync" id="sync"></p>
+    <div class="themes" id="themes" aria-label="Farbschema">
+      <button data-t="" style="--c:#ffb347" title="Bernstein"></button>
+      <button data-t="sakura" style="--c:#ff7eb6" title="Sakura"></button>
+      <button data-t="mint" style="--c:#5eead4" title="Mint"></button>
+    </div>
+  </header>
+
+  <nav class="cats" id="cats" aria-label="Kategorien"></nav>
+  <nav class="tabs" id="tabs" aria-label="Listen"></nav>
+
+  <div class="search" id="searchbox">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" type="search" placeholder="Anime suchen, z. B. Frieren" autocomplete="off" aria-label="Anime suchen">
+    <div class="sug" id="sug"></div>
+  </div>
+  <div class="hint" id="hint"></div>
+
+  <div class="bar" id="bar"></div>
+  <div class="panel" id="panel" hidden></div>
+  <div id="out"></div>
+</main>
+<script>
+const KEY = 'anime-lists-v3';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+const now = () => Date.now();
+const norm = s => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const hint = t => { $('hint').textContent = t; };
+const fmt = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
+const hue = s => s ? Math.round((s - 1) / 9 * 130 + 5) : 0;
+const safeId = v => String(v).replace(/[^\w.~+@:-]/g, '_');
+
+/* ---------- Daten ---------- */
+function newList(name) { return { lid: uid(), name, key: null, nts: now(), items: {}, scores: {}, alts: {}, last: 0 }; }
+function fromOld(name, arr, me) {
+  const L = newList(name);
+  for (const a of arr) {
+    if (!a || !a.title) continue;
+    const aid = safeId(a.id != null ? a.id : uid());
+    L.items[aid] = { t: a.title, i: a.img || '', ts: now() };
+    if (a.alts && a.alts.length) L.alts[aid] = a.alts.map(x => ({ t: x.title, i: x.img }));
+    if (a.score) { (L.scores[me.id] = L.scores[me.id] || { n: me.name, s: {} }).s[aid] = [a.score, now()]; }
+  }
+  return L;
+}
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.lists && d.lists.length && d.me) return d; } catch (e) {}
+  const me = { id: 'p' + uid(), name: '' }, lists = [];
+  try {
+    const o = JSON.parse(localStorage.getItem('anime-lists-v2'));
+    if (o && o.lists) { if (o.me) me.name = o.me; for (const l of o.lists) if (!l.owner) lists.push(fromOld(l.name, l.items || [], me)); }
+  } catch (e) {}
+  if (!lists.length) {
+    try { const old = JSON.parse(localStorage.getItem('anime-liste-v1')); if (Array.isArray(old) && old.length) lists.push(fromOld('Meine Liste', old, me)); } catch (e) {}
+  }
+  if (!lists.length) lists.push(newList('Meine Liste'));
+  return { me, lists, active: lists[0].lid, gsUrl: '' };
+}
+let db = load();
+db.gsUrl = db.gsUrl || '';
+db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
+const cur = () => db.lists.find(l => l.lid === db.active) || db.lists[0];
+const live = L => Object.entries(L.items).filter(([, x]) => !x.d).map(([aid, x]) => ({ aid, ...x }));
+const scoreOf = (L, pid, aid) => { const e = L.scores[pid], v = e && e.s[aid]; return v && v[0] > 0 ? v[0] : null; };
+const myScore = (L, aid) => scoreOf(L, db.me.id, aid);
+const pname = (L, pid) => pid === db.me.id ? 'Du' : ((L.scores[pid] && L.scores[pid].n) || 'Person');
+const others = L => Object.keys(L.scores).filter(p => p !== db.me.id && Object.values(L.scores[p].s).some(v => v[0] > 0));
+const parts = L => [db.me.id, ...others(L)];
+const stOf = x => x.st === 'w' || x.st === 'd' ? x.st : 't';
+const liveIn = (L, st) => live(L).filter(x => stOf(x) === st);
+function epStats(L, pid, aid) {
+  const e = L.scores[pid]; if (!e) return null;
+  const pre = `e:${aid}#`; let n = 0, sum = 0;
+  for (const [k, v] of Object.entries(e.s)) if (k.startsWith(pre) && v[0] > 0) { n++; sum += v[0]; }
+  return n ? { n, avg: sum / n } : null;
+}
+let view = 'mine', cmp = { mode: 'avg', sel: null }, panel = null;
+
+function touch(L) { save(); queueSync(L); }
+function setScore(L, aid, v) {
+  const e = L.scores[db.me.id] || (L.scores[db.me.id] = { n: db.me.name, s: {} });
+  e.n = db.me.name || e.n || '';
+  e.s[aid] = [v, now()];
+  touch(L);
+}
+
+/* ---------- Abgleich: Zusammenführen ---------- */
+/*MERGE-START*/
+const canon = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, x) => (a[x] = v[x], a), {}) : v);
+const pub = L => ({ v: 3, name: L.name, nts: L.nts, items: L.items, scores: L.scores });
+function merge(L, R, meId, meName) {
+  const out = { v: 3 };
+  if ((R.nts || 0) > (L.nts || 0)) { out.name = R.name; out.nts = R.nts; } else { out.name = L.name; out.nts = L.nts; }
+  const Ri = R.items || {}, Rs = R.scores || {};
+  out.items = {};
+  for (const aid of new Set([...Object.keys(L.items), ...Object.keys(Ri)])) {
+    const a = L.items[aid], b = Ri[aid];
+    out.items[aid] = !a ? b : !b ? a : ((b.ts || 0) >= (a.ts || 0) ? b : a);
+  }
+  out.scores = {};
+  for (const pid of new Set([...Object.keys(L.scores), ...Object.keys(Rs)])) {
+    const a = L.scores[pid] || { s: {} }, b = Rs[pid] || { s: {} }, s = {};
+    for (const aid of new Set([...Object.keys(a.s), ...Object.keys(b.s)])) {
+      const x = a.s[aid], y = b.s[aid];
+      s[aid] = !x ? y : !y ? x : ((y[1] || 0) >= (x[1] || 0) ? y : x);
+    }
+    out.scores[pid] = { n: pid === meId ? (meName || a.n || b.n || '') : (b.n || a.n || ''), s };
+  }
+  return out;
+}
+/*MERGE-END*/
+
+/* ---------- Online-Speicher ---------- */
+const JH = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+const BK = {
+  jb: { label: 'JSONBlob', base: 'https://jsonblob.com/api/jsonBlob', home: 'https://jsonblob.com/' },
+  gs: { label: 'Google-Speicher', home: 'https://script.google.com/' }
+};
+const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
+const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
+const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
+const GS_CODE = `function doGet(e){return out_(read_(key_(e.parameter.k)));}
+function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
+function key_(k){return String(k||'').replace(/\\W/g,'');}
+function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
+function write_(k,s){var p=PropertiesService.getScriptProperties(),old=+p.getProperty(k+'_c')||0,n=Math.ceil(s.length/2500),o={};for(var i=0;i<n;i++)o[k+'_'+i]=s.slice(i*2500,(i+1)*2500);o[k+'_c']=String(n);p.setProperties(o);for(var j=n;j<old;j++)p.deleteProperty(k+'_'+j);}
+function out_(s){return ContentService.createTextOutput(s).setMimeType(ContentService.MimeType.JSON);}`;
+async function http(label, step, url, opt) {
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 15000);
+  let r;
+  try { r = await fetch(url, { ...opt, signal: ctl.signal }); }
+  catch (e) { throw new Error(`${label} ${step}: nicht erreichbar oder vom Browser blockiert (${e.name === 'AbortError' ? 'Zeitüberschreitung' : e.message})`); }
+  finally { clearTimeout(to); }
+  if (!r.ok) throw new Error(`${label} ${step}: HTTP ${r.status}`);
+  return r;
+}
+const splitKey = key => { const i = key.indexOf(':'), k = key.slice(0, i); if (!BK[k]) throw new Error('Unbekannter Code'); return [k, key.slice(i + 1)]; };
+const gsParts = key => { const [, rest] = splitKey(key), [dep, kk] = rest.split('~'); return { dep, kk }; };
+async function bCreate(k, obj) {
+  if (k === 'gs') {
+    const dep = gsDep();
+    if (!dep) throw new Error('Google-Speicher: noch nicht eingerichtet');
+    const key = 'gs:' + dep + '~' + uid() + uid();
+    await bPut(key, obj);
+    return key;
+  }
+  const b = BK[k];
+  const r = await http(b.label, 'anlegen', b.base, { method: 'POST', headers: JH, body: JSON.stringify(obj) });
+  let j = null; try { j = await r.clone().json(); } catch (e) {}
+  const loc = r.headers.get('Location');
+  const id = (loc && loc.split('/').pop()) || (j && (j.id || j.jsonBlobId)) || null;
+  if (!id) throw new Error(`${b.label} anlegen: Kennung in der Antwort nicht lesbar`);
+  return k + ':' + id;
+}
+async function bGet(key) {
+  const [k, id] = splitKey(key), b = BK[k];
+  let j;
+  if (k === 'gs') {
+    const { dep, kk } = gsParts(key);
+    const r = await http(b.label, 'lesen', GS(dep) + '?k=' + encodeURIComponent(kk), { cache: 'no-store' });
+    try { j = JSON.parse(await r.text()); } catch (e) { throw new Error(`${b.label} lesen: Antwort ist kein JSON (Bereitstellung auf „Jeder“ gestellt?)`); }
+  } else {
+    const r = await http(b.label, 'lesen', b.base + '/' + id, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+    j = await r.json();
+  }
+  if (!j || typeof j !== 'object' || !j.items) throw new Error(`${b.label} lesen: unerwartete Antwort`);
+  return j;
+}
+async function bPut(key, obj) {
+  const [k, id] = splitKey(key), b = BK[k];
+  if (k === 'gs') {
+    const { dep, kk } = gsParts(key);
+    const r = await http(b.label, 'schreiben', GS(dep), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ k: kk, d: obj }) });
+    let j = null; try { j = JSON.parse(await r.text()); } catch (e) {}
+    if (!j || !j.ok) throw new Error(`${b.label} schreiben: Antwort ist kein JSON (Bereitstellung auf „Jeder“ gestellt?)`);
+    return;
+  }
+  await http(b.label, 'schreiben', b.base + '/' + id, { method: 'PUT', headers: JH, body: JSON.stringify(obj) });
+}
+async function reach(url) {
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000);
+  try { await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: ctl.signal }); return true; }
+  catch (e) { return false; } finally { clearTimeout(to); }
+}
+async function testBackends() {
+  const out = [];
+  for (const k of Object.keys(BK)) {
+    const b = BK[k], steps = [];
+    if (k === 'gs' && !gsDep()) { out.push(`${b.label}: noch nicht eingerichtet (siehe unten)`); continue; }
+    const up = await reach(b.home);
+    try {
+      const t0 = { v: 3, items: {}, scores: {}, test: 1 };
+      const key = await bCreate(k, t0); steps.push('anlegen ok');
+      await bGet(key); steps.push('lesen ok');
+      await bPut(key, { ...t0, test: 2 }); steps.push('ändern ok');
+      const g = await bGet(key); steps.push(g.test === 2 ? 'Änderung sichtbar' : 'Änderung NICHT sichtbar');
+      out.push(`${b.label}: ${steps.join(' → ')}`);
+    } catch (e) {
+      out.push((steps.length ? steps.join(' → ') + ' → ' : '') + e.message);
+      out.push(`   Server ${up ? 'ist erreichbar, die Anfrage wird aber abgelehnt (meist CORS)' : 'ist NICHT erreichbar (Werbeblocker, Firewall oder Netz)'}`);
+      if (k === 'jb') {
+        try { const r = await fetch(b.base, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"v":3,"items":{},"scores":{}}' }); out.push(`   POST ohne Vorabfrage: HTTP ${r.status}`); }
+        catch (e2) { out.push('   POST ohne Vorabfrage: ' + e2.message); }
+      }
+    }
+  }
+  return out;
+}
+const parseKey = t => { const m = String(t).match(/\b(jb|gs):([A-Za-z0-9._~+@-]{4,})/); return m ? m[1] + ':' + m[2] : null; };
+
+/* ---------- Sicherung ---------- */
+function makeBackup() {
+  let theme = ''; try { theme = localStorage.getItem('anime-theme') || ''; } catch (e) {}
+  return { app: 'anime-liste', v: 1, saved: now(), me: db.me, gsUrl: db.gsUrl, theme, active: db.active, lists: db.lists };
+}
+const encBackup = () => 'ANIMEBACKUP:' + btoa(unescape(encodeURIComponent(JSON.stringify(makeBackup()))));
+function parseBackup(t) {
+  t = String(t).trim();
+  if (t.startsWith('ANIMEBACKUP:')) t = decodeURIComponent(escape(atob(t.slice(12).trim())));
+  return JSON.parse(t);
+}
+function restoreBackup(b) {
+  if (!b || b.app !== 'anime-liste' || !Array.isArray(b.lists) || !b.me || !b.me.id) throw new Error('Das ist keine gültige Sicherung.');
+  const oldId = db.me.id, newId = b.me.id;
+  if (oldId !== newId) {
+    for (const L of db.lists) {
+      const e = L.scores[oldId]; if (!e) continue;
+      const t = L.scores[newId];
+      if (!t) L.scores[newId] = e;
+      else for (const [aid, v] of Object.entries(e.s)) if (!t.s[aid] || t.s[aid][1] < v[1]) t.s[aid] = v;
+      delete L.scores[oldId];
+    }
+    db.me.id = newId;
+  }
+  db.me.name = b.me.name || db.me.name;
+  if (b.gsUrl && !db.gsUrl) db.gsUrl = b.gsUrl;
+  let added = 0, merged = 0;
+  for (const B of b.lists) {
+    const L = db.lists.find(l => (B.key && l.key === B.key) || l.lid === B.lid);
+    if (L) {
+      const M = merge(L, B, newId, db.me.name);
+      L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores;
+      L.alts = { ...(B.alts || {}), ...(L.alts || {}) }; L.key = L.key || B.key || null; merged++;
+    } else {
+      db.lists.push({ lid: B.lid || uid(), name: B.name || 'Liste', key: B.key || null, nts: B.nts || 0, items: B.items || {}, scores: B.scores || {}, alts: B.alts || {}, last: 0 });
+      added++;
+    }
+  }
+  const empty = l => !l.key && !Object.keys(l.items).length && !Object.keys(l.scores).length;
+  if (db.lists.some(l => !empty(l))) db.lists = db.lists.filter(l => !empty(l));
+  if (!db.lists.length) db.lists.push(newList('Meine Liste'));
+  db.active = (b.active && db.lists.some(l => l.lid === b.active)) ? b.active : (db.lists.some(l => l.lid === db.active) ? db.active : db.lists[0].lid);
+  for (const L of db.lists) { const e = L.scores[db.me.id]; if (e && db.me.name) e.n = db.me.name; }
+  if (typeof b.theme === 'string') { applyTheme(b.theme); try { localStorage.setItem('anime-theme', b.theme); } catch (e) {} }
+  save();
+  db.lists.filter(l => l.key).forEach((l, k) => queueSync(l, 300 + k * 600));
+  return { added, merged };
+}
+
+/* ---------- Abgleich: Ablauf ---------- */
+const SY = new Map(), TM = new Map();
+function queueSync(L, ms = 800) { if (!L.key) return; clearTimeout(TM.get(L.lid)); TM.set(L.lid, setTimeout(() => syncList(L), ms)); }
+async function syncList(L) {
+  if (!L.key) return;
+  const st = SY.get(L.lid) || {}; SY.set(L.lid, st);
+  if (st.busy) { st.again = true; return; }
+  st.busy = true; setStatus();
+  try {
+    const R = await bGet(L.key);
+    const M = merge(L, R, db.me.id, db.me.name);
+    const differs = canon(M) !== canon({ v: 3, name: R.name, nts: R.nts, items: R.items, scores: R.scores });
+    L.name = M.name; L.nts = M.nts; L.items = M.items; L.scores = M.scores;
+    if (differs) await bPut(L.key, M);
+    st.err = null; L.last = now(); save();
+  } catch (e) { st.err = e.message; }
+  st.busy = false; setStatus(); safeRender();
+  if (st.again) { st.again = false; queueSync(L, 300); }
+}
+function setStatus() {
+  const L = cur(), el = $('sync');
+  if (!L.key) { el.textContent = 'Nur auf diesem Gerät gespeichert'; el.className = 'sync'; return; }
+  const st = SY.get(L.lid) || {};
+  if (st.busy) { el.textContent = 'Synchronisiere …'; el.className = 'sync'; }
+  else if (st.err) { el.textContent = 'Sync-Fehler: ' + st.err + ' Änderungen bleiben lokal und werden erneut versucht.'; el.className = 'sync bad'; }
+  else if (L.last) { const s = Math.round((now() - L.last) / 1000); el.textContent = 'Synchronisiert ' + (s < 10 ? 'gerade eben' : s < 90 ? `vor ${s} s` : `vor ${Math.round(s / 60)} min`); el.className = 'sync ok'; }
+  else { el.textContent = 'Noch nicht synchronisiert'; el.className = 'sync'; }
+}
+setInterval(setStatus, 10000);
+setInterval(() => { const L = cur(); if (L.key && !document.hidden) syncList(L); }, 30000);
+document.addEventListener('visibilitychange', () => { const L = cur(); if (!document.hidden && L.key) syncList(L); });
+
+/* ---------- Suche ---------- */
+let results = [], timer, seq = 0;
+async function searchAniList(q) {
+  const r = await fetch('https://graphql.anilist.co', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ query: 'query($q:String){Page(perPage:6){media(search:$q,type:ANIME,sort:SEARCH_MATCH){id title{english romaji} coverImage{large} seasonYear episodes}}}', variables: { q } })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  return d.data.Page.media.map(a => ({ id: 'al' + a.id, title: a.title.english || a.title.romaji, img: a.coverImage.large || '', year: a.seasonYear || '', episodes: a.episodes || 0 }));
+}
+async function searchJikan(q) {
+  const r = await fetch('https://api.jikan.moe/v4/anime?sfw=true&limit=6&q=' + encodeURIComponent(q));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  return d.data.map(a => ({ id: 'mal' + a.mal_id, title: a.title_english || a.title, img: a.images.jpg.large_image_url || a.images.jpg.image_url || '', year: a.year || '', episodes: a.episodes || 0 }));
+}
+async function search(q) {
+  const errs = [];
+  try { return await searchAniList(q); } catch (e) { errs.push('AniList: ' + e.message); }
+  try { return await searchJikan(q); } catch (e) { errs.push('Jikan: ' + e.message); }
+  throw new Error(errs.join(' | '));
+}
+function showSug() {
+  const s = $('sug');
+  if (!results.length) { s.style.display = 'none'; return; }
+  s.innerHTML = results.map((r, i) => `<button data-i="${i}"><img src="${esc(r.img)}" alt=""><span>${esc(r.title)}<br><small>${esc(r.year)}</small></span></button>`).join('');
+  s.style.display = 'block';
+}
+$('q').addEventListener('input', e => {
+  clearTimeout(timer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { results = []; showSug(); hint(''); return; }
+  timer = setTimeout(async () => {
+    const my = ++seq;
+    hint('Suche …');
+    try {
+      const res = await search(q);
+      if (my !== seq) return;
+      results = res; showSug();
+      hint(res.length ? 'Treffer anklicken oder Enter für den ersten.' : 'Nichts gefunden – Enter fügt den Namen ohne Bild hinzu.');
+    } catch (err) {
+      if (my !== seq) return;
+      results = []; showSug();
+      hint('Suche nicht erreichbar – ' + err.message + '. Enter fügt den Namen ohne Bild hinzu.');
+    }
+  }, 450);
+});
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const q = e.target.value.trim();
+    if (q) addItem(results[0] || { id: 'm' + now(), title: q, img: '' }, results);
+  }
+  if (e.key === 'Escape') { results = []; showSug(); }
+});
+$('sug').addEventListener('click', e => { const b = e.target.closest('button'); if (b) addItem(results[+b.dataset.i], results); });
+
+function addItem(item, alts) {
+  const L = cur(), aid = safeId(item.id);
+  if (live(L).some(x => x.aid === aid || norm(x.t) === norm(item.title))) { hint('„' + item.title + '“ ist schon in der Liste.'); return; }
+  L.items[aid] = { t: item.title, i: item.img || '', ts: now(), ...(item.episodes ? { n: item.episodes } : {}) };
+  L.alts[aid] = alts.filter(a => a.id !== item.id).map(a => ({ t: a.title, i: a.img }));
+  touch(L);
+  $('q').value = ''; results = []; showSug(); hint('„' + item.title + '“ hinzugefügt.');
+  render();
+}
+
+/* ---------- Darstellung ---------- */
+const poster = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : esc((a.t || '?').charAt(0).toUpperCase());
+const slider = (a, v) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" aria-label="Deine Bewertung für ${esc(a.t)}">`;
+const tools = (L, a) => `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
+const othersHtml = (L, aid) => {
+  const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
+  return o.length ? `<div class="oth">${o.map(([n, v]) => `<span>${esc(n)} <b>${v}</b></span>`).join('')}</div>` : '';
+};
+
+function card(L, a, rank) {
+  return `<article class="card" data-aid="${esc(a.aid)}" style="--h:${hue(a.s)}">
+    <div class="poster">${poster(a)}</div>
+    ${rank ? `<span class="rank r${rank}">#${rank}</span>` : ''}
+    <output class="badge ${a.s ? '' : 'none'}">${a.s || '–'}</output>
+    <div class="info"><p class="title">${esc(a.t)}</p>${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
+  </article>`;
+}
+function hero(L, a) {
+  return `<section class="hero" data-aid="${esc(a.aid)}" style="--h:${hue(a.s)};--s:${a.s};--art:url('${esc(a.i)}')">
+    <div class="poster">${poster(a)}</div>
+    <div class="txt">
+      <span class="flag">Als Nächstes gucken</span>
+      <h2>${esc(a.t)}</h2>
+      ${othersHtml(L, a.aid).replace('class="oth"', 'class="oth" style="font-size:.9rem;margin-bottom:12px"')}
+      <div class="srow"><div class="ring"><output>${a.s}</output></div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
+    </div>
+  </section>`;
+}
+function renderMine(L) {
+  const it = liveIn(L, 't').map(a => ({ ...a, s: myScore(L, a.aid) }));
+  const byT = (x, y) => (x.t || '').localeCompare(y.t || '');
+  const rated = it.filter(a => a.s).sort((x, y) => y.s - x.s || byT(x, y));
+  const open = it.filter(a => !a.s).sort(byT);
+  const avg = rated.length ? fmt(rated.reduce((s, a) => s + a.s, 0) / rated.length) : null;
+  const oth = others(L).map(p => pname(L, p));
+  $('stats').textContent = it.length
+    ? `${it.length} ${it.length === 1 ? 'Anime' : 'Animes'} · ${rated.length} von dir bewertet` + (avg ? ` · Ø ${avg}` : '') + (oth.length ? ` · mit ${oth.join(', ')}` : '')
+    : 'Deine Watchlist, sortiert nach Lust aufs Gucken.';
+  let h = '';
+  if (!it.length) h = '<div class="empty"><b>Diese Liste ist noch leer</b>Such oben nach einem Anime, importiere eine Liste oder spiele unter „Sicherung“ deine alten Daten ein.</div>';
+  if (rated.length) h += hero(L, rated[0]);
+  if (rated.length > 1) h += `<div class="grid">${rated.slice(1).map((a, i) => card(L, a, i + 2)).join('')}</div>`;
+  if (open.length) h += `<h3>Noch nicht von dir bewertet</h3><div class="grid">${open.map(a => card(L, a, 0)).join('')}</div>`;
+  $('out').innerHTML = h;
+}
+
+const chip = (n, s) => `<span class="chip" style="--h:${hue(s)}">${esc(n)} <b>${s ? fmt(s) : '–'}</b></span>`;
+const ringC = (c, cls) => `<div class="ring ${cls || ''}" style="--h:${hue(c)};--s:${c}"><output>${fmt(c)}</output></div>`;
+function renderCompare(L) {
+  const P = parts(L);
+  let sel = (cmp.sel || P).filter(p => P.includes(p));
+  if (!sel.length) sel = P;
+  const k1 = cmp.mode === 'min' ? 'min' : 'avg', k2 = cmp.mode === 'min' ? 'avg' : 'min';
+  const all = liveIn(L, 't').map(a => {
+    const sc = sel.map(p => scoreOf(L, p, a.aid)), full = sc.every(Boolean);
+    const r = { ...a, sc, full, mine: myScore(L, a.aid) };
+    if (full) { r.avg = sc.reduce((x, y) => x + y, 0) / sc.length; r.min = Math.min(...sc); r.c = r[k1]; }
+    return r;
+  });
+  const both = all.filter(r => r.full).sort((a, b) => b[k1] - a[k1] || b[k2] - a[k2] || a.t.localeCompare(b.t));
+  const miss = all.filter(r => !r.full).sort((a, b) => a.sc.filter(Boolean).length < b.sc.filter(Boolean).length ? 1 : a.t.localeCompare(b.t));
+  const names = sel.map(p => pname(L, p));
+
+  const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
+    ${rank ? `<span class="rk">#${rank}</span>` : ''}
+    <div class="pst">${r.i ? `<img src="${esc(r.i)}" alt="" loading="lazy">` : ''}</div>
+    <div class="mid"><div class="nm">${esc(r.t)}</div>
+      <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}</div>
+      ${sel.includes(db.me.id) ? `<input type="range" min="1" max="10" step="1" value="${r.mine || 5}" title="Deine Bewertung ändern" aria-label="Deine Bewertung für ${esc(r.t)}">` : ''}
+    </div>
+    ${r.full ? ringC(r.c, 'sm') : ''}
+  </article>`;
+  const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
+
+  $('stats').textContent = `${names.join(' × ')} · ${both.length} gemeinsam bewertet`;
+  let h = `<div class="ctl"><span class="lab">Vergleichen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Berechnung"><button data-m="avg" class="${cmp.mode === 'avg' ? 'on' : ''}">Ø aller</button><button data-m="min" class="${cmp.mode === 'min' ? 'on' : ''}">Minimum</button></div></div>
+  <p class="note">${cmp.mode === 'avg' ? 'Der Durchschnitt aller Gewählten bestimmt die Reihenfolge.' : 'Der niedrigste Score zählt: Oben landet nur, was alle mögen.'} Mit den Reglern änderst du direkt deine eigenen Scores.${P.length < 2 ? ' Noch hat niemand sonst Scores in dieser Liste. Über „Online-Sync“ lädst du deinen Kollegen ein.' : ''}</p>`;
+  if (both.length) {
+    const t = both[0];
+    h += `<section class="hero" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
+      <div class="poster">${poster(t)}</div>
+      <div class="txt"><span class="flag">Das solltet ihr zuerst gucken</span><h2>${esc(t.t)}</h2>
+        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i])).join('')}</div>
+        <div class="srow">${ringC(t.c)}</div></div></section>`;
+    h += section('Eure Rangliste', both.slice(1), 2);
+  } else {
+    h += '<div class="empty"><b>Noch keine gemeinsamen Scores</b>Sobald alle Gewählten einen Titel bewertet haben, erscheint er hier.</div>';
+  }
+  h += section('Es fehlen noch Scores', miss);
+  $('out').innerHTML = h;
+}
+
+function renderTabs() {
+  $('tabs').innerHTML = db.lists.map(l => `<button class="tab ${l.lid === db.active ? 'on' : ''}" data-l="${esc(l.lid)}">${esc(l.name)}${l.key ? '<i title="Online synchronisiert">●</i>' : ''}</button>`).join('') + '<button class="tab add" data-l="+">+ Neue Liste</button>';
+}
+function renderBar() {
+  const L = cur();
+  $('bar').innerHTML = `${db.cat === 'list' ? `<div class="seg"><button data-v="mine" class="${view === 'mine' ? 'on' : ''}">Meine Scores</button><button data-v="cmp" class="${view === 'cmp' ? 'on' : ''}">Vergleich</button></div>` : ''}
+    <button data-a="share" class="${L.key ? '' : 'pri'}">${L.key ? 'Online-Sync' : 'Mit Kollegen synchronisieren'}</button>
+    <button data-a="imp">Importieren</button><button data-a="bak">Sicherung</button><button data-a="ren">Umbenennen</button><button data-a="del">Liste löschen</button>`;
+}
+let detail = null, detailAll = false;
+function render() {
+  const L = cur();
+  if (detail && (!L.items[detail] || L.items[detail].d)) detail = null;
+  renderTabs(); renderCats(); renderBar(); setStatus();
+  $('searchbox').hidden = db.cat !== 'list' || !!detail;
+  if (detail) renderDetail(L, detail);
+  else if (db.cat === 'watch') renderWatching(L);
+  else if (db.cat === 'done') renderDone(L);
+  else if (view === 'cmp') renderCompare(L); else renderMine(L);
+}
+let lastIn = 0, dragging = false, rt = null;
+function safeRender() {
+  if (dragging || now() - lastIn < 2500) { clearTimeout(rt); rt = setTimeout(safeRender, 800); return; }
+  render();
+}
+document.addEventListener('pointerdown', e => { if (e.target.type === 'range') dragging = true; });
+document.addEventListener('pointerup', () => { dragging = false; });
+
+/* ---------- Kategorien: Am Schauen, Bewertungen, Details ---------- */
+function moveTo(L, aid, st) {
+  const x = L.items[aid]; if (!x) return;
+  const y = { ...x, ts: now() };
+  if (st === 't') delete y.st; else y.st = st;
+  if (st === 'w' && !y.ep) y.ep = 1;
+  if (st === 'd' && y.n) y.ep = y.n;
+  L.items[aid] = y; touch(L);
+}
+function setEp(L, aid, v) { const x = L.items[aid]; if (!x) return; L.items[aid] = { ...x, ep: v, pts: now(), ts: now() }; touch(L); }
+function renderCats() {
+  const L = cur(), c = { list: 0, watch: 0, done: 0 };
+  live(L).forEach(x => { const s = stOf(x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
+  $('cats').innerHTML = [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']].map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
+}
+const imgOf = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : '';
+const rng = (v, k, ek, label) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" data-k="${k}" ${ek ? `data-ek="${ek}"` : ''} aria-label="${esc(label)}">`;
+
+function renderWatching(L) {
+  const it = liveIn(L, 'w').sort((a, b) => (b.pts || b.ts || 0) - (a.pts || a.ts || 0));
+  $('stats').textContent = it.length ? `${it.length} ${it.length === 1 ? 'Anime' : 'Animes'} am Schauen` : 'Gerade schaut ihr nichts.';
+  if (!it.length) { $('out').innerHTML = '<div class="empty"><b>Nichts am Schauen</b>Starte in der Liste einen Anime mit „Am Schauen“.</div>'; return; }
+  const me = db.me.id, P = parts(L);
+  $('out').innerHTML = `<div class="rows">${it.map(a => {
+    const ep = a.ep || 1, total = a.n || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0, my = scoreOf(L, me, `e:${a.aid}#${ep}`);
+    return `<article class="row" data-aid="${esc(a.aid)}" style="--h:${hue(my)}">
+      <div class="pst">${imgOf(a)}</div>
+      <div class="mid"><div class="nm">${esc(a.t)}</div>
+        <div class="pg">${total ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}<span>Folge ${ep}${total ? ` von ${total}` : ''}</span></div>
+        <div class="scs">${chip('Du', my)}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`))).join('')}</div>
+        <span class="minilab">Folge ${ep} bewerten</span>${rng(my, 'e', ep, `Deine Bewertung für Folge ${ep}`)}
+      </div>
+      <div class="wact"><button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
+    </article>`;
+  }).join('')}</div>`;
+}
+
+function renderDone(L) {
+  const P = parts(L), me = db.me.id;
+  let sel = (cmp.sel || P).filter(p => P.includes(p)); if (!sel.length) sel = P;
+  const names = sel.map(p => pname(L, p));
+  const it = liveIn(L, 'd').map(a => {
+    const sc = sel.map(p => scoreOf(L, p, 'r:' + a.aid)), av = sc.filter(Boolean);
+    return { ...a, sc, cnt: av.length, c: av.length ? av.reduce((x, y) => x + y, 0) / av.length : null, ea: epStats(L, me, a.aid), mine: scoreOf(L, me, 'r:' + a.aid) };
+  });
+  const ranked = it.filter(r => r.c != null).sort((a, b) => b.c - a.c || b.cnt - a.cnt || a.t.localeCompare(b.t));
+  const open = it.filter(r => r.c == null).sort((a, b) => a.t.localeCompare(b.t));
+  $('stats').textContent = it.length ? `${it.length} geguckt · ${ranked.length} bewertet` : 'Noch nichts geguckt.';
+  if (!it.length) { $('out').innerHTML = '<div class="empty"><b>Noch keine Bewertungen</b>Markiere in der Liste oder unter „Am Schauen“ einen Anime als geguckt.</div>'; return; }
+  const epChip = r => r.ea ? `<span class="chip" style="--h:${hue(r.ea.avg)}">Ø deiner Folgen <b>${fmt(r.ea.avg)}</b></span>` : '';
+  const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
+    ${rank ? `<span class="rk">#${rank}</span>` : ''}
+    <div class="pst">${imgOf(r)}</div>
+    <div class="mid"><div class="nm">${esc(r.t)}</div>
+      <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}${epChip(r)}</div>
+      ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
+    </div>
+    ${r.c != null ? ringC(r.c, 'sm') : ''}
+    <div class="wact"><button data-act="detail">Details</button><button data-act="watch">Weiter schauen</button><button data-act="todo">Zur Liste</button></div>
+  </article>`;
+  const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
+  let h = P.length > 1 ? `<div class="ctl"><span class="lab">Anzeigen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div></div><p class="note">Die Reihenfolge richtet sich nach dem Durchschnitt der Gesamtbewertungen der Gewählten.</p>` : '';
+  if (ranked.length) {
+    const t = ranked[0];
+    h += `<section class="hero" data-aid="${esc(t.aid)}" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
+      <div class="poster">${poster(t)}</div>
+      <div class="txt"><span class="flag">Am besten bewertet</span><h2>${esc(t.t)}</h2>
+        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i])).join('')}${epChip(t)}</div>
+        <div class="srow">${ringC(t.c)}<div class="wact"><button data-act="detail">Details</button></div></div></div></section>`;
+    h += section('Eure Bewertungen', ranked.slice(1), 2);
+  }
+  h += section('Noch nicht bewertet', open);
+  $('out').innerHTML = h;
+}
+
+function renderDetail(L, aid) {
+  const x = L.items[aid], st = stOf(x), P = parts(L), me = db.me.id, a = { aid, ...x };
+  const total = x.n || 0, ep = x.ep || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
+  const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
+  const my = scoreOf(L, me, 'r:' + aid), es = epStats(L, me, aid);
+  $('stats').textContent = x.t;
+  const from = detailAll ? 1 : Math.max(1, ep - 19);
+  let rows = '';
+  for (let k = ep; k >= from; k--) {
+    const mk = scoreOf(L, me, `e:${aid}#${k}`);
+    const vals = P.map(p => scoreOf(L, p, `e:${aid}#${k}`)).filter(Boolean), avg = vals.length > 1 ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
+    rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}<output class="eo ${mk ? '' : 'none'}">${mk || '–'}</output>
+      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}</span></div>`;
+  }
+  const more = ep > 20 ? `<button class="lnk" data-act="showall">${detailAll ? 'Nur die letzten 20 zeigen' : `Alle ${ep} Folgen anzeigen`}</button>` : '';
+  $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
+  <section class="hero" data-aid="${esc(aid)}" style="--h:${hue(my)};--art:url('${esc(x.i)}')">
+    <div class="poster">${poster(a)}</div>
+    <div class="txt">
+      <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
+      <h2>${esc(x.t)}</h2>
+      <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Liste')}${stBtn('w', 'Am Schauen')}${stBtn('d', 'Geguckt')}</div>
+      <div class="step"><span>Folge</span><button data-act="ep-" aria-label="Eine Folge zurück">−</button><input type="number" id="epIn" min="0" ${total ? `max="${total}"` : ''} value="${ep}" aria-label="Aktuelle Folge"><button data-act="ep+" aria-label="Nächste Folge">+</button><span>von</span><input type="number" id="nTot" min="1" value="${total || ''}" placeholder="?" aria-label="Folgen insgesamt"></div>
+      ${total ? `<div class="pg"><div class="pbar"><i style="width:${pct}%"></i></div><span>${pct} %</span></div>` : ''}
+      ${st === 'd' ? `<div class="fin"><span class="lab">Deine Gesamtbewertung</span><output class="eo ${my ? '' : 'none'}">${my || '–'}</output>${rng(my, 'r', 0, 'Deine Gesamtbewertung')}
+        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, 'r:' + aid))).join('')}${es ? `<span class="chip" style="--h:${hue(es.avg)}">Ø deiner Folgen <b>${fmt(es.avg)}</b></span>` : ''}</div></div>` : ''}
+    </div>
+  </section>
+  <h3>Folgen bewerten</h3>
+  ${ep ? `<div class="elist">${rows}</div>${more}` : '<p class="note">Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.</p>'}`;
+}
+
+/* ---------- Bedienung ---------- */
+$('tabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.l === '+') { panel = 'new'; renderPanel(); return; }
+  db.active = b.dataset.l; panel = null; detail = null; hint(''); save(); renderPanel(); render();
+  const L = cur(); if (L.key) syncList(L);
+};
+$('cats').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  db.cat = b.dataset.c; detail = null; save(); render();
+};
+$('bar').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v) { view = b.dataset.v; render(); return; }
+  const a = b.dataset.a;
+  panel = panel === a ? null : a; renderPanel();
+};
+$('out').addEventListener('input', e => {
+  if (e.target.type !== 'range') return;
+  lastIn = now();
+  const box = e.target.closest('[data-aid]'), o = box.querySelector('output');
+  if (o) { o.textContent = e.target.value; o.classList.remove('none'); }
+  box.style.setProperty('--h', hue(+e.target.value));
+  box.style.setProperty('--s', e.target.value);
+});
+$('out').addEventListener('change', e => {
+  const t = e.target, L = cur(), box = t.closest('[data-aid]');
+  if (!box) return;
+  const aid = box.dataset.aid;
+  if (t.type === 'range') {
+    lastIn = 0;
+    const k = t.dataset.k || 's';
+    setScore(L, k === 'r' ? 'r:' + aid : k === 'e' ? `e:${aid}#${t.dataset.ek}` : aid, +t.value);
+    render(); return;
+  }
+  if (t.id === 'epIn' || t.id === 'nTot') {
+    const x = L.items[aid]; if (!x) return;
+    const v = Math.max(0, Math.floor(+t.value || 0));
+    if (t.id === 'epIn') setEp(L, aid, x.n ? Math.min(v, x.n) : v);
+    else { L.items[aid] = { ...x, n: v || null, ts: now() }; touch(L); }
+    render();
+  }
+});
+$('out').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const L = cur();
+  if (b.dataset.m) { cmp.mode = b.dataset.m; render(); return; }
+  if (b.dataset.p) {
+    const P = parts(L), s = new Set(cmp.sel || P);
+    if (s.has(b.dataset.p)) s.delete(b.dataset.p); else s.add(b.dataset.p);
+    cmp.sel = s.size ? [...s] : P; render(); return;
+  }
+  if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
+  const box = b.closest('[data-aid]'); if (!box) return;
+  const aid = box.dataset.aid, x = L.items[aid]; if (!x) return;
+  const act = b.dataset.act;
+  if (act === 'watch' || act === 'done' || act === 'todo' || act === 'st') {
+    const to = act === 'st' ? b.dataset.st : act === 'watch' ? 'w' : act === 'done' ? 'd' : 't';
+    moveTo(L, aid, to);
+    hint(`„${x.t}“ ist jetzt ${to === 'w' ? 'unter „Am Schauen“' : to === 'd' ? 'unter „Bewertungen“' : 'wieder in der Liste'}.`);
+    render(); return;
+  }
+  if (act === 'detail') { detail = aid; detailAll = false; render(); window.scrollTo(0, 0); return; }
+  if (act === 'ep+') {
+    if (x.n && (x.ep || 0) >= x.n) { moveTo(L, aid, 'd'); hint(`„${x.t}“ ist komplett geguckt und jetzt unter „Bewertungen“.`); }
+    else setEp(L, aid, (x.ep || 0) + 1);
+    render(); return;
+  }
+  if (act === 'ep-') { setEp(L, aid, Math.max(0, (x.ep || 0) - 1)); render(); return; }
+  if (b.dataset.act === 'del') {
+    if (!b.dataset.arm) {
+      b.dataset.arm = 1; b.textContent = 'Sicher?';
+      setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = 'Entfernen'; } }, 3000);
+      return;
+    }
+    L.items[aid] = { ...x, d: 1, ts: now() }; touch(L); render();
+  }
+  if (b.dataset.act === 'alt') {
+    const al = L.alts[aid];
+    if (al && al.length) {
+      const n = al.shift(); al.push({ t: x.t, i: x.i });
+      L.items[aid] = { ...x, t: n.t, i: n.i, ts: now() }; touch(L); render();
+    }
+  }
+});
+
+/* ---------- Bereich unter der Leiste ---------- */
+const msg = (t, bad) => { const m = $('pMsg'); if (m) { m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); } };
+function renderPanel() {
+  const P = $('panel'), L = cur();
+  if (!panel) { P.hidden = true; P.innerHTML = ''; return; }
+  P.hidden = false;
+  const nameField = `<label>Dein Name (sieht dein Kollege bei deinen Scores)<input type="text" id="pName" maxlength="30" value="${esc(db.me.name)}"></label>`;
+  let h = '';
+  if (panel === 'share' && !L.key) {
+    h = `<p>Damit dein Kollege an „${esc(L.name)}“ mitarbeiten kann, legt die App einen kleinen Online-Speicher an. Danach gleichen sich beide Geräte automatisch ab: bei jeder Änderung und alle 30 Sekunden. Du bekommst einen Code, den dein Kollege unter „Importieren“ einfügt.</p>
+      ${nameField}
+      <div class="row2"><button class="go" data-pa="start">Online-Sync starten</button><button data-pa="test">Verbindung testen</button></div>
+      <pre id="pLog"></pre>
+      <details id="gsd"><summary>Eigenen Google-Speicher einrichten (falls JSONBlob bei dir nicht geht)</summary>
+        <p style="margin-top:10px">Einmalig, etwa 3 Minuten. Dein Kollege braucht davon nichts, er bekommt nur den Code.</p>
+        <ol><li>Auf script.google.com ein neues Projekt anlegen, den vorhandenen Code durch das Script unten ersetzen und speichern.</li>
+        <li>Oben rechts „Bereitstellen“ → „Neue Bereitstellung“ → Typ „Web-App“. Ausführen als: „Ich“, Zugriff: „Jeder“. Bereitstellen und die Berechtigung bestätigen.</li>
+        <li>Die angezeigte Web-App-URL (endet auf /exec) hier einfügen und speichern.</li></ol>
+        <textarea id="pGsCode" rows="7" readonly>${esc(GS_CODE)}</textarea>
+        <div class="row2"><button data-pa="gscopy">Script kopieren</button></div>
+        <label style="margin-top:12px">Web-App-URL<input type="text" id="pGs" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(db.gsUrl)}"></label>
+        <div class="row2"><button class="go" data-pa="gssave">URL speichern</button></div>
+      </details>
+      <p class="warn">Wer den Code kennt, kann die Liste lesen und ändern. Gib ihn nur weiter, wem du vertraust.</p>`;
+  } else if (panel === 'share') {
+    h = `<p>Diese Liste gleicht sich automatisch ab. Schick deinem Kollegen diesen Code. Er fügt ihn unter „Importieren“ ein.</p>
+      <textarea id="pCode" rows="2" readonly>ANIME:${esc(L.key)}</textarea>
+      ${nameField}
+      <div class="row2"><button class="go" data-pa="copy">Code kopieren</button><button data-pa="now">Jetzt abgleichen</button><button data-pa="test">Verbindung testen</button><button data-pa="stop">Sync beenden</button></div>
+      <pre id="pLog"></pre><p class="warn">Wer den Code kennt, kann die Liste lesen und ändern. „Sync beenden“ trennt nur dieses Gerät, die Online-Daten bleiben für deinen Kollegen bestehen.</p>`;
+  } else if (panel === 'imp') {
+    h = `<p>Den Code deines Kollegen einfügen, um seiner Liste beizutreten. Oder Titel einfügen, einer pro Zeile, optional mit Note (z. B. „Frieren; 9“). Sie landen in „${esc(L.name)}“ und Bilder werden automatisch gesucht.</p>
+      <textarea id="pTxt" rows="5" placeholder="ANIME:jb:…&#10;oder&#10;Frieren; 9&#10;Death Note"></textarea>
+      <div style="height:12px"></div>${nameField}
+      <div class="row2"><input type="file" id="pFile" accept=".txt,.csv,.tsv,.json"><button class="go" data-pa="import">Importieren</button></div>`;
+  } else if (panel === 'bak') {
+    const nL = db.lists.length, nK = db.lists.filter(l => l.key).length;
+    h = `<p>Die Sicherung enthält alles: ${nL} ${nL === 1 ? 'Liste' : 'Listen'} (davon ${nK} mit Online-Sync, also auch die Listen deines Kollegen), deinen Namen samt Profil-Kennung, den Google-Script-Link und das Farbschema. Damit übernimmst du alles in eine neue Version der Datei oder auf ein anderes Gerät.</p>
+      <label>Deine Sicherung (Code)<textarea id="pBak" rows="3" readonly>${esc(encBackup())}</textarea></label>
+      <div class="row2"><button class="go" data-pa="bakcopy">Code kopieren</button><button data-pa="baksave">Als Datei speichern</button></div>
+      <p style="margin-top:18px">Sicherung einspielen: Code einfügen oder Datei wählen. Vorhandene Daten bleiben erhalten und werden zusammengeführt.</p>
+      <textarea id="pBakIn" rows="3" placeholder="ANIMEBACKUP:…"></textarea>
+      <div class="row2"><input type="file" id="pBakFile" accept=".json,.txt"><button class="go" data-pa="bakload">Einspielen</button></div>`;
+  } else if (panel === 'new') {
+    h = `<label>Name der neuen Liste<input type="text" id="pName2" maxlength="40" placeholder="z. B. Winter-Season"></label>
+      <div class="row2"><button class="go" data-pa="create">Liste anlegen</button><button data-pa="close">Abbrechen</button></div>`;
+  } else if (panel === 'ren') {
+    h = `<label>Neuer Name<input type="text" id="pName2" maxlength="40" value="${esc(L.name)}"></label>
+      <div class="row2"><button class="go" data-pa="rename">Speichern</button><button data-pa="close">Abbrechen</button></div>`;
+  } else if (panel === 'del') {
+    h = `<p>Liste „${esc(L.name)}“ von diesem Gerät löschen?${L.key ? ' Die Online-Daten bleiben für deinen Kollegen bestehen.' : ' Das lässt sich nicht rückgängig machen.'}</p>
+      <div class="row2"><button class="go" data-pa="delete">Ja, löschen</button><button data-pa="close">Abbrechen</button></div>`;
+  }
+  P.innerHTML = h + '<div class="msg" id="pMsg"></div>';
+  const f = P.querySelector('#pName2,#pTxt'); if (f) f.focus();
+}
+$('panel').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text') { e.preventDefault(); const g = $('panel').querySelector('.go'); if (g) g.click(); }
+});
+$('panel').addEventListener('change', e => {
+  const to = { pFile: 'pTxt', pBakFile: 'pBakIn' }[e.target.id];
+  if (to) { const f = e.target.files[0]; if (f) f.text().then(t => { $(to).value = t; }); }
+});
+$('panel').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b || !b.dataset.pa) return;
+  const L = cur(), a = b.dataset.pa;
+  const takeName = () => { const n = ($('pName') || {}).value; if (n && n.trim()) { db.me.name = n.trim().slice(0, 30); const en = L.scores[db.me.id]; if (en) en.n = db.me.name; save(); } return db.me.name; };
+  if (a === 'close') { panel = null; renderPanel(); return; }
+  if (a === 'create') {
+    const n = $('pName2').value.trim(); if (!n) { msg('Gib der Liste einen Namen.', true); return; }
+    const nl = newList(n); db.lists.push(nl); db.active = nl.lid; panel = null; view = 'mine'; save(); renderPanel(); render(); return;
+  }
+  if (a === 'rename') {
+    const n = $('pName2').value.trim(); if (!n) { msg('Gib der Liste einen Namen.', true); return; }
+    L.name = n; L.nts = now(); touch(L); panel = null; renderPanel(); render(); return;
+  }
+  if (a === 'delete') {
+    db.lists = db.lists.filter(x => x !== L);
+    if (!db.lists.length) db.lists.push(newList('Meine Liste'));
+    db.active = db.lists[0].lid; panel = null; save(); renderPanel(); render(); return;
+  }
+  if (a === 'bakcopy') {
+    const t = $('pBak'); t.select();
+    try { await navigator.clipboard.writeText(t.value); msg('Sicherung kopiert. Bewahre sie gut auf.'); }
+    catch (err) { document.execCommand('copy'); msg('Sicherung markiert. Mit Strg+C kopieren.'); }
+    return;
+  }
+  if (a === 'baksave') {
+    const blob = new Blob([JSON.stringify(makeBackup(), null, 1)], { type: 'application/json' });
+    const el = document.createElement('a');
+    el.href = URL.createObjectURL(blob); el.download = 'anime-sicherung-' + new Date().toISOString().slice(0, 10) + '.json'; el.click();
+    setTimeout(() => URL.revokeObjectURL(el.href), 1000);
+    msg('Datei gespeichert (Downloads-Ordner).'); return;
+  }
+  if (a === 'bakload') {
+    const t = ($('pBakIn').value || '').trim(); if (!t) { msg('Nichts eingefügt.', true); return; }
+    try {
+      const r = restoreBackup(parseBackup(t));
+      panel = null; renderPanel(); render();
+      hint(`Sicherung eingespielt: ${r.added} Liste(n) neu, ${r.merged} zusammengeführt.`);
+    } catch (err) { msg(err.message && err.message.startsWith('Das ist') ? err.message : 'Die Sicherung ist ungültig oder unvollständig.', true); }
+    return;
+  }
+  if (a === 'gscopy') {
+    const t = $('pGsCode'); t.select();
+    try { await navigator.clipboard.writeText(t.value); msg('Script kopiert.'); }
+    catch (err) { document.execCommand('copy'); msg('Script markiert. Mit Strg+C kopieren.'); }
+    return;
+  }
+  if (a === 'gssave') {
+    const v = ($('pGs').value || '').trim();
+    if (!GS_RE.test(v)) { msg('Das ist keine Web-App-URL. Sie muss …/macros/s/…/exec enthalten.', true); return; }
+    db.gsUrl = v; save(); msg('Gespeichert. Klicke jetzt auf „Verbindung testen“.'); return;
+  }
+  if (a === 'test') {
+    msg('Teste die Online-Speicher …'); $('pLog').textContent = '';
+    const out = await testBackends(); $('pLog').textContent = out.join('\n'); msg(''); return;
+  }
+  if (a === 'copy') {
+    const t = $('pCode'); t.select();
+    try { await navigator.clipboard.writeText(t.value); msg('Code kopiert. Schick ihn deinem Kollegen.'); }
+    catch (err) { document.execCommand('copy'); msg('Code markiert. Mit Strg+C kopieren.'); }
+    return;
+  }
+  if (a === 'now') { takeName(); touch(L); await syncList(L); msg(SY.get(L.lid) && SY.get(L.lid).err ? SY.get(L.lid).err : 'Abgeglichen.', !!(SY.get(L.lid) && SY.get(L.lid).err)); return; }
+  if (a === 'stop') {
+    if (!b.dataset.arm) { b.dataset.arm = 1; b.textContent = 'Wirklich beenden?'; return; }
+    L.key = null; L.last = 0; save(); panel = 'share'; renderPanel(); render(); return;
+  }
+  if (a === 'start') {
+    const nm = takeName(); if (!nm) { msg('Trag zuerst deinen Namen ein.', true); return; }
+    msg('Lege Online-Speicher an …');
+    const errs = [];
+    for (const k of Object.keys(BK)) {
+      if (k === 'gs' && !gsDep()) continue;
+      try {
+        const e0 = L.scores[db.me.id] || (L.scores[db.me.id] = { n: nm, s: {} }); e0.n = nm;
+        const key = await bCreate(k, pub(L));
+        await bGet(key);
+        L.key = key; break;
+      } catch (err) { errs.push(err.message); }
+    }
+    if (!L.key) {
+      msg(errs.join('  |  ') + (gsDep() ? '' : '  |  Tipp: Richte unten den eigenen Google-Speicher ein.'), true);
+      const d = $('gsd'); if (d) d.open = true;
+      return;
+    }
+    L.last = now(); save(); panel = 'share'; renderPanel(); render(); syncList(L); return;
+  }
+  if (a === 'import') {
+    const t = ($('pTxt').value || '').trim(); if (!t) { msg('Nichts eingefügt.', true); return; }
+    const key = parseKey(t);
+    if (key) { await joinCode(key, takeName()); return; }
+    const entries = parseImport(t);
+    if (!entries.length) { msg('Nichts zum Importieren gefunden.', true); return; }
+    panel = null; renderPanel(); runImport(entries);
+  }
+});
+
+async function joinCode(key, nm) {
+  const ex = db.lists.find(l => l.key === key);
+  if (ex) { db.active = ex.lid; panel = null; renderPanel(); render(); syncList(ex); hint('Diese Liste hast du schon.'); return; }
+  if (!nm) { msg('Trag deinen Namen ein, damit dein Kollege deine Scores erkennt.', true); return; }
+  msg('Lade Liste …');
+  try {
+    const R = await bGet(key);
+    const L = newList(R.name || 'Gemeinsame Liste');
+    L.key = key; L.items = R.items || {}; L.scores = R.scores || {}; L.nts = R.nts || 0; L.last = now();
+    L.scores[db.me.id] = L.scores[db.me.id] || { n: nm, s: {} }; L.scores[db.me.id].n = nm;
+    db.lists.push(L); db.active = L.lid; view = 'mine'; panel = null; save(); renderPanel(); render();
+    queueSync(L, 300);
+    hint(`Du bist der Liste „${L.name}“ beigetreten.`);
+  } catch (err) { msg(err.message, true); }
+}
+
+/* ---------- Import von Titeln ---------- */
+const fixScore = v => {
+  if (v == null || v === '') return null;
+  let n = parseFloat(String(v).replace(',', '.'));
+  if (!n) return null;
+  if (n > 10) n = n / 10;
+  return Math.min(10, Math.max(1, Math.round(n)));
+};
+function parseImport(text) {
+  text = text.trim();
+  if (!text) return [];
+  if (/^[\[{]/.test(text)) {
+    try {
+      let d = JSON.parse(text);
+      if (!Array.isArray(d)) d = d.list || d.animes || d.items || [];
+      return d.map(x => typeof x === 'string' ? { title: x } : {
+        title: x.title || x.t || x.name || x.anime || x.series_title, score: fixScore(x.score ?? x.rating ?? x.my_score),
+        img: x.img || x.image, id: x.id }).filter(x => x.title);
+    } catch (e) {}
+  }
+  return text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^(title|titel|name|anime)\s*[;,\t]/i.test(l)).map(l => {
+    const m = l.match(/^(.*?)\s*[;\t|,]\s*(\d+(?:[.,]\d+)?)\s*$/);
+    const clean = t => t.replace(/^(?:[-*•]|\d+[.)])\s+/, '').replace(/^"|"$/g, '').trim();
+    return m ? { title: clean(m[1]), score: fixScore(m[2]) } : { title: clean(l) };
+  }).filter(x => x.title);
+}
+let busy = false;
+async function runImport(entries) {
+  if (busy) return;
+  busy = true;
+  const L = cur();
+  let added = 0, n = 0;
+  for (const e of entries) {
+    n++;
+    hint(`Importiere ${n}/${entries.length}: ${e.title}`);
+    if (live(L).some(x => norm(x.t) === norm(e.title))) continue;
+    let aid, t = e.title, i = e.img || '', alts = [], n = null;
+    if (e.img) aid = safeId(e.id != null ? e.id : 'i' + now() + n);
+    else {
+      let res = [];
+      try { res = await search(e.title); } catch (err) {}
+      const r = res[0] || { id: 'm' + now() + n, title: e.title, img: '' };
+      aid = safeId(r.id); t = r.title; i = r.img; n = r.episodes || null;
+      alts = res.filter(x => x.id !== r.id).map(x => ({ t: x.title, i: x.img }));
+      await new Promise(ok => setTimeout(ok, 700));
+    }
+    if (live(L).some(x => x.aid === aid)) continue;
+    L.items[aid] = { t, i, ts: now(), ...(n ? { n } : {}) }; L.alts[aid] = alts;
+    if (e.score) setScore(L, aid, e.score); else touch(L);
+    added++;
+    if (cur() === L) safeRender();
+  }
+  busy = false;
+  hint(`Import fertig: ${added} von ${entries.length} hinzugefügt.`);
+}
+
+/* ---------- Farbschema ---------- */
+const applyTheme = t => {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  document.querySelectorAll('#themes button').forEach(b => b.classList.toggle('on', b.dataset.t === (t || '')));
+};
+let theme = '';
+try { theme = localStorage.getItem('anime-theme') || ''; } catch (e) {}
+applyTheme(theme);
+$('themes').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  applyTheme(b.dataset.t);
+  try { localStorage.setItem('anime-theme', b.dataset.t); } catch (e) {}
+};
+
+save();
+render();
+db.lists.filter(l => l.key).forEach((l, i) => setTimeout(() => syncList(l), 300 + i * 600));
+</script>
+</body>
+</html>
