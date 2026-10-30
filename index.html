@@ -320,6 +320,7 @@ async function pwHash(pw, salt) {
 }
 const newPw = async pw => { const s = uid() + uid(); return { s, h: await pwHash(pw, s), t: now() }; };
 const pwOn = e => !!(e && e.pw && e.pw.h);
+const admOk = async (L, pw) => !!pw && ((await okPw({ s: ADM.s, h: ADM.h }, pw)) || (!!L.adm && (await okPw(L.adm, pw))));
 const okPw = async (rec, pw) => !!rec && !!pw && (await pwHash(pw, rec.s)) === rec.h;
 
 /* ---------- Personen: entfernen und Identität wählen ---------- */
@@ -1213,11 +1214,12 @@ function renderPanel() {
       ${nRated(mine || { s: {} }) > 0 ? `<label class="chk"><input type="checkbox" id="pMerge"> Meine bisherigen ${nRated(mine)} Bewertungen als „${esc(db.me.name || 'Person')}“ in die gewählte Person übernehmen und „${esc(db.me.name || 'Person')}“ entfernen. Nur ankreuzen, wenn „${esc(db.me.name || 'Person')}“ nur dieses Gerät ist und kein anderes Gerät dieselbe Person benutzt.</label>` : ''}
       ${rows || '<p>Noch keine anderen Personen in dieser Liste.</p>'}
       <h4>Admin</h4>
-      <p>${adm ? 'Entfernen und Passwort zurücksetzen brauchen das Admin-Passwort.' : 'Lege ein Admin-Passwort fest. Erst dann kann jemand Personen entfernen.'}</p>
-      ${adm ? '<label>Admin-Passwort<input type="password" id="pAdm" autocomplete="off"></label>' : ''}
-      <label>${adm ? 'Neues Admin-Passwort (nur zum Ändern)' : 'Admin-Passwort festlegen'}<input type="password" id="pAdmNew" autocomplete="off"></label>
-      <div class="row2" style="margin-top:0"><button class="go" data-pa="admset">${adm ? 'Admin-Passwort ändern' : 'Admin-Passwort festlegen'}</button></div>
-      <p class="warn">Hinweis: Es gibt keinen Server. Die Passwörter werden in der App geprüft, in der Liste liegt nur ein verschlüsselter Prüfwert. Das hält Versehen und Neugierige ab, aber keinen, der den Programmcode ändert. Ein vergessenes Passwort lässt sich nicht zurücksetzen. Das Admin-Passwort solltest du dir aufschreiben.</p>`;
+      <p>Entfernen und „Passwort zurücksetzen“ brauchen das Admin-Passwort. Es gilt für alle Listen und muss nicht neu festgelegt werden.</p>
+      <label>Admin-Passwort<input type="password" id="pAdm" autocomplete="off"></label>
+      <p style="margin-top:14px">Optional: ein eigenes Admin-Passwort nur für diese Liste (gilt zusätzlich).</p>
+      <label>${adm ? 'Neues eigenes Passwort für diese Liste' : 'Eigenes Passwort für diese Liste'}<input type="password" id="pAdmNew" autocomplete="off"></label>
+      <div class="row2" style="margin-top:0"><button class="go" data-pa="admset">${adm ? 'Eigenes Passwort ändern' : 'Eigenes Passwort festlegen'}</button></div>
+      <p class="warn">Hinweis: Es gibt keinen Server. Die Passwörter werden in der App geprüft, in der Liste liegt nur ein verschlüsselter Prüfwert. Das hält Versehen und Neugierige ab, aber keinen, der den Programmcode ändert. Ein vergessenes Personen-Passwort setzt der Admin zurück.</p>`;
   } else if (panel === 'new') {
     h = `<label>Name der neuen Liste<input type="text" id="pName2" maxlength="40" placeholder="z. B. Winter-Season"></label>
       <div class="row2"><button class="go" data-pa="create">Liste anlegen</button><button data-pa="close">Abbrechen</button></div>`;
@@ -1273,14 +1275,14 @@ $('panel').addEventListener('click', async e => {
     }
     if (a === 'admset') {
       const nw = val('pAdmNew'); if (nw.length < 4) return bad('Das Admin-Passwort braucht mindestens 4 Zeichen.');
-      if (L.adm && !(await okPw(L.adm, val('pAdm')))) return bad('Das aktuelle Admin-Passwort stimmt nicht.');
+      if (!adminOn && !(await admOk(L, val('pAdm')))) return bad('Bitte oben das aktuelle Admin-Passwort eingeben.');
       L.adm = await newPw(nw); touch(L);
-      renderPanel(); msg('Admin-Passwort gespeichert. Gut aufschreiben.'); return;
+      renderPanel(); msg('Eigenes Listen-Passwort gespeichert.'); return;
     }
     if (a === 'rm' || a === 'rst') {
       if (!adminOn) {
-        if (!L.adm) return bad('Lege zuerst unten ein Admin-Passwort fest.');
-        if (!(await okPw(L.adm, val('pAdm')))) return bad('Falsches Admin-Passwort.');
+        if (!val('pAdm')) return bad('Bitte das Admin-Passwort eingeben.');
+        if (!(await admOk(L, val('pAdm')))) return bad('Falsches Admin-Passwort.');
       }
       if (a === 'rm') {
         if (!b.dataset.arm) { b.dataset.arm = 1; b.textContent = 'Wirklich entfernen?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.arm; b.textContent = 'Entfernen'; } }, 3500); return; }
