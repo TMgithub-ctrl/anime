@@ -200,6 +200,20 @@ header{padding-top:34px}
 .mico svg{width:30px;height:30px}
 .side .sl{display:flex;align-items:center;gap:10px}
 .side button.on .sl svg{color:inherit}
+.gold-note{}
+@keyframes gshine{0%{background-position:-140% 0}100%{background-position:240% 0}}
+@keyframes gtw{0%,100%{opacity:0;transform:scale(.2) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(90deg)}}
+@keyframes gglow{0%,100%{box-shadow:0 0 6px 1px rgba(255,200,40,.55),0 4px 12px rgba(0,0,0,.4)}50%{box-shadow:0 0 16px 4px rgba(255,214,90,.95),0 4px 12px rgba(0,0,0,.4)}}
+.badge.gold,.ring.gold{--gold:linear-gradient(115deg,#b8860b 0%,#ffd95e 25%,#fff6c2 40%,#ffd95e 55%,#e0a100 80%,#b8860b 100%)}
+.badge.gold{background:var(--gold);background-size:250% 100%;color:#3a2600;animation:gshine 2.6s linear infinite,gglow 1.8s ease-in-out infinite;font-size:1rem}
+.ring.gold{background:var(--gold);background-size:250% 100%;animation:gshine 2.6s linear infinite,gglow 1.8s ease-in-out infinite}
+.ring.gold output{color:#ffd95e;text-shadow:0 0 10px rgba(255,200,40,.8)}
+.chip.gold{border-color:#ffd95e;background:linear-gradient(115deg,rgba(255,217,94,.12),rgba(255,246,194,.28),rgba(255,217,94,.12));background-size:250% 100%;animation:gshine 3s linear infinite}
+.chip.gold b,.oth .gold b,.eo.gold{color:#ffd95e;text-shadow:0 0 8px rgba(255,200,40,.7)}
+.sp{position:absolute;width:11px;height:11px;pointer-events:none;background:#fffbe0;clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);opacity:0;animation:gtw 1.6s ease-in-out infinite;z-index:3;filter:drop-shadow(0 0 3px #ffd95e)}
+.sp.a{top:-5px;left:6px}.sp.b{top:4px;right:-6px;animation-delay:.4s;width:9px;height:9px}.sp.c{bottom:-5px;right:10px;animation-delay:.8s}.sp.d{bottom:3px;left:-6px;animation-delay:1.2s;width:8px;height:8px}
+.ring.gold .sp{width:15px;height:15px}.ring.sm.gold .sp{width:11px;height:11px}
+@media (prefers-reduced-motion:reduce){.badge.gold,.ring.gold,.chip.gold,.sp{animation:none}.sp{opacity:1}}
 .pbadge{position:absolute;top:58px;right:14px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#7be0a4;color:#0c2417;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .pl{display:flex;align-items:center;gap:5px;margin:0 0 4px;font-size:.78rem;color:#7be0a4;line-height:1.3}
 .pl svg{flex:0 0 auto}
@@ -320,7 +334,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-30 23:40 · Steam-Suche über Google-Script';
+const APP_VERSION = '2026-10-30 23:55 · Gold-Effekt bei zweimal 10';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -805,14 +819,14 @@ const subLine = (L, a) => !game() ? '' : `<p class="sub">${[a.m ? 'Mapper: ' + e
 const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button><button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
   const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
-  return o.length ? `<div class="oth">${o.map(([n, v]) => `<span>${esc(n)} <b>${v}</b></span>`).join('')}</div>` : '';
+  return o.length ? `<div class="oth">${o.map(([n, v]) => `<span${v === 10 && gold10(L, aid) ? ' class="gold"' : ''}>${esc(n)} <b>${fmtG(v, gold10(L, aid))}</b></span>`).join('')}</div>` : '';
 };
 
 function card(L, a, rank) {
   return `<article class="card" data-aid="${esc(a.aid)}" style="--h:${hue(a.s)}">
     <div class="poster">${poster(a)}</div>
     ${rank ? `<span class="rank r${rank}">#${rank}</span>` : ''}
-    <output class="badge ${a.s ? '' : 'none'}">${a.s || '–'}</output>${playedBadge(L, a)}
+    <output class="badge ${a.s ? '' : 'none'}${a.s === 10 && gold10(L, a.aid) ? ' gold' : ''}">${a.s ? fmtG(a.s, gold10(L, a.aid)) : '–'}${a.s === 10 && gold10(L, a.aid) ? SPK : ''}</output>${playedBadge(L, a)}
     <div class="info"><p class="title">${esc(a.t)}</p>${subLine(L, a)}${playedHtml(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
   </article>`;
 }
@@ -823,7 +837,7 @@ function hero(L, a) {
       <span class="flag">${T('Als Nächstes gucken', 'Als Nächstes spielen')}</span>
       <h2>${esc(a.t)}</h2>${subLine(L, a)}${playedHtml(L, a)}
       ${othersHtml(L, a.aid).replace('class="oth"', 'class="oth" style="font-size:.9rem;margin-bottom:12px"')}
-      <div class="srow"><div class="ring"><output>${a.s}</output></div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
+      <div class="srow"><div class="ring${a.s === 10 && gold10(L, a.aid) ? ' gold' : ''}"><output>${fmtG(a.s, gold10(L, a.aid))}</output>${a.s === 10 && gold10(L, a.aid) ? SPK : ''}</div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
     </div>
   </section>`;
 }
@@ -845,8 +859,14 @@ function renderMine(L) {
   $('out').innerHTML = h;
 }
 
-const chip = (n, s) => `<span class="chip" style="--h:${hue(s)}">${esc(n)} <b>${s ? fmt(s) : '–'}</b></span>`;
-const ringC = (c, cls) => `<div class="ring ${cls || ''}" style="--h:${hue(c)};--s:${c}"><output>${fmt(c)}</output></div>`;
+const tens = (arr) => arr.filter(v => v === 10).length >= 2;
+const gold10 = (L, key) => tens(Object.values(L.scores).filter(e => !(e.d && !nRated(e))).map(e => e.s[key] ? e.s[key][0] : 0));
+const SPK = '<i class="sp a"></i><i class="sp b"></i><i class="sp c"></i><i class="sp d"></i>';
+const fmtG = (v, g) => g && v === 10 ? '10+' : fmt(v);
+const gArr = g => Array.isArray(g) ? tens(g) : !!g;
+const chip = (n, s, g) => { const go = s === 10 && gArr(g); return `<span class="chip${go ? ' gold' : ''}" style="--h:${hue(s)}">${esc(n)} <b>${s ? fmtG(s, go) : '–'}</b></span>`; };
+const ringC = (c, cls, g) => { const go = c === 10 && gArr(g); return `<div class="ring ${cls || ''}${go ? ' gold' : ''}" style="--h:${hue(c)};--s:${c}"><output>${fmtG(c, go)}</output>${go ? SPK : ''}</div>`; };
+const eoG = (v, g) => { const go = v === 10 && g; return `<output class="eo ${v ? '' : 'none'}${go ? ' gold' : ''}">${v ? fmtG(v, go) : '–'}</output>`; };
 function renderCompare(L) {
   const P = parts(L);
   let sel = (cmp.sel || P).filter(p => P.includes(p));
@@ -866,10 +886,10 @@ function renderCompare(L) {
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${r.i ? `<img src="${esc(r.i)}" alt="" loading="lazy">` : ''}</div>
     <div class="mid"><div class="nm">${esc(r.t)}</div>${playedHtml(L, r)}
-      <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}</div>
+      <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i], r.sc)).join('')}</div>
       ${sel.includes(db.me.id) ? `<input type="range" min="1" max="10" step="1" value="${r.mine || 5}" title="Deine Bewertung ändern" aria-label="Deine Bewertung für ${esc(r.t)}">` : ''}
     </div>
-    ${r.full ? ringC(r.c, 'sm') : ''}
+    ${r.full ? ringC(r.c, 'sm', r.sc) : ''}
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
 
@@ -882,8 +902,8 @@ function renderCompare(L) {
     h += `<section class="hero" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
       <div class="poster">${poster(t)}</div>
       <div class="txt"><span class="flag">${T('Das solltet ihr zuerst gucken', 'Das solltet ihr zuerst spielen')}</span><h2>${esc(t.t)}</h2>
-        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i])).join('')}</div>
-        <div class="srow">${ringC(t.c)}</div></div></section>`;
+        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i], t.sc)).join('')}</div>
+        <div class="srow">${ringC(t.c, '', t.sc)}</div></div></section>`;
     h += section('Eure Rangliste', both.slice(1), 2);
   } else {
     h += '<div class="empty"><b>Noch keine gemeinsamen Scores</b>Sobald alle Gewählten einen Titel bewertet haben, erscheint er hier.</div>';
@@ -942,8 +962,8 @@ function renderMapDetail(L, aid) {
       <h2>${esc(x.t)}</h2>${subLine(L, a)}${playedHtml(L, a)}
       <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Noch nicht gespielt')}${stBtn('d', steam() ? 'Ich habe es gespielt' : 'Ich habe sie gespielt')}</div>
       ${link ? `<p><a class="lnk" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${steam() ? 'Auf Steam ansehen' : 'Auf osu! ansehen'} ↗</a></p>` : ''}
-      <div class="fin"><span class="lab">${st === 'd' ? 'Deine Gesamtbewertung' : 'Deine Bewertung'}</span><output class="eo ${my ? '' : 'none'}">${my || '–'}</output>${rng(my, st === 'd' ? 'r' : 's', 0, 'Deine Bewertung')}
-        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, key))).join('')}</div></div>
+      <div class="fin"><span class="lab">${st === 'd' ? 'Deine Gesamtbewertung' : 'Deine Bewertung'}</span>${eoG(my, gold10(L, key))}${rng(my, st === 'd' ? 'r' : 's', 0, 'Deine Bewertung')}
+        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, key), gold10(L, key))).join('')}</div></div>
     </div>
   </section>`;
 }
@@ -977,7 +997,7 @@ function renderWatching(L) {
       <div class="pst">${imgOf(a)}</div>
       <div class="mid"><div class="nm">${esc(a.t)}</div>
         <div class="pg">${total ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}<span>Folge ${ep}${total ? ` von ${total}` : ''}</span></div>
-        <div class="scs">${chip('Du', my)}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`))).join('')}</div>
+        <div class="scs">${chip('Du', my, gold10(L, `e:${a.aid}#${ep}`))}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`), gold10(L, `e:${a.aid}#${ep}`))).join('')}</div>
         <span class="minilab">Folge ${ep} bewerten</span>${rng(my, 'e', ep, `Deine Bewertung für Folge ${ep}`)}
       </div>
       <div class="wact"><button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
@@ -1002,10 +1022,10 @@ function renderDone(L) {
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${imgOf(r)}</div>
     <div class="mid"><div class="nm">${esc(r.t)}</div>
-      ${subLine(L, r)}<div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i])).join('')}${epChip(r)}</div>
+      ${subLine(L, r)}<div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i], r.sc)).join('')}${epChip(r)}</div>
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
-    ${r.c != null ? ringC(r.c, 'sm') : ''}
+    ${r.c != null ? ringC(r.c, 'sm', r.sc) : ''}
     <div class="wact"><button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
@@ -1015,8 +1035,8 @@ function renderDone(L) {
     h += `<section class="hero" data-aid="${esc(t.aid)}" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
       <div class="poster">${poster(t)}</div>
       <div class="txt"><span class="flag">Am besten bewertet</span><h2>${esc(t.t)}</h2>
-        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i])).join('')}${epChip(t)}</div>
-        <div class="srow">${ringC(t.c)}<div class="wact"><button data-act="detail">Details</button></div></div></div></section>`;
+        <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i], t.sc)).join('')}${epChip(t)}</div>
+        <div class="srow">${ringC(t.c, '', t.sc)}<div class="wact"><button data-act="detail">Details</button></div></div></div></section>`;
     h += section('Eure Bewertungen', ranked.slice(1), 2);
   }
   h += section('Noch nicht bewertet', open);
@@ -1035,8 +1055,8 @@ function renderDetail(L, aid) {
   for (let k = ep; k >= from; k--) {
     const mk = scoreOf(L, me, `e:${aid}#${k}`);
     const vals = P.map(p => scoreOf(L, p, `e:${aid}#${k}`)).filter(Boolean), avg = vals.length > 1 ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
-    rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}<output class="eo ${mk ? '' : 'none'}">${mk || '–'}</output>
-      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}</span></div>`;
+    rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}${eoG(mk, gold10(L, `e:${aid}#${k}`))}
+      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}</span></div>`;
   }
   const more = ep > 20 ? `<button class="lnk" data-act="showall">${detailAll ? 'Nur die letzten 20 zeigen' : `Alle ${ep} Folgen anzeigen`}</button>` : '';
   $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
@@ -1048,8 +1068,8 @@ function renderDetail(L, aid) {
       <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Liste')}${stBtn('w', 'Am Schauen')}${stBtn('d', 'Geguckt')}</div>
       <div class="step"><span>Folge</span><button data-act="ep-" aria-label="Eine Folge zurück">−</button><input type="number" id="epIn" min="0" ${total ? `max="${total}"` : ''} value="${ep}" aria-label="Aktuelle Folge"><button data-act="ep+" aria-label="Nächste Folge">+</button><span>von</span><input type="number" id="nTot" min="1" value="${total || ''}" placeholder="?" aria-label="Folgen insgesamt"></div>
       ${total ? `<div class="pg"><div class="pbar"><i style="width:${pct}%"></i></div><span>${pct} %</span></div>` : ''}
-      ${st === 'd' ? `<div class="fin"><span class="lab">Deine Gesamtbewertung</span><output class="eo ${my ? '' : 'none'}">${my || '–'}</output>${rng(my, 'r', 0, 'Deine Gesamtbewertung')}
-        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, 'r:' + aid))).join('')}${es ? `<span class="chip" style="--h:${hue(es.avg)}">Ø deiner Folgen <b>${fmt(es.avg)}</b></span>` : ''}</div></div>` : ''}
+      ${st === 'd' ? `<div class="fin"><span class="lab">Deine Gesamtbewertung</span>${eoG(my, gold10(L, 'r:' + aid))}${rng(my, 'r', 0, 'Deine Gesamtbewertung')}
+        <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, 'r:' + aid), gold10(L, 'r:' + aid))).join('')}${es ? `<span class="chip" style="--h:${hue(es.avg)}">Ø deiner Folgen <b>${fmt(es.avg)}</b></span>` : ''}</div></div>` : ''}
     </div>
   </section>
   <h3>Folgen bewerten</h3>
