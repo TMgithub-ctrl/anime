@@ -118,6 +118,16 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 @media (hover:none){.slw{max-height:150px;opacity:1}}
 .tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
 .tools .mv{color:var(--text)}
+.oprog{margin:6px 0 0;font-size:.85rem;color:var(--muted)}
+.hero .ctl{margin:8px 0 4px}
+.chip.mal{border-color:#4a6fc7;color:#aabdf0}.chip.mal b{color:#cdd8ff;font-size:1rem}
+.d.up{color:#7be0a4;font-style:normal;font-weight:700}.d.dn{color:#ff9a9a;font-style:normal;font-weight:700}
+.malbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
+.malbar button{font:inherit;font-size:.85rem;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
+.malbar button.on{color:var(--text);border-color:var(--accent)}
+.malbar small{color:var(--muted)}
+.malsum{display:flex;gap:6px 18px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:10px;font-size:.9rem;color:var(--muted)}
+.malsum b{color:var(--text)}.malsum b.d.up{color:#7be0a4}.malsum b.d.dn{color:#ff9a9a}
 .strm{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:.8rem;font-weight:700;padding:3px 12px;border-radius:999px;background:var(--sc);color:var(--sf);text-decoration:none;white-space:nowrap;line-height:1.4}
 .strm:hover{filter:brightness(1.12)}
 .hero p .strm{font-size:.9rem;padding:5px 14px}
@@ -343,7 +353,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-31 01:10 · Streaming-Button + AniList-Bewertung';
+const APP_VERSION = '2026-10-31 13:40 · Wer guckt, Fortschritt pro Person, MAL-Vergleich';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -385,7 +395,11 @@ function playedOf(L, pid, aid) {
   const v = e.s['p:' + aid]; if (v) return v[0] > 0;
   const r = e.s['r:' + aid]; return !!(r && r[0] > 0);
 }
-const catOf = (L, x) => game() ? (playedOf(L, db.me.id, x.aid) ? 'd' : 't') : stOf(x);
+const watchersOf = (L, x) => { const P = parts(L); return x.who ? P.filter(p => x.who.includes(p)) : P; };
+function statOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['s:' + a.aid]; return v ? (['t', 'w', 'd'][v[0]] || 't') : stOf(a); }
+function epOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['g:' + a.aid]; if (v) return v[0] || 0; return pid === db.me.id ? (a.ep || 0) : 0; }
+const gTs = (L, pid, aid) => { const e = L.scores[pid], v = e && e.s['g:' + aid]; return v ? v[1] : 0; };
+const catOf = (L, x) => game() ? (playedOf(L, db.me.id, x.aid) ? 'd' : 't') : (x.who && !x.who.includes(db.me.id) ? 't' : statOf(L, db.me.id, x));
 const liveIn = (L, st) => live(L).filter(x => catOf(L, x) === st);
 const playersOf = (L, aid) => Object.keys(L.scores).filter(p => p !== db.me.id && !(L.scores[p].d && !nRated(L.scores[p])) && playedOf(L, p, aid));
 const PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
@@ -423,7 +437,7 @@ const admOk = async (L, pw) => !!pw && ((await okPw({ s: ADM.s, h: ADM.h }, pw))
 const okPw = async (rec, pw) => !!rec && !!pw && (await pwHash(pw, rec.s)) === rec.h;
 
 /* ---------- Personen: entfernen und Identität wählen ---------- */
-const nRated = e => Object.entries(e.s).filter(([k, v]) => v[0] > 0 && !k.startsWith('p:')).length;
+const nRated = e => Object.entries(e.s).filter(([k, v]) => v[0] > 0 && !/^[pgs]:/.test(k)).length;
 const people = L => Object.keys(L.scores).filter(p => p !== db.me.id && (!L.scores[p].d || nRated(L.scores[p]) > 0));
 function removePerson(L, pid) {
   const e = L.scores[pid]; if (!e || pid === db.me.id) return;
@@ -847,20 +861,39 @@ const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub
 let metaBusy = false; const metaTry = {};
 async function enrich() {
   if (metaBusy || game()) return;
-  const need = live(cur()).map(x => x.aid).filter(a => aliId(a) && (!META[a] || now() - META[a].t > 14 * 864e5) && now() - (metaTry[a] || 0) > 600000);
+  const need = live(cur()).map(x => x.aid).filter(a => aliId(a) && (!META[a] || META[a].mal === undefined || now() - META[a].t > 14 * 864e5) && now() - (metaTry[a] || 0) > 600000);
   if (!need.length) return;
   metaBusy = true; const ids = need.slice(0, 50); ids.forEach(a => { metaTry[a] = now(); });
   try {
     const r = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ query: 'query($ids:[Int]){Page(perPage:50){media(id_in:$ids,type:ANIME){id averageScore externalLinks{site url type}}}}', variables: { ids: ids.map(aliId) } }) });
+      body: JSON.stringify({ query: 'query($ids:[Int]){Page(perPage:50){media(id_in:$ids,type:ANIME){id idMal averageScore externalLinks{site url type}}}}', variables: { ids: ids.map(aliId) } }) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const got = (await r.json()).data.Page.media, seen = {};
-    for (const m of got) { seen['al' + m.id] = 1; META['al' + m.id] = { t: now(), sc: m.averageScore || 0, sl: pickStream(m.externalLinks) }; }
-    ids.forEach(a => { if (!seen[a]) META[a] = { t: now(), sc: 0, sl: null }; });
+    for (const m of got) { seen['al' + m.id] = 1; META['al' + m.id] = { t: now(), sc: m.averageScore || 0, sl: pickStream(m.externalLinks), mal: m.idMal || 0 }; }
+    ids.forEach(a => { if (!seen[a]) META[a] = { t: now(), sc: 0, sl: null, mal: 0 }; });
     saveMeta(); metaBusy = false; safeRender();
   } catch (e) { metaBusy = false; }
 }
 const queueEnrich = () => { setTimeout(enrich, 50); };
+/* Folgenbewertungen von MyAnimeList (über Jikan); Skala 1–5 wird auf 1–10 umgerechnet */
+const EPS_KEY = 'anime-eps-v1'; let EPS = {};
+try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
+const epsBusy = {}, epsTry = {};
+async function loadMalEps(aid) {
+  const m = META[aid]; if (!m || !m.mal) return;
+  const c = EPS[aid]; if ((c && now() - c.t < 7 * 864e5) || epsBusy[aid] || now() - (epsTry[aid] || 0) < 300000) return;
+  epsBusy[aid] = 1; epsTry[aid] = now(); const sc = {}; let complete = false, got = false;
+  try {
+    for (let pg = 1; pg <= 12; pg++) {
+      const j = await jget(`https://api.jikan.moe/v4/anime/${m.mal}/episodes?page=${pg}`, 9000); got = true;
+      for (const e of (j.data || [])) if (e.score > 0) sc[e.mal_id] = Math.round(e.score * 20) / 10;
+      if (!(j.pagination && j.pagination.has_next_page)) { complete = true; break; }
+      await new Promise(r => setTimeout(r, 450));
+    }
+  } catch (e) {}
+  epsBusy[aid] = 0;
+  if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
+}
 const subLine = (L, a) => !game() ? animeSub(a) : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
 const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button>${strmLink(a)}<button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
@@ -1016,6 +1049,14 @@ function renderMapDetail(L, aid) {
 
 /* ---------- Kategorien: Am Schauen, Bewertungen, Details ---------- */
 function moveTo(L, aid, st) {
+  const x = L.items[aid]; if (!x) return; const me = db.me.id, a = { aid, ...x };
+  if (x.who && !x.who.includes(me) && st !== 't') { L.items[aid] = { ...x, who: [...x.who, me], ts: now() }; }
+  setRating(L, me, 's:' + aid, st === 'w' ? 1 : st === 'd' ? 2 : 0);
+  if (st === 'w' && !epOf(L, me, a)) setEp(L, aid, 1);
+  if (st === 'd' && x.n) setEp(L, aid, x.n);
+  touch(L);
+}
+function moveLegacy(L, aid, st) {
   const x = L.items[aid]; if (!x) return;
   const y = { ...x, ts: now() };
   if (st === 't') delete y.st; else y.st = st;
@@ -1023,7 +1064,7 @@ function moveTo(L, aid, st) {
   if (st === 'd' && y.n) y.ep = y.n;
   L.items[aid] = y; touch(L);
 }
-function setEp(L, aid, v) { const x = L.items[aid]; if (!x) return; L.items[aid] = { ...x, ep: v, pts: now(), ts: now() }; touch(L); }
+function setEp(L, aid, v) { if (!L.items[aid]) return; setRating(L, db.me.id, 'g:' + aid, v); }
 function renderCats() {
   const L = cur(), c = { list: 0, watch: 0, done: 0 };
   live(L).forEach(x => { const s = catOf(L, x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
@@ -1033,16 +1074,17 @@ const imgOf = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : '';
 const rng = (v, k, ek, label) => `<input type="range" min="1" max="10" step="1" value="${v || 5}" data-k="${k}" ${ek ? `data-ek="${ek}"` : ''} aria-label="${esc(label)}">`;
 
 function renderWatching(L) {
-  const it = liveIn(L, 'w').sort((a, b) => (b.pts || b.ts || 0) - (a.pts || a.ts || 0));
+  const it = liveIn(L, 'w').sort((a, b) => (gTs(L, db.me.id, b.aid) || b.pts || b.ts || 0) - (gTs(L, db.me.id, a.aid) || a.pts || a.ts || 0));
   $('stats').textContent = it.length ? `${it.length} ${it.length === 1 ? 'Anime' : 'Animes'} am Schauen` : 'Gerade schaut ihr nichts.';
   if (!it.length) { $('out').innerHTML = '<div class="empty"><b>Nichts am Schauen</b>Starte in der Liste einen Anime mit „Am Schauen“.</div>'; return; }
   const me = db.me.id, P = parts(L);
   $('out').innerHTML = `<div class="rows">${it.map(a => {
-    const ep = a.ep || 1, total = a.n || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0, my = scoreOf(L, me, `e:${a.aid}#${ep}`);
+    const ep = epOf(L, me, a) || 1, total = a.n || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0, my = scoreOf(L, me, `e:${a.aid}#${ep}`);
     return `<article class="row" data-aid="${esc(a.aid)}" style="--h:${hue(my)}">
       <div class="pst">${imgOf(a)}</div>
       <div class="mid"><div class="nm">${esc(a.t)}</div>
         <div class="pg">${total ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}<span>Folge ${ep}${total ? ` von ${total}` : ''}</span></div>
+        ${watchersOf(L, a).filter(q => q !== me && gTs(L, q, a.aid)).map(q => `<p class="oprog">${esc(pname(L, q))}: Folge ${epOf(L, q, a)}${total ? ` von ${total}` : ''}</p>`).join('')}
         <div class="scs">${chip('Du', my, gold10(L, `e:${a.aid}#${ep}`))}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`), gold10(L, `e:${a.aid}#${ep}`))).join('')}</div>
         <span class="minilab">Folge ${ep} bewerten</span>${rng(my, 'e', ep, `Deine Bewertung für Folge ${ep}`)}
       </div>
@@ -1091,18 +1133,24 @@ function renderDone(L) {
 
 function renderDetail(L, aid) {
   if (game()) return renderMapDetail(L, aid);
-  const x = L.items[aid], st = stOf(x), P = parts(L), me = db.me.id, a = { aid, ...x };
-  const total = x.n || 0, ep = x.ep || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
+  const x = L.items[aid], P = parts(L), me = db.me.id, a = { aid, ...x };
+  const W = watchersOf(L, x), iWatch = W.includes(me), st = iWatch ? statOf(L, me, a) : 't';
+  const malOn = db.mal !== false, hasMal = !!(META[aid] && META[aid].mal); if (malOn && hasMal) loadMalEps(aid);
+  const malS = malOn && EPS[aid] ? EPS[aid].s : null;
+  const total = x.n || 0, ep = iWatch ? epOf(L, me, a) : 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
   const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
   const my = scoreOf(L, me, 'r:' + aid), es = epStats(L, me, aid);
   $('stats').textContent = x.t;
   const from = detailAll ? 1 : Math.max(1, ep - 19);
-  let rows = '';
+  let rows = ''; const pairs = [];
   for (let k = ep; k >= from; k--) {
     const mk = scoreOf(L, me, `e:${aid}#${k}`);
     const vals = P.map(p => scoreOf(L, p, `e:${aid}#${k}`)).filter(Boolean), avg = vals.length > 1 ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
+    const mv = malS && malS[k]; if (mv && vals.length) { const our = vals.reduce((s2, v) => s2 + v, 0) / vals.length; pairs.push([our, mv]); }
+    const dl = mv && vals.length ? (vals.reduce((s2, v) => s2 + v, 0) / vals.length) - mv : null;
+    const malChip = mv ? `<span class="chip mal">MAL <b>${fmt(mv)}</b>${dl !== null ? ` <i class="d ${dl >= 0 ? 'up' : 'dn'}">${dl >= 0 ? '+' : '−'}${fmt(Math.abs(dl))}</i>` : ''}</span>` : '';
     rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}${eoG(mk, gold10(L, `e:${aid}#${k}`))}
-      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}</span></div>`;
+      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}${malChip}</span></div>`;
   }
   const more = ep > 20 ? `<button class="lnk" data-act="showall">${detailAll ? 'Nur die letzten 20 zeigen' : `Alle ${ep} Folgen anzeigen`}</button>` : '';
   $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
@@ -1111,15 +1159,20 @@ function renderDetail(L, aid) {
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
       <h2>${esc(x.t)}</h2>${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
-      <div class="seg" role="group" aria-label="Status">${stBtn('t', 'Liste')}${stBtn('w', 'Am Schauen')}${stBtn('d', 'Geguckt')}</div>
+      <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
+      ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
+      ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
+      ${iWatch ? `<div class="seg" role="group" aria-label="Status">${stBtn('t', 'Liste')}${stBtn('w', 'Am Schauen')}${stBtn('d', 'Geguckt')}</div>
       <div class="step"><span>Folge</span><button data-act="ep-" aria-label="Eine Folge zurück">−</button><input type="number" id="epIn" min="0" ${total ? `max="${total}"` : ''} value="${ep}" aria-label="Aktuelle Folge"><button data-act="ep+" aria-label="Nächste Folge">+</button><span>von</span><input type="number" id="nTot" min="1" value="${total || ''}" placeholder="?" aria-label="Folgen insgesamt"></div>
-      ${total ? `<div class="pg"><div class="pbar"><i style="width:${pct}%"></i></div><span>${pct} %</span></div>` : ''}
+      ${total ? `<div class="pg"><div class="pbar"><i style="width:${pct}%"></i></div><span>${pct} %</span></div>` : ''}` : ''}
       ${st === 'd' ? `<div class="fin"><span class="lab">Deine Gesamtbewertung</span>${eoG(my, gold10(L, 'r:' + aid))}${rng(my, 'r', 0, 'Deine Gesamtbewertung')}
         <div class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, 'r:' + aid), gold10(L, 'r:' + aid))).join('')}${es ? `<span class="chip" style="--h:${hue(es.avg)}">Ø deiner Folgen <b>${fmt(es.avg)}</b></span>` : ''}</div></div>` : ''}
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  ${ep ? `<div class="elist">${rows}</div>${more}` : '<p class="note">Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.</p>'}`;
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MyAnimeList: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? 'MAL-Folgenwertung, 1–5 Sterne auf 1–10 umgerechnet.' : 'MAL hat für diesen Anime noch keine Folgenwertungen.') : 'Lade MAL-Folgenwertungen …'}</small></div>
+  ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>MAL Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
+  ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
 
 /* ---------- Konten: Name + Passwort, Person und Listen auf jedem Gerät ---------- */
@@ -1343,7 +1396,7 @@ $('out').addEventListener('change', e => {
     if (d === 'lname') { const l = listBy(t.dataset.lid), n = t.value.trim().slice(0, 40); if (l && n) { l.name = n; l.nts = now(); touch(l); amsg('Name gespeichert.'); } return; }
     if (d === 'pname') { const e2 = L.scores[t.dataset.pid], n = t.value.trim().slice(0, 30); if (e2 && n) { e2.n = n; e2.nt = now(); touch(L); amsg('Name gespeichert.'); } return; }
     if (d === 'title') { const x = L.items[t.dataset.it], n = t.value.trim(); if (x && n) { L.items[t.dataset.it] = { ...x, t: n, ts: now() }; touch(L); amsg('Titel gespeichert.'); } return; }
-    if (d === 'stat') { moveTo(L, t.dataset.it, t.value); amsg('Status gespeichert.'); return; }
+    if (d === 'stat') { const sv = t.value; moveLegacy(L, t.dataset.it, sv); Object.keys(L.scores).forEach(pp => setRating(L, pp, 's:' + t.dataset.it, sv === 'w' ? 1 : sv === 'd' ? 2 : 0)); amsg('Status gespeichert (für alle Personen).'); return; }
     if (d === 'cell') { const v = adm.art === 'p' ? (clamp(t.value) ? 1 : 0) : clamp(t.value); setRating(L, t.dataset.pid, keyFor(adm.art, t.dataset.it, adm.k), v); t.value = v || ''; amsg('Gespeichert.'); return; }
     if (d === 'mine') { const l = listBy(t.dataset.lid); if (l) { setRating(l, db.me.id, keyFor(t.dataset.art, t.dataset.it, 0), clamp(t.value)); t.value = clamp(t.value) || ''; amsg('Gespeichert.'); } return; }
   } catch (err) { amsg(err.message, true); }
@@ -1533,6 +1586,7 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
   const box = b.closest('[data-aid]'); if (!box) return;
   const aid = box.dataset.aid, x = L.items[aid]; if (!x) return;
@@ -1545,11 +1599,19 @@ $('out').addEventListener('click', e => {
   }
   if (act === 'detail') { detail = aid; detailAll = false; render(); window.scrollTo(0, 0); return; }
   if (act === 'ep+') {
-    if (x.n && (x.ep || 0) >= x.n) { moveTo(L, aid, 'd'); hint(`„${x.t}“ ist komplett geguckt und jetzt unter „Bewertungen“.`); }
-    else setEp(L, aid, (x.ep || 0) + 1);
+    const e0 = epOf(L, db.me.id, { aid, ...x });
+    if (x.n && e0 >= x.n) { moveTo(L, aid, 'd'); hint(`„${x.t}“ ist komplett geguckt und jetzt unter „Bewertungen“.`); }
+    else setEp(L, aid, e0 + 1);
     render(); return;
   }
-  if (act === 'ep-') { setEp(L, aid, Math.max(0, (x.ep || 0) - 1)); render(); return; }
+  if (act === 'ep-') { setEp(L, aid, Math.max(0, epOf(L, db.me.id, { aid, ...x }) - 1)); render(); return; }
+  if (act === 'who') {
+    const P = parts(L), pid = b.dataset.pid; let w = x.who ? P.filter(q => x.who.includes(q)) : [...P];
+    w = w.includes(pid) ? w.filter(q => q !== pid) : [...w, pid];
+    const y = { ...x, ts: now() }; if (w.length === P.length) delete y.who; else y.who = w;
+    L.items[aid] = y; touch(L); render(); return;
+  }
+  if (act === 'whoall' || act === 'whome') { const y = { ...x, ts: now() }; if (act === 'whoall') delete y.who; else y.who = [db.me.id]; L.items[aid] = y; touch(L); render(); return; }
   if (b.dataset.act === 'del') {
     if (!b.dataset.arm) {
       b.dataset.arm = 1; b.textContent = 'Sicher?';
