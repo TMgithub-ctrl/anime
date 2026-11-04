@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14171c">
+<title>Aufmaß</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#f3f4f6; --panel:#ffffff; --panel2:#eef0f3; --text:#14171c; --muted:#5d6673; --line:#d9dde3;
+  --accent:#e8590c; --accent-text:#ffffff; --ok:#2b8a3e; --warn:#c92a2a; --info:#1c64b0;
+  --cell-new:#ffe8cc; --cell-old:#e7f0fb; --cell-hi:#ffc078;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1115; --panel:#181b21; --panel2:#20242c; --text:#eceef1; --muted:#9aa3af; --line:#2c313a;
+    --accent:#ff7a29; --accent-text:#14171c; --ok:#51cf66; --warn:#ff6b6b; --info:#74b0ff;
+    --cell-new:#4a2c10; --cell-old:#1b2a3d; --cell-hi:#8a4a12;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 16px 8px;display:flex;align-items:center;gap:10px}
+header .proj{flex:1;min-width:0;background:none;border:0;text-align:left;padding:4px 0;cursor:pointer}
+header .proj b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .proj small{color:var(--muted);font-size:12.5px}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12.5px;font-weight:600;background:var(--panel2);color:var(--muted)}
+.pill.accent{background:var(--accent);color:var(--accent-text)}
+.pill.sync{cursor:pointer;white-space:nowrap}
+.pill.sync.ok{color:var(--ok)} .pill.sync.ok::before{content:"☁ ✓ "}
+.pill.sync.warn{color:var(--warn)} .pill.sync.warn::before{content:"☁ "}
+main{max-width:760px;margin:0 auto;padding:14px 16px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{flex:1;background:none;border:0;padding:9px 2px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+nav.tabs button svg{width:24px;height:24px}
+nav.tabs button.on{color:var(--accent);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+h2{font-size:19px;margin:4px 0 12px}
+h3{font-size:15px;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--panel2);border-radius:11px;padding:11px 16px;font-weight:600;cursor:pointer;min-height:46px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.btn.danger{color:var(--warn)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:10px;align-items:center}
+.row > *{min-width:0}
+.grow{flex:1}
+label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 5px}
+input.i,select.i,textarea.i{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px;font-size:17px;outline:none}
+input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
+.search{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:10;background:var(--bg);padding:2px 0 10px}
+.search input{font-size:18px;padding:14px 14px 14px 44px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%238b939e' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 13px center}
+.res{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 14px;margin-bottom:8px;cursor:pointer;display:flex;gap:12px;align-items:flex-start}
+.res:active{background:var(--panel2)}
+.res .pos{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--muted);font-weight:600}
+.res .tx{font-weight:600;margin:1px 0 2px;word-break:break-word}
+.res .ti{font-size:13px;color:var(--muted)}
+.res .q{text-align:right;font-size:12.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.res .q b{display:block;font-size:15px;color:var(--text)}
+.res .q .neg{color:var(--warn)}
+.tlink{cursor:pointer}
+.lvbtn{display:inline-block;margin-left:4px;padding:0 7px;border-radius:6px;background:var(--panel2);color:var(--accent);font-weight:700;font-size:12px}
+.pdfpages canvas{width:100%;height:auto;display:block;margin:0 0 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.qchip{display:inline-block;margin:0 0 10px;padding:6px 11px;border-radius:9px;background:var(--cell-new);font-weight:600;font-size:14px}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--panel);border-radius:18px 18px 0 0;max-height:92vh;overflow:auto;padding:8px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .22s ease;max-width:760px;margin:0 auto}
+.sheet.open{transform:none;visibility:visible}
+.sheet:not(.open){visibility:hidden}
+a.btn{text-decoration:none;color:inherit}
+.sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
+.sheet .head{display:flex;gap:10px;align-items:flex-start}
+.sheet .head .x{background:var(--panel2);border:0;border-radius:50%;width:34px;height:34px;font-size:20px;line-height:1;cursor:pointer;flex:none}
+.qty{display:flex;gap:8px}
+.qty input{font-size:26px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.qty .unit{align-self:center;font-weight:700;font-size:18px;min-width:38px}
+.qty .plus{width:56px;flex:none;font-size:24px}
+.sugg{border:1px solid var(--line);border-radius:11px;margin-top:4px;max-height:220px;overflow:auto;background:var(--panel)}
+.sugg div{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.sugg div:last-child{border-bottom:0}
+.sugg div:active,.sugg div.sel{background:var(--panel2)}
+.hint{font-size:13px;margin-top:5px}
+.hint.warn{color:var(--warn)}
+.hint.ok{color:var(--ok)}
+.target{margin-top:14px;padding:10px 12px;border-radius:11px;background:var(--panel2);font-size:14px}
+.target b{color:var(--accent)}
+details.long{margin-top:8px;font-size:13.5px;color:var(--muted)}
+details.long summary{cursor:pointer;font-weight:600}
+details.long div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:auto}
+.toast{position:fixed;left:16px;right:16px;top:calc(12px + env(safe-area-inset-top));z-index:60;background:var(--text);color:var(--bg);padding:12px 14px;border-radius:12px;font-size:14.5px;opacity:0;transform:translateY(-10px);transition:.2s;pointer-events:none;max-width:560px;margin:0 auto}
+.toast.show{opacity:1;transform:none}
+.entry{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.entry:last-child{border-bottom:0}
+.entry .m{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.entry .w{font-size:12.5px;color:var(--muted)}
+.day{display:flex;justify-content:space-between;align-items:center;margin:18px 0 6px}
+.day b{font-size:15px}
+.seg{display:flex;background:var(--panel2);border-radius:11px;padding:3px;gap:3px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 4px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
+.chips button{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.chips button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.chips button .d{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle}
+.chips button.on .d{background:var(--accent-text)}
+.gridwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);max-height:70vh}
+table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.grid th,table.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:5px 6px;min-width:64px;text-align:right;white-space:nowrap}
+table.grid th{position:sticky;top:0;background:var(--panel2);z-index:2;text-align:left;vertical-align:bottom;font-weight:600;white-space:normal;min-width:80px;max-width:110px;font-size:11.5px;line-height:1.25}
+table.grid th .p{color:var(--muted);display:block;font-weight:500}
+table.grid td.rm,table.grid th.rm{position:sticky;left:0;background:var(--panel);text-align:left;z-index:1;min-width:120px;max-width:150px;white-space:normal}
+table.grid th.rm{z-index:3;background:var(--panel2)}
+table.grid td.old{background:var(--cell-old)}
+table.grid td.nc{background:repeating-linear-gradient(135deg,var(--panel2),var(--panel2) 4px,var(--panel) 4px,var(--panel) 8px);color:var(--muted);text-decoration:line-through}
+table.grid td.new{background:var(--cell-new);font-weight:700}
+table.grid td.hi{background:var(--cell-hi);font-weight:800;outline:2px solid var(--accent);outline-offset:-2px}
+table.grid tr.sum td{font-weight:700;background:var(--panel2)}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);margin:8px 2px 0;flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14.5px}
+.kv span:nth-child(even){font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.tbl td,.tbl th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.tbl td:first-child,.tbl th:first-child{text-align:left}
+.tbl th{font-size:12px;color:var(--muted);font-weight:600}
+.neg{color:var(--warn)}
+.imp{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+.imp.off{opacity:.5}
+.imp .src{font-size:13px;color:var(--muted);margin-bottom:6px;word-break:break-word}
+.imp select,.imp input{font-size:15px;padding:9px}
+.empty{text-align:center;padding:30px 10px;color:var(--muted)}
+.file{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--line);border-radius:12px;padding:14px;cursor:pointer;background:var(--panel2)}
+.file input{display:none}
+.file .n{font-weight:600;word-break:break-all}
+.prog{height:6px;border-radius:3px;background:var(--panel2);overflow:hidden;margin-top:10px;display:none}
+.prog div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.projlist .p{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <button class="proj" id="projBtn"><b id="projName">Aufmaß</b><small id="projSub">Keine Baustelle</small></button>
+  <span class="pill sync hidden" id="syncPill"></span>
+  <span class="pill accent hidden" id="openPill"></span>
+</header>
+
+<main id="main"></main>
+
+<nav class="tabs hidden" id="tabs">
+  <button data-tab="erfassen" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Erfassen</button>
+  <button data-tab="liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Einträge</button>
+  <button data-tab="blaetter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>Blätter</button>
+  <button data-tab="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export</button>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Aufmaß-App – Erfassung von Aufmaßmengen für H&W-Aufmaß-Dateien (.xlsm)
+   Läuft komplett im Browser. Daten bleiben auf dem Gerät (IndexedDB).
+   ===================================================================== */
+
+const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+const PDFJS_WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const NS_PKG = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const DATA_ROW_FIRST = 11, DATA_ROW_LAST = 31, POS_ROW = 8, SUM_ROW = 32;
+const BLATT_COLS = 'CDEFGHIJKLMNO'.split('');   // 13 Positions-Spalten pro Blatt
+const BRS_START_COL = 18;                         // Spalte R in "Aufmaßdaten"
+
+/* ---------------- Helfer ---------------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = iso => { const [y, m, d] = iso.split('-'); const wd = ['So','Mo','Di','Mi','Do','Fr','Sa'][new Date(+y, m - 1, +d).getDay()]; return `${wd}, ${d}.${m}.${y}`; };
+const nf = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 });
+const fmt = n => (n == null || isNaN(n)) ? '–' : nf.format(Math.round(n * 1000) / 1000);
+const round = (n, d) => { const f = Math.pow(10, d); return Math.round(n * f) / f; };
+const colNum = c => { let n = 0; for (const ch of c) n = n * 26 + ch.charCodeAt(0) - 64; return n; };
+const colLetter = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+const splitRef = ref => { const m = /^([A-Z]+)(\d+)$/.exec(ref); return m ? [m[1], +m[2]] : [null, 0]; };
+const decodeX = s => String(s ?? '').replace(/_x([0-9A-Fa-f]{4})_/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+const cleanText = s => decodeX(s).replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').trim();
+const firstLine = s => cleanText(s).split('\n')[0].trim();
+
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.innerHTML = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/** Mengen-Ausdruck auswerten: "12,5", "2+5*3", "10+12+8" */
+function evalExpr(raw) {
+  let s = String(raw ?? '').trim().replace(/\s+/g, '').replace(/×/g, '*').replace(/,/g, '.');
+  if (!s) return null;
+  if (!/^[0-9.+\-*/()]+$/.test(s)) return null;
+  try { const v = Function('"use strict";return (' + s + ')')(); return (typeof v === 'number' && isFinite(v)) ? round(v, 6) : null; }
+  catch { return null; }
+}
+
+/* ---------------- Normalisierung & Suche ---------------- */
+function norm(s) {
+  s = String(s ?? '').toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/²/g, '2').replace(/³/g, '3').replace(/×/g, 'x')
+    .replace(/obergeschoss?/g, 'og').replace(/erdgeschoss?/g, 'eg').replace(/dachgeschoss?/g, 'dg')
+    .replace(/untergeschoss?/g, 'ug');
+  s = s.replace(/(\d),(\d)/g, '$1.$2')
+       .replace(/(\d)\.\s*(?=(og|eg|ug|dg)\b)/g, '$1')
+       .replace(/(\d)\s*x\s*(\d)/g, '$1x$2')
+       .replace(/[^a-z0-9.+]+/g, ' ')
+       .replace(/\.(?=\s|$)/g, '')
+       .replace(/\s+/g, ' ').trim();
+  return s;
+}
+function lev1(a, b) { // true, wenn Levenshtein-Distanz <= 1
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++d > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return d + (a.length - i) + (b.length - j) <= 1;
+}
+const SYN = [[/schutzkontakt/i, 'schuko'], [/leitungsschutzschalter/i, 'ls lss sicherung'], [/fehlerstrom|fi-schutz|fi\/ls/i, 'fi rcd'],
+  [/unterverteilung/i, 'uv'], [/kabelrinne/i, 'kr rinne'], [/leerrohr|lehrrohr|isolierrohr/i, 'rohr leerrohr'], [/datenkabel|kat\s*7|cat\s*7/i, 'lan netzwerk cat7 kat7'],
+  [/brandmelde|bmk/i, 'bma'], [/mehrsensormelder|rauchwarnmelder|rauchmelder|optisch-thermisch/i, 'rauchmelder melder'], [/sicherheitsleuchte|sicherheitsbeleuchtung|rettungszeichen/i, 'notlicht notleuchte notbeleuchtung'], [/leuchte/i, 'lampe licht'], [/potentialausgleich/i, 'pa erdung'], [/stundenlohn/i, 'regie stunden']];
+const synonyms = s => SYN.filter(([re]) => re.test(s)).map(([, w]) => w).join(' ');
+function buildIndex(p) {
+  const all = new Set(p.positions.map(x => x.pos));
+  for (const x of p.positions) x.repl = (x.dup && x.L <= 0 && all.has(x.pos + 'a')) ? x.pos + 'a' : null;
+  for (const x of p.positions) {
+    const t = posTitle(p, x.pos);
+    x._hay = norm(`${x.text} ${t.titel} ${t.bereich} ${t.titel !== t.titelOrig ? t.titelOrig : ''} ${t.bereich !== t.bereichOrig ? t.bereichOrig : ''} ${x.unit} ${synonyms(x.fullText + ' ' + t.titel)}`);
+    x._hayText = norm(x.text);
+    x._words = x._hay.split(' ');
+    x._nospace = x._hay.replace(/ /g, '');
+    x._posc = x.pos.replace(/\./g, '');
+  }
+}
+function scoreToken(x, tok) {
+  if (/^[0-9.]+$/.test(tok) && tok.replace(/\./g, '').length >= 3) {
+    const t = tok.replace(/\./g, '');
+    if (x._posc.startsWith(t)) return 30 + t.length;
+  }
+  let best = 0;
+  const inText = tok.length >= 4 ? x._hayText.includes(tok) : (' ' + x._hayText).includes(' ' + tok);
+  for (const w of x._words) {
+    if (w === tok) { best = Math.max(best, 10); break; }
+    if (w.startsWith(tok)) best = Math.max(best, 7);
+    else if (tok.length >= 3 && w.includes(tok)) best = Math.max(best, 4);
+    else if (tok.length >= 5 && lev1(w.slice(0, tok.length + 1), tok)) best = Math.max(best, 2);
+  }
+  if (!best && tok.length >= 3 && x._nospace.includes(tok)) best = 3;
+  if (best && inText) best += 2;       // Treffer im Positionstext zählt mehr als im Titel
+  return best;
+}
+/** Findet den längsten Raumbuch-Eintrag, der als ganze Wörter in der Eingabe vorkommt */
+function findRoom(p, text) {
+  const nl = ' ' + norm(text) + ' '; let best = '', bn = '';
+  if (!p._roomNorm) p._roomNorm = p.rooms.map(r => [r, norm(r)]);
+  for (const [r, n] of p._roomNorm) if (n.length >= 3 && n.length > bn.length && nl.includes(' ' + n + ' ')) { best = r; bn = n; }
+  return best ? { raum: best, norm: bn } : null;
+}
+function rankTokens(p, toks) {
+  const out = []; const df = toks.map(() => 0);
+  for (const x of p.positions) {
+    const sc = toks.map(t => scoreToken(x, t)); let m = 0;
+    sc.forEach((v, i) => { if (v) { m++; df[i]++; } });
+    if (m) out.push({ x, sc, m });
+  }
+  const N = p.positions.length;
+  const idf = df.map(d => Math.log(1 + N / Math.max(1, d)));
+  const use = p._use || new Map();
+  for (const o of out) { o.s = o.sc.reduce((a, v, i) => a + v * idf[i], 0); if (o.x.repl) o.s *= 0.7;
+    const u = use.get(o.x.pos); if (u) o.s *= 1 + 0.12 * Math.min(u, 5); }
+  const full = out.filter(o => o.m === toks.length);
+  return { out, full };
+}
+/** Sucht Positionen. Eine Zahl am Ende wird als Menge erkannt, ein Raum aus dem Raumbuch als Raum. */
+function searchPositions(p, q, limit = 40) {
+  let toks = norm(q).split(' ').filter(Boolean);
+  let qty = null, raum = null;
+  let rawToks = String(q).trim().replace(/(\d)\s+(m|mtr|meter|lfm|st|stk|stck|stück|psch|h|std)\b\.?/gi, '$1$2').split(/\s+/);
+  const UNIT = /^(\d+(?:[.,]\d+)?)(m|mtr|meter|lfm|st|stk|stck|stück|psch|h|std)\.?$/i, BARE = /^\d+(?:[.,]\d+)?$/;
+  let qi = -1;
+  if (rawToks.length >= 2) {
+    qi = rawToks.findIndex(t => UNIT.test(t) && !/^\d+(mm|qmm)/i.test(t));            // "22m", "14 St"
+    if (qi < 0 && BARE.test(rawToks[rawToks.length - 1])) qi = rawToks.length - 1;    // Zahl am Ende
+    if (qi < 0) {                                                                      // einzelne Zahl mittendrin, wenn der Rest trotzdem passt
+      const bare = rawToks.map((t, i) => BARE.test(t) ? i : -1).filter(i => i >= 0);
+      if (bare.length === 1) { const rest = norm(rawToks.filter((_, i) => i !== bare[0]).join(' ')).split(' ').filter(Boolean);
+        if (rest.length && rankTokens(p, rest).full.length) qi = bare[0]; }
+    }
+  }
+  if (qi >= 0) {
+    const m = UNIT.exec(rawToks[qi]); qty = evalExpr(m ? m[1] : rawToks[qi]);
+    rawToks = rawToks.filter((_, i) => i !== qi); toks = norm(rawToks.join(' ')).split(' ').filter(Boolean);
+  }
+  if (!toks.length) return { results: [], qty };
+  let { out, full } = rankTokens(p, toks);
+  if (!full.length && toks.length >= 2) {           // vielleicht steht ein Raum mit in der Eingabe
+    const rm = findRoom(p, toks.join(' '));
+    if (rm) {
+      const rest = (' ' + toks.join(' ') + ' ').replace(' ' + rm.norm + ' ', ' ').trim().split(' ').filter(Boolean);
+      if (rest.length) { const r2 = rankTokens(p, rest); if (r2.full.length) { out = r2.out; full = r2.full; raum = rm.raum; } }
+    }
+  }
+  const list = (full.length ? full : out);
+  list.sort((a, b) => b.m - a.m || b.s - a.s || a.x.row - b.x.row);
+  return { results: list.slice(0, limit), qty, raum, partial: !full.length && out.length > 0 };
+}
+
+/* ---------------- Speicher (IndexedDB) ---------------- */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('aufmass-app', 3);
+      r.onupgradeneeded = () => {
+        const d = r.result; const has = n => d.objectStoreNames.contains(n);
+        if (!has('projects')) d.createObjectStore('projects', { keyPath: 'id' });
+        if (!has('entries')) { const e = d.createObjectStore('entries', { keyPath: 'id' }); e.createIndex('projectId', 'projectId'); }
+        if (!has('kv')) d.createObjectStore('kv');
+        if (!has('snapshots')) { const sn = d.createObjectStore('snapshots', { keyPath: 'key' }); sn.createIndex('pid', 'pid'); }
+        if (!has('aufmasse')) { const a = d.createObjectStore('aufmasse', { keyPath: 'key' }); a.createIndex('pid', 'pid'); }
+      };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode); const s = t.objectStore(store);
+      let out; const r = fn(s); if (r) r.onsuccess = () => out = r.result;
+      t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  },
+  all(store) { return this.tx(store, 'readonly', s => s.getAll()); },
+  put(store, v, k) { return this.tx(store, 'readwrite', s => k === undefined ? s.put(v) : s.put(v, k)); },
+  del(store, k) { return this.tx(store, 'readwrite', s => s.delete(k)); },
+  get(store, k) { return this.tx(store, 'readonly', s => s.get(k)); },
+  byProject(pid) { return this.tx('entries', 'readonly', s => s.index('projectId').getAll(pid)); },
+  snapsOf(pid) { return this.tx('snapshots', 'readonly', s => s.index('pid').getAll(pid)); },
+  aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); }
+};
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ---------------- XLSX / XLSM lesen ---------------- */
+const parseXml = str => new DOMParser().parseFromString(str, 'application/xml');
+const serXml = doc => { let s = new XMLSerializer().serializeToString(doc); if (!s.startsWith('<?xml')) s = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + s; return s; };
+const kids = (el, name) => Array.from(el.childNodes).filter(n => n.nodeType === 1 && n.localName === name);
+const kid = (el, name) => kids(el, name)[0] || null;
+
+async function openWorkbook(buf) {
+  if (typeof JSZip === 'undefined') throw new Error('Zip-Bibliothek nicht geladen – bitte einmal mit Internet öffnen.');
+  const zip = await JSZip.loadAsync(buf);
+  const wbDoc = parseXml(await zip.file('xl/workbook.xml').async('string'));
+  const relDoc = parseXml(await zip.file('xl/_rels/workbook.xml.rels').async('string'));
+  const rels = {};
+  for (const r of relDoc.getElementsByTagName('Relationship')) {
+    let t = r.getAttribute('Target'); t = t.startsWith('/') ? t.slice(1) : 'xl/' + t;
+    rels[r.getAttribute('Id')] = { target: t, type: r.getAttribute('Type') };
+  }
+  const sheets = [];
+  for (const s of wbDoc.getElementsByTagName('sheet')) {
+    const rid = s.getAttributeNS(NS_R, 'id') || s.getAttribute('r:id');
+    sheets.push({ name: s.getAttribute('name'), path: rels[rid]?.target, rid, sheetId: +s.getAttribute('sheetId') });
+  }
+  let ss = [];
+  const ssf = zip.file('xl/sharedStrings.xml');
+  if (ssf) {
+    const d = parseXml(await ssf.async('string'));
+    ss = Array.from(d.getElementsByTagName('si')).map(si => {
+      let t = ''; const walk = n => { for (const c of n.childNodes) { if (c.nodeType !== 1) continue; if (c.localName === 'rPh') continue; if (c.localName === 't') t += c.textContent; else walk(c); } };
+      walk(si); return t;
+    });
+  }
+  return { zip, wbDoc, relDoc, rels, sheets, ss };
+}
+function cellMap(doc) {
+  const m = new Map();
+  for (const c of doc.getElementsByTagName('c')) m.set(c.getAttribute('r'), c);
+  return m;
+}
+function cellVal(c, ss) {
+  if (!c) return null;
+  const t = c.getAttribute('t'); const v = kid(c, 'v');
+  if (t === 's') return v ? ss[+v.textContent] ?? '' : '';
+  if (t === 'inlineStr') { const is = kid(c, 'is'); return is ? Array.from(is.getElementsByTagName('t')).map(x => x.textContent).join('') : ''; }
+  if (t === 'str' || t === 'e') return v ? v.textContent : '';
+  if (t === 'b') return v ? v.textContent === '1' : null;
+  if (!v) return null;
+  const n = parseFloat(v.textContent); return isNaN(n) ? v.textContent : n;
+}
+const num = v => (typeof v === 'number') ? v : (v == null || v === '' ? 0 : (parseFloat(String(v).replace(',', '.')) || 0));
+const str = v => v == null ? '' : String(v).trim();
+const rawStr = v => v == null ? '' : String(v);   // wie CStr() im Makro – ohne Trimmen
+
+/** Liest die Aufmaß-Vorlage (H&W-Export) */
+async function parseTemplate(buf) {
+  const wb = await openWorkbook(buf);
+  const find = n => wb.sheets.find(s => s.name === n);
+  const ad = find('Aufmaßdaten');
+  if (!ad) throw new Error('Blatt „Aufmaßdaten“ fehlt – ist das eine Aufmaß-Datei aus der Handwerkersoftware?');
+  const adDoc = parseXml(await wb.zip.file(ad.path).async('string'));
+  const cm = cellMap(adDoc);
+  const rowsNums = Array.from(adDoc.getElementsByTagName('row')).map(r => +r.getAttribute('r'));
+  let headerRow = 16;
+  for (const r of rowsNums) if (str(cellVal(cm.get('A' + r), wb.ss)).startsWith('Pos')) { headerRow = r; break; }
+  const positions = [], seen = new Map();
+  for (const r of rowsNums) {
+    if (r <= headerRow + 2) continue;
+    const pos = str(cellVal(cm.get('A' + r), wb.ss)); if (!pos) continue;
+    const g = k => cellVal(cm.get(k + r), wb.ss);
+    const K = num(g('K')), L = num(g('L'));
+    // Doppelte Pos.-Nr. (z. B. Nachtrag mit Minusmenge): Makros schreiben immer in die ERSTE Zeile.
+    if (seen.has(pos)) { const x = seen.get(pos); x.K += K; x.L += L; x.dup = (x.dup || 1) + 1; continue; }
+    const full = cleanText(g('B'));
+    const x = { pos, row: r, text: firstLine(full).split(/\s{2,}/)[0].trim(), fullText: full, unit: str(g('C')),
+      D: num(g('D')), E: num(g('E')), F: num(g('F')), G: num(g('G')), H: num(g('H')), K, L, rK: K, rL: L, O: num(g('O')) };
+    seen.set(pos, x); positions.push(x);
+  }
+  if (!positions.length) throw new Error('Keine Positionen in „Aufmaßdaten“ gefunden.');
+  const header = cleanText(cellVal(cm.get('A1'), wb.ss));
+  // Bereits vorhandene Blatt/Raum/Stromkreis-Spalten (ab Spalte R) – das, was in der Excel aktuell gezählt wird
+  const adVals = new Map(); const firstRow = new Map(positions.map(x => [x.row, x.pos]));
+  const brsKey = new Map();
+  for (const [ref, c] of cm) { const [col, r] = splitRef(ref); if (colNum(col) < BRS_START_COL || r !== headerRow) continue;
+    const b = cellVal(c, wb.ss); if (b === null || b === '') continue;
+    brsKey.set(col, String(b) + '\u0001' + rawStr(cellVal(cm.get(col + (headerRow + 1)), wb.ss)) + '\u0001' + rawStr(cellVal(cm.get(col + (headerRow + 2)), wb.ss))); }
+  for (const [ref, c] of cm) { const [col, r] = splitRef(ref); if (!brsKey.has(col) || !firstRow.has(r)) continue;
+    const v = num(cellVal(c, wb.ss)); if (v) { const k = brsKey.get(col) + '\u0001' + firstRow.get(r); adVals.set(k, (adVals.get(k) || 0) + v); } }
+  // Raumbuch
+  const rooms = [], sks = [];
+  const rb = find('Raumbuch');
+  if (rb) {
+    const d = parseXml(await wb.zip.file(rb.path).async('string')); const m = cellMap(d);
+    for (const [ref, c] of m) { const [col, r] = splitRef(ref); if (r < 2) continue;
+      const v = str(cellVal(c, wb.ss)); if (!v) continue;
+      if (col === 'A') rooms.push(v); else if (col === 'B') sks.push(v); }
+  }
+  // Erfassungsblätter
+  const blaetter = [];
+  for (const s of wb.sheets) {
+    if (!s.name.startsWith('Blatt') || !s.path) continue;
+    const d = parseXml(await wb.zip.file(s.path).async('string')); const m = cellMap(d);
+    if (str(cellVal(m.get('O3'), wb.ss)) !== 'Blatt') continue;
+    const nr = str(cellVal(m.get('O2'), wb.ss));
+    const pos = BLATT_COLS.map(c => str(cellVal(m.get(c + POS_ROW), wb.ss)));
+    const existing = [];
+    for (let r = DATA_ROW_FIRST; r <= DATA_ROW_LAST; r++) {
+      const raum = rawStr(cellVal(m.get('A' + r), wb.ss)), sk = rawStr(cellVal(m.get('B' + r), wb.ss));
+      const cells = {};
+      BLATT_COLS.forEach((c, i) => {
+        const el = m.get(c + r); const v = cellVal(el, wb.ss);
+        if (v !== null && v !== '' && !isNaN(num(v)) && num(v) !== 0) {
+          const f = el && kid(el, 'f');
+          const counted = (adVals.get(nr + '\u0001' + raum + '\u0001' + sk + '\u0001' + pos[i]) || 0) > 0;
+          cells[i] = { v: num(v), f: (f && f.textContent) ? f.textContent : null, counted };
+        }
+      });
+      if (raum.trim() || sk.trim() || Object.keys(cells).length) existing.push({ row: r, raum, sk, cells });
+    }
+    blaetter.push({ name: s.name, nr, path: s.path, positions: pos, existing });
+  }
+  blaetter.sort((a, b) => (+a.nr || 0) - (+b.nr || 0));
+  if (!blaetter.length) throw new Error('Keine Erfassungsblätter („Blatt 1“ …) gefunden.');
+  const inBlatt = new Set(blaetter.flatMap(b => b.positions).filter(Boolean));
+  for (const x of positions) x.inBlatt = inBlatt.has(x.pos);
+  const uncounted = blaetter.flatMap(b => b.existing.flatMap(e => Object.values(e.cells).filter(c => !c.counted).map(() => b.nr)));
+  return { positions, rooms, sks, blaetter, header, headerRow, uncounted: [...new Set(uncounted)], uncountedCells: uncounted.length };
+}
+
+/* ---------------- LV-PDF lesen ---------------- */
+let pdfjsLib = null;
+async function loadPdfJs() {
+  if (pdfjsLib) return pdfjsLib;
+  pdfjsLib = await import(PDFJS_URL);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  return pdfjsLib;
+}
+async function pdfLines(buf, onProg) {
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const lines = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    const items = tc.items.filter(it => it.str !== undefined && it.str.trim() !== '' || (it.str === ' '));
+    const rows = [];
+    for (const it of items) {
+      if (!it.str) continue;
+      const y = it.transform[5], x = it.transform[4];
+      let row = rows.find(r => Math.abs(r.y - y) < 2.5);
+      if (!row) { row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x, w: it.width || 0, s: it.str });
+    }
+    rows.sort((a, b) => b.y - a.y);
+    for (const r of rows) {
+      r.items.sort((a, b) => a.x - b.x);
+      let s = '', end = null;
+      for (const it of r.items) {
+        if (end !== null) { const gap = it.x - end; if (gap > 1.2 && !s.endsWith(' ') && !it.s.startsWith(' ')) s += gap > 25 ? '   ' : ' '; }
+        s += it.s; end = it.x + it.w;
+      }
+      lines.push(s.replace(/\s+$/, ''));
+    }
+    lines.push('\f');
+    if (onProg) onProg(p / doc.numPages);
+  }
+  return lines;
+}
+function parseLVLines(lines) {
+  const titles = {}, info = {}, pos = {}, printed = {};
+  let cur = null, curT = null, page = 1, lastT = null, lastB = null;
+  const skip = l => /^(Projekt:|Bauherr:|LV:|Pos\.Nr\.)/.test(l) || /Seite\s+\d+\s*$/.test(l) || /\*\*\*Fortsetzung\*\*\*/.test(l) || /^Summe (Titel|Bereich|LV)/.test(l);
+  const close = k => { if (k && info[k] && !info[k].endPage) info[k].endPage = page; };
+  const startTitle = (key, name, kind) => {
+    close(lastT); lastT = null;
+    if (kind !== 'Titel') { close(lastB); lastB = key; } else lastT = key;   // Bereich läuft bis zum nächsten Bereich
+    titles[key] = name; info[key] = { name, kind, page, endPage: null, intro: [] }; curT = info[key]; cur = null;
+  };
+  for (const raw of lines) {
+    if (raw === '\f') { page++; continue; }
+    const l = raw.trim();
+    let m;
+    if ((m = /Seite\s+(\d+)\s*$/.exec(l))) printed[page] = +m[1];    // gedruckte Seitennummer merken
+    if ((m = /^(\d{1,2}\.(?:\d{1,2}\.)?\d{3,4})(\.?)\s+(.+)$/.exec(l)) && !(!m[2] && /^\d{2}\.\d{2}\.(19|20)\d{2}$/.test(m[1]))) {
+      let k = m[1]; if (/^\d{1,2}\.\d{3,4}$/.test(k)) k = k.replace('.', '.00.');   // "06.0010" -> "06.00.0010"
+      k = k.split('.').map((x, i, a) => i === a.length - 1 ? x.padStart(4, '0') : x.padStart(2, '0')).join('.');
+      cur = { pos: k, short: m[3].replace(/\s{2,}.*$/, '').trim(), long: [], page }; pos[k] = cur; curT = null; continue;
+    }
+    if ((m = /^(\d{1,2}\.\d{1,2}\.)\s+Titel:\s*(.+)$/.exec(l))) { startTitle(m[1].split('.').map(x => x && x.padStart(2, '0')).join('.'), m[2].trim(), 'Titel'); continue; }
+    if ((m = /^(\d{1,2}\.)\s+(Bereich|Los|Abschnitt|Gewerk):\s*(.+)$/.exec(l))) { startTitle(m[1].padStart(3, '0'), m[3].trim(), m[2]); continue; }
+    if (!l || skip(l)) continue;
+    if (curT && !cur) { if (curT.intro.length < 120) curT.intro.push(l.replace(/\s{3,}/g, '  ')); continue; }   // Vorbemerkung zum Titel
+    if (!cur) continue;
+    if (/^[\d.]+,\d{2,3}\s+\S+$/.test(l)) { cur.qtyLine = l; cur = null; continue; }   // Mengenzeile beendet Langtext
+    if (cur.long.length < 60) cur.long.push(l.replace(/\s{3,}/g, '  '));
+  }
+  page = Math.max(1, page - 1);            // nach der letzten Seite folgt noch ein Seitenwechsel
+  close(lastT); close(lastB);
+  for (const k in info) info[k].intro = info[k].intro.join('\n').trim();
+  const out = {};
+  for (const k in pos) out[k] = { short: pos[k].short, long: pos[k].long.join('\n').trim(), page: pos[k].page };
+  return { titles, info, pos: out, pages: page, printed };
+}
+/** Titel/Bereich einer Position – mit eigenem Namen, falls umbenannt */
+function posTitle(p, pos) {
+  const t = p.lv?.titles || {}, a = p.titleAlias || {}; const parts = pos.split('.');
+  const bk = parts[0] + '.', tk = parts[0] + '.' + parts[1] + '.';
+  return { bereich: a[bk] || t[bk] || '', titel: a[tk] || t[tk] || '', bereichOrig: t[bk] || '', titelOrig: t[tk] || '', bk, tk,
+    key: (t[tk] || a[tk] || parts[1] !== '00') ? tk : bk };
+}
+
+/* ---------------- Platzierung (wohin kommt welcher Eintrag?) ---------------- */
+/**
+ * Verteilt offene Einträge auf die Erfassungsblätter – so wie man es in Excel
+ * von Hand machen würde: gleiche Zeile für gleichen Raum+Stromkreis, sonst
+ * nächste freie Zeile. Ist ein Blatt voll, wird eine Kopie des Blatts angelegt.
+ */
+function layout(p, entries) {
+  const bl = p.blaetter.map(b => ({
+    nr: b.nr, name: b.name, path: b.path, positions: b.positions, clone: false, src: null,
+    rows: Array.from({ length: DATA_ROW_LAST - DATA_ROW_FIRST + 1 }, (_, i) => {
+      const r = DATA_ROW_FIRST + i; const ex = b.existing.find(e => e.row === r);
+      const cells = {};
+      if (ex) for (const ci in ex.cells) cells[ci] = { old: ex.cells[ci], parts: [] };
+      return { row: r, raum: ex?.raum || '', sk: ex?.sk || '', cells, hadOld: !!ex };
+    })
+  }));
+  let maxNr = Math.max(...bl.map(b => +b.nr || 0));
+  const place = {}, problems = [];
+  const sorted = entries.slice().sort((a, b) => a.date.localeCompare(b.date) || a.created - b.created);
+  const isEmpty = row => !row.raum && !row.sk && !Object.keys(row.cells).length;
+  for (const e of sorted) {
+    const raum = str(e.raum), sk = str(e.sk);
+    const cands = bl.filter(b => b.positions.includes(e.pos));
+    if (!cands.length) { problems.push({ e, why: 'Position steht auf keinem Erfassungsblatt' }); continue; }
+    if (!raum && !sk) { problems.push({ e, why: 'Raum oder Stromkreis fehlt' }); continue; }
+    let tgt = null, row = null;
+    for (const b of cands) { const ci = b.positions.indexOf(e.pos);
+      row = b.rows.find(r => r.raum === raum && r.sk === sk && !isEmpty(r) && !r.cells[ci]?.old); if (row) { tgt = b; break; } }
+    if (!tgt) for (const b of cands) { row = b.rows.find(isEmpty); if (row) { tgt = b; break; } }
+    if (!tgt) {
+      const src = cands[0].src || cands[0];
+      maxNr++;
+      tgt = { nr: String(maxNr), name: 'Blatt ' + maxNr, path: null, positions: src.positions, clone: true, src: src.name, srcPath: src.path,
+        rows: Array.from({ length: DATA_ROW_LAST - DATA_ROW_FIRST + 1 }, (_, i) => ({ row: DATA_ROW_FIRST + i, raum: '', sk: '', cells: {}, hadOld: false })) };
+      tgt.src = src; bl.push(tgt); row = tgt.rows[0];
+    }
+    row.raum = raum; row.sk = sk;
+    const ci = tgt.positions.indexOf(e.pos);
+    (row.cells[ci] ||= { old: null, parts: [] }).parts.push({ v: e.qty, id: e.id });
+    place[e.id] = { blatt: tgt.nr, name: tgt.name, row: row.row, col: BLATT_COLS[ci], clone: tgt.clone };
+  }
+  for (const b of bl) if (b.clone) b.src = b.src.name || b.src;
+  return { blaetter: bl, place, problems };
+}
+const cellTotal = c => (c.old ? c.old.v : 0) + c.parts.reduce((s, x) => s + x.v, 0);
+
+/* ---------------- Export: Vorlage befüllen ---------------- */
+function getRow(doc, sheetData, r, create) {
+  let before = null;
+  for (const row of kids(sheetData, 'row')) {
+    const n = +row.getAttribute('r'); if (n === r) return row; if (n > r) { before = row; break; }
+  }
+  if (!create) return null;
+  const row = doc.createElementNS(NS, 'row'); row.setAttribute('r', r);
+  sheetData.insertBefore(row, before); return row;
+}
+function getCell(doc, sheetData, ref, create = true) {
+  const [col, r] = splitRef(ref); const row = getRow(doc, sheetData, r, create); if (!row) return null;
+  const cn = colNum(col); let before = null;
+  for (const c of kids(row, 'c')) {
+    const [cc] = splitRef(c.getAttribute('r')); const k = colNum(cc);
+    if (k === cn) return c; if (k > cn) { before = c; break; }
+  }
+  if (!create) return null;
+  const c = doc.createElementNS(NS, 'c'); c.setAttribute('r', ref);
+  const rs = row.getAttribute('s'); if (rs && row.getAttribute('customFormat') === '1') c.setAttribute('s', rs);
+  row.insertBefore(c, before); return c;
+}
+function clearCell(c) { while (c.firstChild) c.removeChild(c.firstChild); c.removeAttribute('t'); }
+function setNum(doc, c, n) { clearCell(c); const v = doc.createElementNS(NS, 'v'); v.textContent = String(round(n, 10)); c.appendChild(v); }
+function setCached(doc, c, n) { // nur den zwischengespeicherten Wert einer Formelzelle setzen
+  let v = kid(c, 'v'); if (!v) { v = doc.createElementNS(NS, 'v'); c.appendChild(v); }
+  c.removeAttribute('t'); v.textContent = String(round(n, 10));
+}
+function setStr(doc, c, s) {
+  clearCell(c); if (s === '' || s == null) return;
+  c.setAttribute('t', 'inlineStr');
+  const is = doc.createElementNS(NS, 'is'); const t = doc.createElementNS(NS, 't');
+  if (/^\s|\s$/.test(s)) t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+  t.textContent = s; is.appendChild(t); c.appendChild(is);
+}
+function setFormula(doc, c, f, val) {
+  clearCell(c); const fe = doc.createElementNS(NS, 'f'); fe.textContent = f; c.appendChild(fe);
+  const v = doc.createElementNS(NS, 'v'); v.textContent = String(round(val, 10)); c.appendChild(v);
+}
+const numStr = n => String(round(n, 6));
+
+function writeBlattGrid(doc, b, isClone) {
+  const sd = doc.getElementsByTagName('sheetData')[0];
+  for (const row of b.rows) {
+    const touched = isClone || Object.values(row.cells).some(c => c.parts.length) ;
+    if (!touched) continue;
+    setStr(doc, getCell(doc, sd, 'A' + row.row), row.raum);
+    setStr(doc, getCell(doc, sd, 'B' + row.row), row.sk);
+    for (const ci in row.cells) {
+      const c = row.cells[ci]; if (!c.parts.length && !isClone) continue;
+      const cell = getCell(doc, sd, BLATT_COLS[ci] + row.row);
+      const terms = [];
+      if (c.old) terms.push(c.old.f ? '(' + c.old.f + ')' : numStr(c.old.v));
+      for (const pt of c.parts) terms.push(numStr(pt.v));
+      const total = cellTotal(c);
+      if (terms.length === 1 && !c.old) setNum(doc, cell, total);
+      else setFormula(doc, cell, terms.join('+').replace(/\+-/g, '-'), total);
+    }
+  }
+  // Summenzeile (zwischengespeicherte Werte)
+  BLATT_COLS.forEach((col, ci) => {
+    if (!b.positions[ci]) return;
+    const c = getCell(doc, sd, col + SUM_ROW, false); if (!c || !kid(c, 'f')) return;
+    let s = 0; for (const row of b.rows) if (row.cells[ci]) s += cellTotal(row.cells[ci]);
+    setCached(doc, c, s);
+  });
+}
+
+function prepareClone(doc, nr) {
+  const ws = doc.documentElement;
+  ws.removeAttribute('xr:uid');
+  for (const a of Array.from(ws.attributes)) if (a.localName === 'uid') ws.removeAttributeNode(a);
+  for (const name of ['drawing', 'legacyDrawing', 'legacyDrawingHF', 'controls', 'tableParts', 'picture', 'oleObjects']) for (const n of Array.from(doc.getElementsByTagName(name))) n.parentNode.removeChild(n);
+  for (const n of Array.from(ws.childNodes)) if (n.nodeType === 1 && n.localName === 'AlternateContent') ws.removeChild(n);
+  for (const n of doc.getElementsByTagName('pageSetup')) for (const a of Array.from(n.attributes)) if (a.localName === 'id') n.removeAttributeNode(a);
+  const sp = doc.getElementsByTagName('sheetPr')[0]; if (sp) sp.removeAttribute('codeName');
+  for (const sv of doc.getElementsByTagName('sheetView')) sv.removeAttribute('tabSelected');
+  for (const dv of doc.getElementsByTagName('dataValidation')) for (const a of Array.from(dv.attributes)) if (a.localName === 'uid') dv.removeAttributeNode(a);
+  const sd = doc.getElementsByTagName('sheetData')[0];
+  setNum(doc, getCell(doc, sd, 'O2'), +nr);
+  for (let r = DATA_ROW_FIRST; r <= DATA_ROW_LAST; r++) for (const col of ['A', 'B', ...BLATT_COLS]) { const c = getCell(doc, sd, col + r, false); if (c) clearCell(c); }
+}
+
+async function buildXlsm(p, entries) {
+  const L = layout(p, entries);
+  const wb = await openWorkbook(p.template);
+  const zip = wb.zip;
+  const ct = parseXml(await zip.file('[Content_Types].xml').async('string'));
+  const posByNr = new Map(p.positions.map(x => [x.pos, x]));
+
+  // 1) Erfassungsblätter (bestehende + neue Kopien)
+  let maxSheetFile = 0;
+  zip.forEach(path => { const m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(path); if (m) maxSheetFile = Math.max(maxSheetFile, +m[1]); });
+  let maxSheetId = Math.max(...wb.sheets.map(s => s.sheetId));
+  let maxRid = Math.max(...Object.keys(wb.rels).map(k => +k.replace(/\D/g, '') || 0));
+  const sheetsEl = wb.wbDoc.getElementsByTagName('sheets')[0];
+  const relsRoot = wb.relDoc.documentElement;
+  for (const b of L.blaetter) {
+    if (!b.clone) {
+      if (!b.rows.some(r => Object.values(r.cells).some(c => c.parts.length))) continue;
+      const doc = parseXml(await zip.file(b.path).async('string'));
+      writeBlattGrid(doc, b, false);
+      zip.file(b.path, serXml(doc));
+    } else {
+      const doc = parseXml(await zip.file(b.srcPath).async('string'));
+      prepareClone(doc, b.nr);
+      writeBlattGrid(doc, b, true);
+      const path = `xl/worksheets/sheet${++maxSheetFile}.xml`;
+      zip.file(path, serXml(doc));
+      const rid = 'rId' + (++maxRid);
+      const rel = wb.relDoc.createElementNS(NS_PKG, 'Relationship');
+      rel.setAttribute('Id', rid); rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet');
+      rel.setAttribute('Target', path.replace(/^xl\//, '')); relsRoot.appendChild(rel);
+      const sh = wb.wbDoc.createElementNS(NS, 'sheet');
+      sh.setAttribute('name', b.name); sh.setAttribute('sheetId', ++maxSheetId); sh.setAttributeNS(NS_R, 'r:id', rid);
+      sheetsEl.appendChild(sh);
+      const ov = ct.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override');
+      ov.setAttribute('PartName', '/' + path); ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml');
+      ct.documentElement.appendChild(ov);
+    }
+  }
+
+  // 2) Aufmaßdaten fortschreiben – genau wie die Makros beim Eintippen: vorhandene
+  //    Blatt/Raum/Stromkreis-Spalte suchen, sonst rechts neue anhängen, Menge addieren.
+  const ad = wb.sheets.find(s => s.name === 'Aufmaßdaten');
+  const adDoc = parseXml(await zip.file(ad.path).async('string'));
+  const sd = adDoc.getElementsByTagName('sheetData')[0];
+  const hr = p.headerRow || 16;
+  const brs = new Map(); let lastCol = 17;
+  const cv = (row, col) => { const c = getCell(adDoc, sd, col + row, false); return c ? cellVal(c, wb.ss) : null; };
+  for (const row of kids(sd, 'row')) {
+    row.removeAttribute('spans');
+    if (+row.getAttribute('r') < hr) continue;
+    for (const c of kids(row, 'c')) { const [col] = splitRef(c.getAttribute('r')); if (cellVal(c, wb.ss) !== null && cellVal(c, wb.ss) !== '') lastCol = Math.max(lastCol, colNum(col)); }
+  }
+  for (let ci = BRS_START_COL; ci <= lastCol; ci++) {
+    const L_ = colLetter(ci); const b = cv(hr, L_); if (b === null || b === '') continue;
+    const key = String(b) + '\u0001' + rawStr(cv(hr + 1, L_)) + '\u0001' + rawStr(cv(hr + 2, L_));
+    if (!brs.has(key)) brs.set(key, ci);
+  }
+  let newCols = 0;
+  const perBlatt = new Map();   // nr -> Zuwachs {bz, lohn, mat}
+  const addMenge = (b, raum, sk, pos, v) => {
+    const x = posByNr.get(pos); if (!x || !v) return;
+    const key = b.nr + '\u0001' + raum + '\u0001' + sk;
+    let col = brs.get(key);
+    if (!col) {
+      col = ++lastCol; newCols++; brs.set(key, col); const L_ = colLetter(col);
+      setNum(adDoc, getCell(adDoc, sd, L_ + hr), +b.nr);
+      if (raum) setStr(adDoc, getCell(adDoc, sd, L_ + (hr + 1)), raum);
+      if (sk) setStr(adDoc, getCell(adDoc, sd, L_ + (hr + 2)), sk);
+    }
+    const c = getCell(adDoc, sd, colLetter(col) + x.row);
+    const prev = num(cellVal(c, wb.ss));
+    if (round(prev + v, 6) === 0) clearCell(c); else setNum(adDoc, c, prev + v);
+    const pe = x.G || 1; const pb = perBlatt.get(b.nr) || { bz: 0, lohn: 0, mat: 0 };
+    pb.bz += x.D / pe * v; pb.lohn += x.E / pe * v; pb.mat += x.F / pe * v; perBlatt.set(b.nr, pb);
+  };
+  for (const b of L.blaetter.slice().sort((a, c) => (+a.nr) - (+c.nr))) {
+    for (const row of b.rows) {
+      for (const ci in row.cells) {
+        const c = row.cells[ci];
+        let v = c.parts.reduce((s_, x_) => s_ + x_.v, 0);
+        if (p.countExisting && c.old && !c.old.counted) v += c.old.v;   // Altwerte auf Wunsch mitzählen
+        addMenge(b, row.raum, row.sk, b.positions[ci], v);
+      }
+    }
+  }
+  // Menge jetzt (Spalte I) = Summe aller Raum/Stromkreis-Spalten der Zeile
+  const sumPos = new Map();
+  for (const x of p.positions) {
+    const row = getRow(adDoc, sd, x.row, false); if (!row) continue; let s_ = 0;
+    for (const c of kids(row, 'c')) { const [col] = splitRef(c.getAttribute('r')); if (colNum(col) >= BRS_START_COL) s_ += evalExpr(cellVal(c, wb.ss)) || 0; }
+    sumPos.set(x.pos, s_);
+  }
+  const nextCol = lastCol + 1;
+  // zwischengespeicherte Formelergebnisse aktualisieren (I, J, M, N, P, Q)
+  let sJ = 0, sP = 0, sQ = 0;
+  for (const x of p.positions) {
+    const I = sumPos.get(x.pos) || 0; const G = x.G;
+    const set = (col, val) => { const c = getCell(adDoc, sd, col + x.row, false); if (c && kid(c, 'f') && isFinite(val)) setCached(adDoc, c, val); };
+    const J = G ? x.H / G * I : NaN, P = G ? I / G * x.D : NaN, Q = (isFinite(x.O) ? x.O : 0) + (isFinite(P) ? P : 0);
+    set('I', I); set('J', J); set('M', x.rL - I - x.rK); set('N', I + x.rK); set('P', P); set('Q', Q);
+    if (isFinite(J)) sJ += J; if (isFinite(P)) sP += P; sQ += Q;
+  }
+  const s17 = (col, val) => { const c = getCell(adDoc, sd, col + (hr + 1), false); if (c && kid(c, 'f')) setCached(adDoc, c, val); };
+  s17('J', sJ); s17('P', sP); s17('Q', sQ);
+  const lastRow = Math.max(...kids(sd, 'row').map(r => +r.getAttribute('r')));
+  const dim = adDoc.getElementsByTagName('dimension')[0];
+  if (dim) dim.setAttribute('ref', 'A1:' + colLetter(Math.max(17, nextCol - 1)) + lastRow);
+  zip.file(ad.path, serXml(adDoc));
+
+  // 3) Übersicht (Bauzeit / Lohn / Material je Blatt)
+  const ub = wb.sheets.find(s => s.name === 'Übersicht');
+  if (ub) {
+    const ud = parseXml(await zip.file(ub.path).async('string'));
+    const usd = ud.getElementsByTagName('sheetData')[0];
+    let rows = kids(usd, 'row');
+    const aVal = row => { const c = kids(row, 'c').find(c => splitRef(c.getAttribute('r'))[0] === 'A'); return c ? cellVal(c, wb.ss) : null; };
+    let sumRow = rows.find(r => str(aVal(r)) === 'Summe');
+    const nrRow = new Map(); let firstR = null, lastR = null;
+    for (const r of rows) { const v = aVal(r); if (typeof v === 'number' && r !== sumRow) { nrRow.set(String(v), r); firstR ??= +r.getAttribute('r'); lastR = +r.getAttribute('r'); } }
+    const newBl = L.blaetter.filter(b => b.clone);
+    if (sumRow && newBl.length && lastR) {
+      const tplRow = nrRow.get([...nrRow.keys()].pop());
+      const shift = newBl.length; const sr = +sumRow.getAttribute('r');
+      // Summenzeile nach unten schieben
+      for (const r of rows) { const n = +r.getAttribute('r'); if (n >= sr) { r.setAttribute('r', n + shift); for (const c of kids(r, 'c')) { const [col] = splitRef(c.getAttribute('r')); c.setAttribute('r', col + (n + shift)); } } }
+      newBl.forEach((b, i) => {
+        const rn = sr + i; const nr = tplRow.cloneNode(true); nr.setAttribute('r', rn); nr.removeAttribute('spans');
+        for (const c of kids(nr, 'c')) { const [col] = splitRef(c.getAttribute('r')); c.setAttribute('r', col + rn); clearCell(c); }
+        usd.insertBefore(nr, sumRow);
+        setNum(ud, getCell(ud, usd, 'A' + rn), +b.nr);
+        setFormula(ud, getCell(ud, usd, 'E' + rn), `D${rn} + C${rn}`, 0);
+        nrRow.set(b.nr, nr); lastR = rn;
+      });
+      for (const c of kids(sumRow, 'c')) { const f = kid(c, 'f'); if (f) f.textContent = f.textContent.replace(/(\$?[A-Z]+\$?)(\d+)\s*:\s*(\$?[A-Z]+\$?)(\d+)/, (m, a, r1, b2) => `${a}${r1}:${b2}${lastR}`); }
+      const mc = ud.getElementsByTagName('dimension')[0]; if (mc) mc.setAttribute('ref', 'A1:E' + (sr + shift));
+    }
+    let tB = 0, tC = 0, tD = 0;
+    for (const [nr, r] of nrRow) {
+      const pb = perBlatt.get(nr); const rn = +r.getAttribute('r');
+      const cB = getCell(ud, usd, 'B' + rn), cC = getCell(ud, usd, 'C' + rn), cD = getCell(ud, usd, 'D' + rn), cE = getCell(ud, usd, 'E' + rn, false);
+      const oB = num(cellVal(cB, wb.ss)), oC = num(cellVal(cC, wb.ss)), oD = num(cellVal(cD, wb.ss));
+      const nB = round(oB + (pb ? pb.bz : 0), 6), nC = round(oC + (pb ? pb.lohn : 0), 2), nD = round(oD + (pb ? pb.mat : 0), 2);
+      if (pb) { setNum(ud, cB, nB); setNum(ud, cC, nC); setNum(ud, cD, nD); }
+      tB += nB; tC += nC; tD += nD;
+      if (cE && kid(cE, 'f')) setCached(ud, cE, nC + nD);
+    }
+    if (sumRow) { const srn = +sumRow.getAttribute('r'); [['B', tB], ['C', tC], ['D', tD], ['E', tC + tD]].forEach(([c, v]) => { const el = getCell(ud, usd, c + srn, false); if (el && kid(el, 'f')) setCached(ud, el, v); }); }
+    for (const r of kids(usd, 'row')) r.removeAttribute('spans');
+    zip.file(ub.path, serXml(ud));
+  }
+
+  // 4) calcChain entfernen (Excel baut ihn beim Öffnen neu auf)
+  if (zip.file('xl/calcChain.xml')) {
+    zip.remove('xl/calcChain.xml');
+    for (const r of Array.from(relsRoot.getElementsByTagName('Relationship'))) if ((r.getAttribute('Type') || '').endsWith('/calcChain')) relsRoot.removeChild(r);
+    for (const o of Array.from(ct.getElementsByTagName('Override'))) if (o.getAttribute('PartName') === '/xl/calcChain.xml') o.parentNode.removeChild(o);
+  }
+  zip.file('xl/workbook.xml', serXml(wb.wbDoc));
+  zip.file('xl/_rels/workbook.xml.rels', serXml(wb.relDoc));
+  zip.file('[Content_Types].xml', serXml(ct));
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
+  return { blob, layout: L, brsCount: brs.size, newCols };
+}
+
+/* ---------------- App-Zustand ---------------- */
+const S = { projects: [], p: null, entries: [], tab: 'erfassen', listFilter: 'offen', blattSel: null, lastEntryId: null, exportRes: null };
+
+async function loadAll() {
+  S.projects = await DB.all('projects');
+  const cur = await DB.get('kv', 'current');
+  S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); updateUse(); }
+}
+const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
+async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
+async function selectProject(id) {
+  await DB.put('kv', id, 'current'); await loadAll(); S.tab = 'erfassen'; S.curExport = null; S.listWeek = null; render(); Aufmass.check();
+}
+/** Wie oft wurde eine Position schon benutzt? -> bei gleichen Texten zuerst die, die du sonst nimmst */
+function updateUse() { const m = new Map(); for (const e of S.entries) m.set(e.pos, (m.get(e.pos) || 0) + 1); if (S.p) S.p._use = m; }
+const openEntries = () => weekEntries(curWeek().key);
+const posMap = () => S._pm && S._pmFor === S.p ? S._pm : (S._pmFor = S.p, S._pm = new Map(S.p.positions.map(x => [x.pos, x])));
+function erfasst(pos) { let s = 0; for (const e of S.entries) if (e.pos === pos) s += e.qty; return s; }
+function lastRaum() { const e = S.entries.slice().sort((a, b) => b.created - a.created)[0]; return e ? { raum: e.raum, sk: e.sk } : { raum: '', sk: '' }; }
+
+
+/* ---------------- Automatische Sicherung ----------------
+   1) Lokal: pro Tag ein Stand aller Einträge (IndexedDB "snapshots"), wird nie automatisch gelöscht.
+   2) Server (Raspberry Pi, aufmass_server.py): nach jeder Änderung; bei Funkloch wird nachgeholt. */
+function hashStr(str) { // zwei 32-bit FNV-1a Varianten -> 16 Hex-Zeichen
+  let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x5bd1e995;
+  for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 ^= c; h1 = Math.imul(h1, 16777619); h2 ^= c; h2 = Math.imul(h2, 0x5bd1e995); h2 ^= h2 >>> 15; }
+  return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
+function hashBuf(buf) {
+  const b = new Uint8Array(buf); let h1 = 0x811c9dc5, h2 = 0x5bd1e995;
+  for (let i = 0; i < b.length; i++) { h1 ^= b[i]; h1 = Math.imul(h1, 16777619); h2 ^= b[i]; h2 = Math.imul(h2, 0x5bd1e995); h2 ^= h2 >>> 15; }
+  return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0') + b.length.toString(16).padStart(8, '0');
+}
+const Sync = {
+  cfg: { url: '', token: '' }, st: {}, timer: null, busy: false,
+  async init() {
+    this.cfg = (await DB.get('kv', 'syncCfg')) || { url: '', token: '' };
+    this.st = (await DB.get('kv', 'syncState')) || {};
+    const m = /[#&]token=([^&]+)/.exec(location.hash);
+    if (m) { this.cfg.token = decodeURIComponent(m[1]); history.replaceState(null, '', location.pathname + location.search); }
+    if (!this.cfg.url && /^https?:$/.test(location.protocol)) {
+      try { const r = await fetch(location.origin + '/api/status', { cache: 'no-store' }); const j = await r.json(); if (j.app === 'aufmass') this.cfg.url = location.origin; } catch { }
+    }
+    if (this.configured()) this.refreshStatus();
+    await DB.put('kv', this.cfg, 'syncCfg');
+    window.addEventListener('online', () => this.run());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.run(); });
+    setInterval(() => { if (Object.values(this.st).some(x => x.pending)) this.run(); }, 60000);
+    if (Object.values(this.st).some(x => x.pending)) setTimeout(() => this.run(), 1500);
+  },
+  configured() { return !!(this.cfg.url && this.cfg.token); },
+  mailOk: false,
+  async refreshStatus() { try { const j = await (await fetch(this.api('/api/status'), { headers: this.hdr(), cache: 'no-store' })).json(); this.mailOk = !!j.mail; return j; } catch { return null; } },
+  api(path) { return this.cfg.url.replace(/\/+$/, '') + path; },
+  hdr(extra = {}) { return { 'X-Aufmass-Token': this.cfg.token, ...extra }; },
+  async saveState() { await DB.put('kv', this.st, 'syncState'); renderSyncPill(); },
+  async dirty(pid) {
+    if (!pid) return;
+    await snapshotLocal(pid);
+    (this.st[pid] ||= {}).pending = true; await this.saveState();
+    clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 1200);
+  },
+  async run() {
+    if (this.busy || !this.configured()) { renderSyncPill(); return; }
+    this.busy = true;
+    try {
+      for (const pid of Object.keys(this.st)) {
+        if (!this.st[pid].pending) continue;
+        const p = await DB.get('projects', pid);
+        if (!p) { delete this.st[pid]; continue; }
+        try { await this.push(p); this.st[pid] = { pending: false, ok: Date.now(), err: null }; }
+        catch (e) { this.st[pid].err = String(e.message || e); this.st[pid].fail = Date.now(); }
+      }
+    } finally { this.busy = false; await this.saveState(); }
+    Aufmass.upload().catch(() => {});
+  },
+  async push(p) {
+    const entries = await DB.byProject(p.id);
+    if (!p.templateHash) { p.templateHash = hashBuf(p.template); }
+    if (p.lvPdf && !p.lvHash) p.lvHash = hashBuf(p.lvPdf);
+    const { template, lvPdf, ...metaRaw } = stripIdx(p);
+    const metaJson = JSON.stringify({ ...metaRaw, metaHash: undefined });
+    const metaHash = hashStr(metaJson);
+    const post = async extra => {
+      const r = await fetch(this.api('/api/sync'), { method: 'POST', headers: this.hdr({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ pid: p.id, name: p.name, entries, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
+      if (r.status === 401) throw new Error('Token falsch');
+      if (!r.ok) throw new Error('Server-Fehler ' + r.status);
+      return r.json();
+    };
+    let res = await post({});
+    if (res.needMeta) res = await post({ meta: { ...JSON.parse(metaJson), metaHash } });
+    if (res.needTemplate) {
+      const r = await fetch(this.api(`/api/vorlage/${p.id}/${p.templateHash}`), { method: 'PUT', headers: this.hdr({ 'Content-Type': 'application/octet-stream' }), body: template });
+      if (!r.ok) throw new Error('Vorlage hochladen fehlgeschlagen (' + r.status + ')');
+    }
+    if (res.needLv && lvPdf) {
+      const r = await fetch(this.api(`/api/lv/${p.id}/${p.lvHash}`), { method: 'PUT', headers: this.hdr({ 'Content-Type': 'application/pdf' }), body: lvPdf });
+      if (!r.ok) throw new Error('LV hochladen fehlgeschlagen (' + r.status + ')');
+    }
+    return res;
+  },
+  async get(path) {
+    const r = await fetch(this.api(path), { headers: this.hdr(), cache: 'no-store' });
+    if (r.status === 401) throw new Error('Token falsch');
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || ('Fehler ' + r.status));
+    return r;
+  }
+};
+async function snapshotLocal(pid) {
+  // Tagesstand = alles, was an diesem Tag irgendwann da war (gelöschte Einträge bleiben drin)
+  const entries = await DB.byProject(pid); const date = todayISO(); const key = pid + '|' + date;
+  const prev = await DB.get('snapshots', key); const m = new Map((prev?.entries || []).map(e => [e.id, e]));
+  for (const e of entries) m.set(e.id, e);
+  await DB.put('snapshots', { key, pid, date, saved: Date.now(), entries: [...m.values()] });
+}
+/** Änderung an Einträgen gemerkt -> lokale Tagessicherung + Server */
+const changed = () => { if (!S.p) return; updateUse(); Sync.dirty(S.p.id); Aufmass.soon(); };
+function syncInfo() {
+  if (!S.p) return { cls: 'hidden', txt: '' };
+  const st = Sync.st[S.p.id] || {};
+  if (!Sync.configured()) return { cls: 'warn', txt: 'nur lokal', long: 'Keine Server-Sicherung eingerichtet – Einträge liegen nur auf diesem Gerät (plus Tagesstände).' };
+  if (st.pending) return { cls: 'warn', txt: 'Sicherung ausstehend', long: 'Wird nachgeholt, sobald der Server erreichbar ist' + (st.err ? ` (${st.err})` : '') + '.' };
+  if (st.ok) { const d = new Date(st.ok); const sameDay = d.toDateString() === new Date().toDateString();
+    return { cls: 'ok', txt: 'gesichert', long: 'Zuletzt gesichert: ' + (sameDay ? 'heute ' : d.toLocaleDateString('de-DE') + ' ') + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) }; }
+  return { cls: 'warn', txt: 'noch nicht gesichert', long: 'Noch keine Sicherung auf dem Server.' };
+}
+function renderSyncPill() {
+  const el = $('#syncPill'); if (!el) return; const i = syncInfo();
+  el.className = 'pill sync ' + i.cls; el.textContent = i.txt; el.title = i.long || '';
+}
+
+
+/* ---------------- Wochen-Aufmaße ----------------
+   Jede Kalenderwoche (Mo–So) ist ein Aufmaß. Ab Montag wird die Vorwoche automatisch als
+   Excel erzeugt, gespeichert (KW + Datum im Namen) und auf den Pi gelegt. Ändert sich danach
+   ein Eintrag der Woche, wird die Excel neu erzeugt (Version +1, alte Version bleibt auf dem Pi). */
+function weekOf(iso) {
+  const [y, m, d] = iso.split('-').map(Number); const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = (dt.getUTCDay() + 6) % 7; const add = (x, n) => { const r = new Date(x); r.setUTCDate(r.getUTCDate() + n); return r; };
+  const mon = add(dt, -dow), sun = add(mon, 6), th = add(mon, 3);
+  const wy = th.getUTCFullYear(); const w = Math.floor((th - Date.UTC(wy, 0, 1)) / 86400000 / 7) + 1;
+  const f = x => x.toISOString().slice(0, 10);
+  return { key: `${wy}-W${String(w).padStart(2, '0')}`, year: wy, week: w, from: f(mon), to: f(sun) };
+}
+const dm = iso => iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.';
+const weekLabel = w => `KW ${w.week} · ${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`;
+const weekByKey = key => { const [y, ww] = key.split('-W').map(Number); const jan4 = new Date(Date.UTC(y, 0, 4)); const d = new Date(jan4); d.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7) + (ww - 1) * 7); return weekOf(d.toISOString().slice(0, 10)); };
+const curWeek = () => weekOf(todayISO());
+const weekEntries = key => S.entries.filter(e => weekOf(e.date).key === key);
+const safeName = s => s.replace(/[^\wäöüÄÖÜß-]+/g, '_').replace(/^_+|_+$/g, '');
+function aufmassFileName(p, w) { return `Aufmass_${safeName(p.name)}_KW${String(w.week).padStart(2, '0')}_${w.year}_${dm(w.from)}-${dm(w.to)}${w.to.slice(0, 4)}.xlsm`; }
+function weekHash(p, list) {
+  if (!p.templateHash) p.templateHash = hashBuf(p.template);
+  return hashStr(JSON.stringify([p.templateHash, !!p.countExisting, list.map(e => [e.id, e.pos, e.qty, e.raum, e.sk, e.date]).sort((a, b) => a[0] < b[0] ? -1 : 1)]));
+}
+const XLSM_TYPE = 'application/vnd.ms-excel.sheet.macroEnabled.12';
+
+const Aufmass = {
+  busy: false, timer: null,
+  soon() { clearTimeout(this.timer); this.timer = setTimeout(() => this.check(), 2500); },
+  /** Vorwochen abschließen bzw. nach Änderungen neu erzeugen, dann auf den Pi legen */
+  async check() {
+    if (this.busy || !S.p || typeof JSZip === 'undefined') return;
+    this.busy = true; let made = [];
+    try {
+      const p = S.p, cw = curWeek().key;
+      const recs = new Map((await DB.aufmasseOf(p.id)).map(r => [r.week, r]));
+      const weeks = new Set(S.entries.map(e => weekOf(e.date).key).filter(k => k < cw));
+      for (const k of recs.keys()) if (k < cw) weeks.add(k);
+      for (const wk of [...weeks].sort()) {
+        const list = weekEntries(wk); const rec = recs.get(wk); const h = weekHash(p, list);
+        if (rec && rec.hash === h) continue;
+        if (!rec && !list.length) continue;
+        const w = weekByKey(wk); const res = await buildXlsm(p, list);
+        const nr = { key: p.id + '|' + wk, pid: p.id, week: wk, from: w.from, to: w.to, label: weekLabel(w), fileName: aufmassFileName(p, w),
+          file: await res.blob.arrayBuffer(), hash: h, count: list.length, created: rec?.created || Date.now(), updated: Date.now(),
+          version: (rec?.version || 0) + 1, sent: rec?.sent || [], changedAfterSend: !!(rec?.sent?.length), uploaded: null };
+        await DB.put('aufmasse', nr); made.push(nr);
+      }
+    } catch (e) { console.error('Aufmaß-Abschluss', e); }
+    finally { this.busy = false; }
+    if (made.length) {
+      const neu = made.filter(r => r.version === 1), upd = made.filter(r => r.version > 1);
+      toast([neu.length ? `Abgeschlossen: ${neu.map(r => esc(r.label.split(' · ')[0])).join(', ')}` : '', upd.length ? `Aktualisiert: ${upd.map(r => esc(r.label.split(' · ')[0])).join(', ')}` : ''].filter(Boolean).join('<br>') + '<br><span class="small">gespeichert unter Export → Aufmaße</span>', 4500);
+      if (S.tab === 'export') renderExport();
+    }
+    await this.upload();
+  },
+  async upload() {
+    if (!S.p || !Sync.configured()) return;
+    for (const r of await DB.aufmasseOf(S.p.id)) {
+      if (r.uploaded === r.hash) continue;
+      try {
+        const res = await fetch(Sync.api(`/api/aufmass/${r.pid}/${encodeURIComponent(r.fileName)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': 'application/octet-stream' }), body: r.file });
+        if (res.ok) { r.uploaded = r.hash; await DB.put('aufmasse', r); }
+      } catch { return; }
+    }
+  }
+};
+
+/* ---------------- Versand: Teilen-Menü oder direkt per E-Mail über den Pi ---------------- */
+function mailText(p, w, kind) {
+  const m = p.mail || {};
+  const fill = t => String(t || '').replace(/\{kw\}/g, `KW ${w.week}/${w.year}`).replace(/\{zeitraum\}/g, `${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`).replace(/\{baustelle\}/g, p.name);
+  return { subject: fill(m.subject || 'Aufmaß {kw} ({zeitraum}) – {baustelle}') + (kind === 'zwischen' ? ' – Zwischenstand' : ''),
+    body: fill(m.body || 'Hallo,\n\nanbei das Aufmaß {kw} ({zeitraum}) für {baustelle}.\n\nViele Grüße') };
+}
+async function shareFile(buf, name, subject, body) {
+  const file = new File([buf], name, { type: XLSM_TYPE });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: subject, text: body }); return true; }
+    catch (e) { if (e.name === 'AbortError') return false; }
+  }
+  downloadFile(buf, name); return true;
+}
+function downloadFile(buf, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: XLSM_TYPE })); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+async function mailDirect(buf, name, subject, body) {
+  const to = (S.p.mail?.to || '').trim();
+  if (!to) throw new Error('Keine Empfänger-Adresse – unter Export → „E-Mail ans Büro“ eintragen.');
+  if (!Sync.configured()) throw new Error('Kein Pi verbunden.');
+  const r = await fetch(Sync.api('/api/mail'), { method: 'POST', headers: Sync.hdr({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ to, cc: S.p.mail?.cc || '', subject, body, filename: name, data: bufToB64(buf) }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('Fehler ' + r.status));
+  return j;
+}
+/** Knopfzeile Teilen / E-Mail / Herunterladen für eine Datei */
+function sendButtons(id) {
+  return `<div class="row" style="margin-top:10px"><button class="btn primary grow" data-act="mail" data-id="${id}">✉ Per E-Mail ans Büro</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn grow" data-act="share" data-id="${id}">Teilen …</button><button class="btn grow" data-act="dl" data-id="${id}">Herunterladen</button></div>`;
+}
+async function onSend(act, getFile, w, kind, rec) {
+  const { buf, name } = await getFile(); const t = mailText(S.p, w, kind);
+  if (act === 'dl') { downloadFile(buf, name); return; }
+  if (act === 'share') { const ok = await shareFile(buf, name, t.subject, t.body); if (ok && rec) await markSent(rec, 'Teilen'); return; }
+  if (act === 'mail') {
+    if (!Sync.mailOk) {   // kein Mail-Versand auf dem Pi -> iPhone-Teilen-Menü (Mail auswählen)
+      toast('Direktversand ist auf dem Pi nicht eingerichtet – öffne das Teilen-Menü, dort „Mail“ wählen.', 4000);
+      const ok = await shareFile(buf, name, t.subject, t.body); if (ok && rec) await markSent(rec, 'Teilen'); return;
+    }
+    if (!confirm(`„${name}“ jetzt an ${S.p.mail.to}${S.p.mail.cc ? ' (CC ' + S.p.mail.cc + ')' : ''} senden?`)) return;
+    try { await mailDirect(buf, name, t.subject, t.body); if (rec) await markSent(rec, 'E-Mail an ' + S.p.mail.to); toast('E-Mail verschickt ✓'); }
+    catch (e) { toast('Nicht verschickt: ' + esc(e.message || e), 5000); }
+  }
+}
+async function markSent(rec, via) {
+  const r = await DB.get('aufmasse', rec.key); if (!r) return;
+  r.sent = [...(r.sent || []), { at: Date.now(), via, version: r.version }]; r.changedAfterSend = false;
+  await DB.put('aufmasse', r); if (S.tab === 'export') renderExport();
+}
+
+/* ---------------- Rendering ---------------- */
+function render() {
+  const p = S.p;
+  $('#projName').textContent = p ? p.name : 'Aufmaß';
+  $('#projSub').textContent = p ? `${p.positions.length} Positionen · ${p.blaetter.length} Blätter${p.lv ? ' · LV' : ''}` : 'Keine Baustelle';
+  const cw = curWeek(); const op = p ? weekEntries(cw.key).length : 0;
+  $('#openPill').textContent = `KW ${cw.week}: ${op}`; $('#openPill').classList.toggle('hidden', !p || !op);
+  $('#tabs').classList.toggle('hidden', !p);
+  renderSyncPill();
+  for (const b of document.querySelectorAll('nav.tabs button')) b.classList.toggle('on', b.dataset.tab === S.tab);
+  if (!p) return renderSetup();
+  ({ erfassen: renderErfassen, liste: renderListe, blaetter: renderBlaetter, export: renderExport })[S.tab]();
+}
+
+/* ----- Einrichtung / neue Baustelle ----- */
+function renderSetup(opts = {}) {
+  const m = $('#main');
+  m.innerHTML = `
+  <div class="card">
+    <h2>${opts.replace ? 'Vorlage ersetzen' : 'Neue Baustelle'}</h2>
+    <p class="muted small" style="margin-top:-4px">${opts.replace
+      ? 'Lade die neue Aufmaß-Datei vom Büro (z. B. nach der Abrechnung mit aktualisierten „bisher“-Mengen). Deine Einträge bleiben erhalten.'
+      : 'Lade die Aufmaß-Datei aus der Handwerkersoftware (.xlsm) und optional das LV als PDF. Die Dateien bleiben auf diesem Gerät.'}</p>
+    ${opts.replace ? '' : `<label class="f">Name der Baustelle</label><input class="i" id="sName" placeholder="z. B. ASS Buxtehude">`}
+    <label class="f">Aufmaß-Datei (.xlsm) ${opts.replace ? '' : '– Pflicht'}</label>
+    <label class="file"><input type="file" id="sX" accept=".xlsm,.xlsx,application/vnd.ms-excel.sheet.macroEnabled.12"><span class="n" id="sXn">Datei wählen …</span></label>
+    <label class="f">Leistungsverzeichnis (PDF) – optional, liefert Titel &amp; Langtexte</label>
+    <label class="file"><input type="file" id="sP" accept=".pdf,application/pdf"><span class="n" id="sPn">${opts.replace && S.p?.lvName ? 'Aktuell: ' + esc(S.p.lvName) + ' (leer lassen = behalten)' : 'Datei wählen …'}</span></label>
+    <div class="prog" id="sProg"><div></div></div>
+    <p class="hint" id="sMsg"></p>
+    <div class="row" style="margin-top:14px">
+      ${S.p ? '<button class="btn" id="sCancel">Abbrechen</button>' : ''}
+      <button class="btn primary grow" id="sGo">Einlesen</button>
+    </div>
+  </div>
+  ${S.p || opts.replace ? '' : `<div class="card small muted">
+    <b style="color:var(--text)">So funktioniert's</b><br>
+    1. Baustelle anlegen (Aufmaß-Datei + LV).<br>
+    2. Unter <b>Erfassen</b> Position suchen, Menge und Raum eintragen – täglich, direkt auf der Baustelle.<br>
+    3. Unter <b>Blätter</b> siehst du live, wo jeder Eintrag in der Excel landet.<br>
+    4. Unter <b>Export</b> die ausgefüllte Aufmaß-Datei erzeugen und ans Büro schicken.<br><br>
+    Schon Daten gesichert? <a href="#" id="sSrv">Vom Server wiederherstellen</a> · <a href="#" id="sRestore">Backup-Datei laden</a></div>`}`;
+  const fx = $('#sX'), fp = $('#sP');
+  fx.onchange = () => $('#sXn').textContent = fx.files[0]?.name || 'Datei wählen …';
+  fp.onchange = () => $('#sPn').textContent = fp.files[0]?.name || 'Datei wählen …';
+  if ($('#sCancel')) $('#sCancel').onclick = () => { S.tab = opts.replace ? 'export' : S.tab; render(); };
+  if ($('#sRestore')) $('#sRestore').onclick = ev => { ev.preventDefault(); restoreBackup(); };
+  if ($('#sSrv')) $('#sSrv').onclick = ev => { ev.preventDefault(); openServerRestore(); };
+  $('#sGo').onclick = async () => {
+    const msg = $('#sMsg'), prog = $('#sProg'), bar = prog.firstElementChild;
+    msg.className = 'hint'; msg.textContent = '';
+    const xf = fx.files[0], pf = fp.files[0];
+    if (!opts.replace && !xf) { msg.className = 'hint warn'; msg.textContent = 'Bitte die Aufmaß-Datei wählen.'; return; }
+    if (opts.replace && !xf && !pf) { msg.className = 'hint warn'; msg.textContent = 'Bitte mindestens eine Datei wählen.'; return; }
+    $('#sGo').disabled = true; prog.style.display = 'block'; bar.style.width = '5%';
+    try {
+      let tpl = null, buf = null;
+      if (xf) { msg.textContent = 'Lese Aufmaß-Datei …'; buf = await xf.arrayBuffer(); tpl = await parseTemplate(buf); bar.style.width = '30%'; }
+      let lv = undefined;
+      if (pf) {
+        msg.textContent = 'Lese LV (kann bei vielen Seiten etwas dauern) …';
+        var pdfBuf = await pf.arrayBuffer();
+        const lines = await pdfLines(pdfBuf.slice(0), f => bar.style.width = (30 + f * 65) + '%');
+        lv = parseLVLines(lines);
+      }
+      let p;
+      if (opts.replace) {
+        p = S.p;
+        if (tpl) { Object.assign(p, { template: buf, templateName: xf.name, templateDate: Date.now(), positions: tpl.positions, rooms: tpl.rooms, sks: tpl.sks, blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false }); }
+        if (lv) { p.lv = lv; p.lvName = pf.name; p.lvPdf = pdfBuf; p.lvHash = null; }
+      } else {
+        p = { id: uid(), name: ($('#sName').value.trim() || xf.name.replace(/\.[^.]+$/, '')), created: Date.now(),
+          template: buf, templateName: xf.name, templateDate: Date.now(), positions: tpl.positions, rooms: tpl.rooms, sks: tpl.sks,
+          blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false, lv: lv || null, lvName: pf?.name || null, lvPdf: lv ? pdfBuf : null, titleAlias: {} };
+      }
+      await saveProject(p); bar.style.width = '100%';
+      const nT = p.lv ? p.positions.filter(x => posTitle(p, x.pos).titel || posTitle(p, x.pos).bereich).length : 0;
+      const exist = p.uncountedCells || 0;
+      await DB.put('kv', p.id, 'current'); await loadAll(); S.tab = 'erfassen';
+      render();
+      toast(`<b>Eingelesen:</b> ${p.positions.length} Positionen, ${p.blaetter.length} Blätter, ${p.rooms.length} Räume${p.lv ? `, ${nT} mit LV-Titel` : ''}${exist ? `<br>Achtung: ${exist} Altwerte auf ${p.uncounted.map(n => 'Blatt ' + n).join(', ')} (siehe Export)` : ''}`, 5000);
+    } catch (err) {
+      console.error(err); msg.className = 'hint warn';
+      msg.textContent = 'Fehler: ' + (err.message || err) + (String(err).includes('import') || String(err).includes('fetch') ? ' (Für das LV wird beim ersten Mal Internet benötigt.)' : '');
+      $('#sGo').disabled = false; prog.style.display = 'none';
+    }
+  };
+}
+
+/* ----- Erfassen ----- */
+function resultHTML(x) {
+  const t = posTitle(S.p, x.pos); const e = erfasst(x.pos); const rest = x.L - x.K - e;
+  return `<div class="res" data-pos="${esc(x.pos)}">
+    <div class="grow"><div class="pos">${esc(x.pos)}</div><div class="tx">${esc(x.text)}</div>
+      <div class="ti tlink" data-key="${esc(t.key)}">${esc(t.titel || t.bereich || 'Titel ' + t.key)} <span class="lvbtn">LV ›</span></div>${x.repl ? `<div class="ti neg">per Nachtrag ersetzt durch ${esc(x.repl)}</div>` : ''}</div>
+    <div class="q">${e ? `<b>${fmt(e)} ${esc(x.unit)}</b>jetzt<br>` : ''}Rest <span class="${rest < 0 ? 'neg' : ''}">${fmt(rest)}</span><br>LV ${fmt(x.L)} ${esc(x.unit)}</div>
+  </div>`;
+}
+function renderErfassen() {
+  const m = $('#main');
+  m.innerHTML = `
+    <div class="search"><input class="i" id="q" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Position suchen, z. B. nym 3x1,5" value="${esc(S.q || '')}"></div>
+    <div id="qInfo"></div>
+    <div id="res"></div>
+    <div class="row" style="margin-top:14px"><button class="btn block" id="impBtn">Text einfügen (Bautagesbericht / Live Text)</button></div>`;
+  const q = $('#q');
+  const run = () => {
+    S.q = q.value; const box = $('#res'), info = $('#qInfo');
+    if (!q.value.trim()) {
+      info.innerHTML = '';
+      const seen = new Set(); const recent = [];
+      for (const e of S.entries.slice().sort((a, b) => b.created - a.created)) { if (seen.has(e.pos)) continue; seen.add(e.pos); const x = posMap().get(e.pos); if (x) recent.push(x); if (recent.length >= 12) break; }
+      box.innerHTML = recent.length ? `<h3>Zuletzt verwendet</h3>${recent.map(resultHTML).join('')}`
+        : `<div class="empty">Tippe einen Teil der Bezeichnung, eine Pos.-Nr. oder z. B. „datenkabel 45“ – die Zahl am Ende wird als Menge übernommen.</div>`;
+      return;
+    }
+    const { results, qty, partial, raum } = searchPositions(S.p, q.value);
+    S.qQty = qty; S.qRaum = raum;
+    info.innerHTML = (qty != null ? `<span class="qchip">Menge ${fmt(qty)}</span> ` : '') + (raum ? `<span class="qchip">Raum ${esc(raum)}</span>` : '') + (partial ? '<p class="hint">Keine Position passt auf alle Wörter – das sind die besten Teiltreffer:</p>' : '');
+    box.innerHTML = results.length ? results.map(r => resultHTML(r.x)).join('') : '<div class="empty">Nichts gefunden.</div>';
+  };
+  q.oninput = run; run();
+  $('#res').onclick = ev => { const tl = ev.target.closest('.tlink'); if (tl) { ev.stopPropagation(); openTitle(tl.dataset.key); return; } const r = ev.target.closest('.res'); if (r) openEntryForm({ pos: r.dataset.pos, qty: S.qQty, raum: S.qRaum }); };
+  $('#impBtn').onclick = openImport;
+}
+
+/* ----- Eingabeformular (neu / bearbeiten) ----- */
+function roomSuggest(input, box, list, onPick) {
+  const show = () => {
+    const v = norm(input.value);
+    if (!v) { box.classList.add('hidden'); return; }
+    const toks = v.split(' ');
+    const hits = list.filter(r => { const n = norm(r); return toks.every(t => n.includes(t)); })
+      .sort((a, b) => (norm(a).startsWith(v) ? 0 : 1) - (norm(b).startsWith(v) ? 0 : 1) || a.length - b.length).slice(0, 30);
+    if (!hits.length || (hits.length === 1 && hits[0] === input.value)) { box.classList.add('hidden'); return; }
+    box.innerHTML = hits.map(h => `<div>${esc(h)}</div>`).join(''); box.classList.remove('hidden');
+  };
+  input.addEventListener('input', show); input.addEventListener('focus', show);
+  box.addEventListener('mousedown', ev => ev.preventDefault());
+  box.addEventListener('click', ev => { const d = ev.target.closest('div'); if (!d || d === box) return; input.value = d.textContent; box.classList.add('hidden'); onPick && onPick(); });
+  input.addEventListener('blur', () => setTimeout(() => box.classList.add('hidden'), 150));
+}
+function openSheet(html) {
+  const sh = $('#sheet'); sh.innerHTML = '<div class="grab"></div>' + html;
+  $('#sheetBg').style.display = 'block'; requestAnimationFrame(() => sh.classList.add('open'));
+  $('#sheetBg').onclick = closeSheet; sh.scrollTop = 0;
+}
+function closeSheet() { $('#sheet').classList.remove('open'); $('#sheetBg').style.display = 'none'; }
+
+function openEntryForm({ pos, qty, raum, entry }) {
+  const x = posMap().get(entry ? entry.pos : pos); if (!x) return;
+  const t = posTitle(S.p, x.pos); const lr = lastRaum();
+  const e = entry || { id: null, pos: x.pos, qty: qty ?? '', expr: qty != null ? String(qty).replace('.', ',') : '', raum: raum || lr.raum, sk: raum ? '' : lr.sk, date: todayISO(), note: '' };
+  const lvLong = S.p.lv?.pos?.[x.pos]?.long || S.p.lv?.pos?.[x.pos.replace(/[a-z]+$/i, '')]?.long || (x.fullText !== x.text ? x.fullText : '');
+  const done = erfasst(x.pos) - (entry ? entry.qty : 0);
+  openSheet(`
+    <div class="head"><div class="grow"><div class="muted small tlink" id="ftl" style="font-weight:600">${esc(x.pos)} · ${esc(t.titel || t.bereich || 'Titel ' + t.key)} <span class="lvbtn">LV-Abschnitt ›</span></div>
+      <div style="font-weight:700;font-size:17px;margin-top:2px">${esc(x.text)}</div></div><button class="x" id="fx">×</button></div>
+    <div class="muted small" style="margin-top:6px">LV-Menge ${fmt(x.L)} ${esc(x.unit)} · bisher laut Vorlage ${fmt(x.K)} · in der App erfasst ${fmt(done)}</div>
+    ${lvLong ? `<details class="long"><summary>Langtext</summary><div>${esc(lvLong)}</div></details>` : ''}
+    ${x.repl ? `<p class="hint warn">Auftragsmenge wurde per Nachtrag auf ${fmt(x.L)} gesetzt – neue Mengen gehören vermutlich auf <b>${esc(x.repl)}</b>.</p>` : ''}
+    ${!x.inBlatt ? '<p class="hint warn">Diese Position steht auf keinem Erfassungsblatt der Vorlage und kann nicht exportiert werden.</p>' : ''}
+    ${entry ? `<p class="hint">Gehört zum Aufmaß ${esc(weekLabel(weekOf(entry.date)))}. Datum ändern verschiebt ihn in eine andere Woche.</p>` : ''}
+    <label class="f">Menge</label>
+    <div class="qty"><input class="i grow" id="fq" inputmode="decimal" autocomplete="off" value="${esc(e.expr ?? e.qty)}" placeholder="0"><button class="btn plus" id="fplus" type="button">+</button><span class="unit">${esc(x.unit)}</span></div>
+    <div class="hint" id="fqh">Mehrere Stücke addieren: 12+8+15</div>
+    <label class="f">Raum</label>
+    <input class="i" id="fr" autocomplete="off" value="${esc(e.raum)}" placeholder="aus dem Raumbuch">
+    <div class="sugg hidden" id="frs"></div><div class="hint" id="frh"></div>
+    <div class="row"><div class="grow"><label class="f">Stromkreis (optional)</label><input class="i" id="fs" autocomplete="off" value="${esc(e.sk)}"></div>
+      <div style="width:44%"><label class="f">Datum</label><input class="i" id="fd" type="date" value="${esc(e.date)}"></div></div>
+    <label class="f">Notiz (optional, nur in der App)</label><input class="i" id="fn" value="${esc(e.note || '')}">
+    <div class="target" id="ftg"></div>
+    <div class="row" style="margin-top:14px">
+      ${entry ? '<button class="btn danger" id="fdel">Löschen</button>' : ''}
+      <button class="btn primary grow" id="fsave">${entry ? 'Speichern' : 'Eintragen'}</button>
+    </div>`);
+  const fq = $('#fq'), fr = $('#fr'), fs = $('#fs');
+  const rooms = S.p.rooms;
+  const check = () => {
+    const v = evalExpr(fq.value);
+    $('#fqh').className = 'hint' + (fq.value && v == null ? ' warn' : '');
+    $('#fqh').textContent = fq.value && v == null ? 'Ungültige Menge' : (v != null && /[+*\/]/.test(fq.value) ? '= ' + fmt(v) + ' ' + x.unit : 'Mehrere Stücke addieren: 12+8+15');
+    const r = fr.value.trim();
+    const inRb = !r || rooms.includes(r);
+    $('#frh').className = 'hint' + (!inRb ? ' warn' : '');
+    $('#frh').textContent = !r && !fs.value.trim() ? 'Raum oder Stromkreis wird benötigt.' : (!inRb ? 'Raum steht nicht im Raumbuch – Excel zeigt dann einen Hinweis. Besser einen Raum aus der Liste wählen.' : '');
+    // Vorschau: wohin kommt der Eintrag?
+    if (v != null && (r || fs.value.trim()) && x.inBlatt) {
+      const tmp = { id: '__tmp', pos: x.pos, qty: v, raum: r, sk: fs.value.trim(), date: $('#fd').value || todayISO(), created: entry ? entry.created : Date.now() };
+      const others = weekEntries(weekOf(tmp.date).key).filter(o => o.id !== (entry && entry.id));
+      const L = layout(S.p, [...others, tmp]); const pl = L.place['__tmp'];
+      $('#ftg').innerHTML = pl ? `Aufmaß <b>${esc(weekLabel(weekOf(tmp.date)).split(' · ')[0])}</b> → <b>${esc(pl.name)}</b>, Zeile <b>${pl.row}</b>, Spalte <b>${pl.col}</b>${pl.clone ? ' <span class="pill">neues Blatt</span>' : ''}` : esc(L.problems[0]?.why || '');
+    } else $('#ftg').innerHTML = '<span class="muted">Ziel in der Excel wird angezeigt, sobald Menge und Raum da sind.</span>';
+  };
+  roomSuggest(fr, $('#frs'), rooms, check);
+  [fq, fr, fs, $('#fd')].forEach(el => el.addEventListener('input', check)); check();
+  $('#fplus').onclick = () => { fq.value = fq.value.replace(/\+$/, '') + '+'; fq.focus(); check(); };
+  $('#fx').onclick = closeSheet;
+  $('#ftl').onclick = () => openTitle(t.key, () => openEntryForm({ pos, qty: evalExpr(fq.value), raum: fr.value, entry }));
+  if (!entry) setTimeout(() => fq.focus(), 250);
+  if ($('#fdel')) $('#fdel').onclick = async () => {
+    if (!confirm('Eintrag löschen?')) return;
+    await DB.del('entries', entry.id); S.entries = S.entries.filter(o => o.id !== entry.id); changed(); closeSheet(); render(); toast('Eintrag gelöscht – über „Verlauf“ wiederherstellbar');
+  };
+  $('#fsave').onclick = async () => {
+    const v = evalExpr(fq.value);
+    if (v == null || v === 0) { $('#fqh').className = 'hint warn'; $('#fqh').textContent = 'Bitte eine Menge eingeben.'; fq.focus(); return; }
+    if (!fr.value.trim() && !fs.value.trim()) { $('#frh').className = 'hint warn'; $('#frh').textContent = 'Raum oder Stromkreis wird benötigt.'; fr.focus(); return; }
+    const rec = { ...(entry || {}), id: entry?.id || uid(), projectId: S.p.id, pos: x.pos, qty: v, expr: fq.value.trim(), raum: fr.value.trim(), sk: fs.value.trim(),
+      date: $('#fd').value || todayISO(), note: $('#fn').value.trim(), status: entry?.status || 'offen', created: entry?.created || Date.now(), updated: Date.now() };
+    await DB.put('entries', rec); changed();
+    S.entries = S.entries.filter(o => o.id !== rec.id).concat(rec); S.lastEntryId = rec.id; S.exportRes = null;
+    const pl = layout(S.p, weekEntries(weekOf(rec.date).key)).place[rec.id];
+    closeSheet(); if (!entry) { S.q = ''; } render();
+    toast(`<b>${fmt(v)} ${esc(x.unit)}</b> ${esc(x.text)}${pl ? `<br>→ ${esc(pl.name)}, Zeile ${pl.row}, Spalte ${pl.col}` : ''}`);
+  };
+}
+
+
+/* ----- LV-Abschnitt (Obertitel) ansehen und umbenennen ----- */
+function openTitle(key, back) {
+  const p = S.p, lv = p.lv || {}, inf = lv.info?.[key];
+  const isBereich = key.split('.').filter(Boolean).length === 1;
+  const orig = lv.titles?.[key] || '';
+  const alias = p.titleAlias?.[key] || '';
+  const bk = key.split('.')[0] + '.';
+  const items = p.positions.filter(x => x.pos.startsWith(key) && (!isBereich || x.pos.split('.')[1] === '00' || !lv.titles?.[x.pos.slice(0, 6)])).sort((a, b) => a.row - b.row);
+  const pr = n => lv.printed?.[n] ?? n;   // gedruckte Seitennummer (Deckblatt hat keine)
+  const pages = inf ? (inf.endPage && inf.endPage > inf.page ? `${pr(inf.page)}–${pr(inf.endPage)}` : String(pr(inf.page))) : '';
+  openSheet(`
+    <div class="head"><div class="grow"><div class="muted small" style="font-weight:600">${isBereich ? 'Bereich' : 'Titel'} ${esc(key)}${!isBereich && lv.titles?.[bk] ? ' · in ' + esc(p.titleAlias?.[bk] || lv.titles[bk]) : ''}</div>
+      <div style="font-weight:700;font-size:18px;margin-top:2px">${esc(alias || orig || '(ohne Titel im LV)')}</div>
+      ${alias && orig ? `<div class="muted small">im LV: ${esc(orig)}</div>` : ''}</div><button class="x" id="tx">×</button></div>
+    <label class="f">Eigener Name für diesen ${isBereich ? 'Bereich' : 'Titel'}</label>
+    <div class="row"><input class="i grow" id="tn" value="${esc(alias)}" placeholder="${esc(orig || 'z. B. Bauteil A')}"><button class="btn primary" id="ts">Speichern</button></div>
+    <div class="hint">Wird überall in der App statt „${esc(orig || key)}“ angezeigt und ist suchbar. In der Excel ändert sich nichts.${alias ? ' <a href="#" id="tr">Zurücksetzen</a>' : ''}</div>
+    ${!isBereich && lv.titles?.[bk] ? `<div class="hint"><a href="#" id="tb">Übergeordneten Bereich „${esc(p.titleAlias?.[bk] || lv.titles[bk])}“ ansehen</a></div>` : ''}
+    ${inf ? `<div class="target">LV-Seite <b>${pages}</b> <span class="muted small">(wie im gedruckten LV)</span>
+      ${p.lvPdf ? `<button class="btn block" id="tp" style="margin-top:8px">Originalseiten aus dem LV anzeigen</button>` : '<div class="small muted" style="margin-top:4px">Originalseiten: LV-PDF unter Export → „Neue Aufmaß-Datei / LV laden“ einmal neu laden.</div>'}</div>` : (p.lv ? '' : '<p class="hint">Kein LV geladen – nur die Positionen aus der Aufmaß-Datei.</p>')}
+    <div class="pdfpages" id="tpages"></div>
+    ${inf?.intro ? `<details class="long" open><summary>Vorbemerkung zum ${isBereich ? 'Bereich' : 'Titel'}</summary><div>${esc(inf.intro)}</div></details>` : ''}
+    <h3>${items.length} Positionen</h3>
+    ${items.map(x => { const lt = lv.pos?.[x.pos]?.long || lv.pos?.[x.pos.replace(/[a-z]+$/i, '')]?.long || '';
+      return `<div class="imp"><div class="row"><div class="grow"><div class="pos muted small" style="font-weight:600">${esc(x.pos)}${lv.pos?.[x.pos]?.page ? ' · S. ' + pr(lv.pos[x.pos].page) : ''}</div><b>${esc(x.text)}</b></div>
+        <div class="small muted" style="text-align:right;white-space:nowrap">LV ${fmt(x.L)} ${esc(x.unit)}</div></div>
+        ${lt ? `<details class="long"><summary>Langtext</summary><div>${esc(lt)}</div></details>` : ''}
+        <button class="btn block tpick" data-pos="${esc(x.pos)}" style="margin-top:8px;min-height:38px;padding:6px">Diese Position erfassen</button></div>`; }).join('')}
+    ${back ? '<button class="btn block" id="tback" style="margin-top:6px">‹ Zurück zum Eintrag</button>' : ''}`);
+  $('#tx').onclick = closeSheet;
+  if ($('#tback')) $('#tback').onclick = back;
+  if ($('#tb')) $('#tb').onclick = ev => { ev.preventDefault(); openTitle(bk, () => openTitle(key, back)); };
+  const saveAlias = async v => {
+    p.titleAlias = { ...(p.titleAlias || {}) }; if (v) p.titleAlias[key] = v; else delete p.titleAlias[key];
+    await saveProject(p); buildIndex(p); render(); openTitle(key, back);
+    toast(v ? `Umbenannt in „${esc(v)}“` : 'Name zurückgesetzt');
+  };
+  $('#ts').onclick = () => saveAlias($('#tn').value.trim());
+  if ($('#tr')) $('#tr').onclick = ev => { ev.preventDefault(); saveAlias(''); };
+  $('#sheet').querySelectorAll('.tpick').forEach(b => b.onclick = () => openEntryForm({ pos: b.dataset.pos }));
+  if ($('#tp')) $('#tp').onclick = async () => {
+    const box = $('#tpages'); $('#tp').disabled = true; $('#tp').textContent = 'Lade Seiten …';
+    try {
+      const lib = await loadPdfJs();
+      const doc = await lib.getDocument({ data: new Uint8Array(p.lvPdf.slice(0)) }).promise;
+      const from = inf.page, to = Math.min(inf.endPage || inf.page, from + 29, doc.numPages);
+      const w = box.clientWidth || 340, dpr = Math.min(window.devicePixelRatio || 1, 2);
+      for (let n = from; n <= to; n++) {
+        const pg = await doc.getPage(n); const v0 = pg.getViewport({ scale: 1 });
+        const vp = pg.getViewport({ scale: (w * dpr) / v0.width });
+        const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+        box.appendChild(c); await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      }
+      $('#tp').textContent = `Seiten ${pr(from)}–${pr(to)} angezeigt`;
+    } catch (e) { $('#tp').textContent = 'Fehler: ' + (e.message || e); }
+  };
+}
+
+/* ----- Text-Import (Bautagesbericht / iPhone Live Text) ----- */
+function parseImportLine(line, rooms, defRaum) {
+  let rest = ' ' + line.trim() + ' ', qty = null;
+  const mq = /(\d+(?:[.,]\d+)?)\s*(m|mtr|meter|lfm|st|stk|stück|stck|psch|pauschal|h|std|stunden)?\.?\s*$/i.exec(rest.trim())
+          || /(?:^|\s)(\d+(?:[.,]\d+)?)\s*(m|mtr|meter|lfm|st|stk|stück|stck|psch|h|std)\b\.?/i.exec(rest);
+  if (mq) { qty = evalExpr(mq[1]); rest = rest.replace(mq[0], ' '); }
+  const r = searchPositions(S.p, rest, 6);
+  const raum = r.raum || findRoom(S.p, rest)?.raum || defRaum;
+  return { line, qty, raum, cands: r.results.map(o => o.x.pos), use: !!(r.results.length && qty && !r.partial) };
+}
+function openImport() {
+  const lr = lastRaum();
+  openSheet(`
+    <div class="head"><div class="grow"><div style="font-weight:700;font-size:17px">Text einfügen</div>
+      <div class="muted small">Eine Zeile pro Position, z. B. „Datenkabel Kat 7 2.OG Flur 45 m“. Bei Fotos: Text im iPhone-Foto markieren (Live Text) → Kopieren → hier einfügen.</div></div><button class="x" id="ix">×</button></div>
+    <textarea class="i" id="it" rows="7" style="margin-top:12px" placeholder="NYM-J 3x1,5 120 m&#10;Steckdose 2-fach 14 St&#10;Datenkabel 2.OG Flur 45"></textarea>
+    <div class="row" style="margin-top:8px"><div class="grow"><label class="f">Raum, falls in der Zeile keiner steht</label><input class="i" id="ir" value="${esc(lr.raum)}" autocomplete="off"><div class="sugg hidden" id="irs"></div></div>
+      <div style="width:40%"><label class="f">Datum</label><input class="i" id="id" type="date" value="${todayISO()}"></div></div>
+    <button class="btn block" id="igo" style="margin-top:12px">Zeilen erkennen</button>
+    <div id="iout" style="margin-top:14px"></div>`);
+  roomSuggest($('#ir'), $('#irs'), S.p.rooms);
+  $('#ix').onclick = closeSheet;
+  $('#igo').onclick = () => {
+    const lines = $('#it').value.split(/\n+/).map(s => s.trim()).filter(s => s.length > 2);
+    const rows = lines.map(l => parseImportLine(l, S.p.rooms, $('#ir').value.trim()));
+    const out = $('#iout');
+    if (!rows.length) { out.innerHTML = '<p class="hint warn">Kein Text.</p>'; return; }
+    out.innerHTML = rows.map((r, i) => `<div class="imp ${r.use ? '' : 'off'}" data-i="${i}">
+      <div class="row"><input type="checkbox" class="iu" ${r.use ? 'checked' : ''} style="width:22px;height:22px"><div class="src grow">„${esc(r.line)}“</div></div>
+      <select class="i ip">${r.cands.map(pc => { const x = posMap().get(pc); return `<option value="${esc(pc)}">${esc(pc)} – ${esc(x.text)}${posTitle(S.p, pc).titel ? ' (' + esc(posTitle(S.p, pc).titel) + ')' : ''}</option>`; }).join('') || '<option value="">– keine Position erkannt –</option>'}</select>
+      <div class="row" style="margin-top:6px"><input class="i iq" inputmode="decimal" style="width:34%" value="${r.qty != null ? fmt(r.qty) : ''}" placeholder="Menge"><input class="i ir grow" value="${esc(r.raum)}" placeholder="Raum"></div>
+    </div>`).join('') + `<button class="btn primary block" id="isave">Markierte übernehmen</button>`;
+    out.querySelectorAll('.imp').forEach(d => d.querySelector('.iu').onchange = ev => d.classList.toggle('off', !ev.target.checked));
+    $('#isave').onclick = async () => {
+      const date = $('#id').value || todayISO(); let n = 0, skipped = 0;
+      for (const d of out.querySelectorAll('.imp')) {
+        if (!d.querySelector('.iu').checked) continue;
+        const pos = d.querySelector('.ip').value, qv = evalExpr(d.querySelector('.iq').value), raum = d.querySelector('.ir').value.trim();
+        if (!pos || qv == null || !raum) { skipped++; continue; }
+        const rec = { id: uid(), projectId: S.p.id, pos, qty: qv, expr: d.querySelector('.iq').value.trim(), raum, sk: '', date, note: 'Import: ' + rows[+d.dataset.i].line, status: 'offen', created: Date.now() + n, updated: Date.now() };
+        await DB.put('entries', rec); S.entries.push(rec); S.lastEntryId = rec.id; n++;
+      }
+      S.exportRes = null; changed(); closeSheet(); render();
+      toast(`${n} Einträge übernommen${skipped ? `, ${skipped} übersprungen (Menge, Raum oder Position fehlt)` : ''}`);
+    };
+  };
+}
+
+/* ----- Einträge ----- */
+function weekChips(sel) {
+  const cw = curWeek(); const keys = new Set([cw.key, ...S.entries.map(e => weekOf(e.date).key)]);
+  return `<div class="chips">${[...keys].sort().reverse().map(k => { const w = weekByKey(k); const n = weekEntries(k).length;
+    return `<button data-wk="${k}" class="${k === sel ? 'on' : ''}">KW ${w.week}${k === cw.key ? ' (läuft)' : ''} · ${n}</button>`; }).join('')}</div>`;
+}
+function renderListe() {
+  const m = $('#main'); const cw = curWeek();
+  if (!S.listWeek) S.listWeek = cw.key;
+  const wk = S.listWeek, w = weekByKey(wk);
+  const list = weekEntries(wk).sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
+  const L = layout(S.p, weekEntries(wk));
+  const days = new Map(); for (const e of list) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
+  m.innerHTML = weekChips(wk) + `<p class="muted small" style="margin:0 2px 8px">Aufmaß ${esc(weekLabel(w))}${wk === cw.key ? ' – wird am Montag automatisch abgeschlossen' : ' – Änderungen erzeugen die Excel automatisch neu'}</p>
+    ${L.problems.length ? `<div class="card" style="border-color:var(--warn)"><b class="neg">${L.problems.length} Einträge können nicht exportiert werden</b><div class="small muted">${L.problems.slice(0, 5).map(p => esc(p.e.pos + ': ' + p.why)).join('<br>')}</div></div>` : ''}
+    ${!list.length ? '<div class="empty">Keine Einträge in dieser Woche.</div>' : ''}
+    ${[...days].map(([d, es]) => `<div class="day"><b>${fmtDate(d)}</b><button class="btn" data-share="${d}" style="min-height:34px;padding:5px 11px;font-size:13px">Teilen</button></div>
+      <div class="card" style="padding:2px 14px">${es.map(e => { const x = posMap().get(e.pos); const pl = L.place[e.id];
+        return `<div class="entry" data-id="${e.id}"><div class="grow"><div style="font-weight:600">${esc(x ? x.text : e.pos)}</div>
+          <div class="w">${esc(e.pos)} · ${esc(e.raum || '–')}${e.sk ? ' · SK ' + esc(e.sk) : ''}${pl ? ` · ${esc(pl.name)} Z${pl.row} ${pl.col}` : ''}${e.note && !e.note.startsWith('Import:') ? ' · ' + esc(e.note) : ''}</div></div>
+          <div class="m">${fmt(e.qty)} ${esc(x ? x.unit : '')}</div></div>`; }).join('')}</div>`).join('')}`;
+  m.querySelector('.chips button.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  m.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { S.listWeek = b.dataset.wk; renderListe(); });
+  m.querySelectorAll('.entry').forEach(d => d.onclick = () => openEntryForm({ entry: S.entries.find(e => e.id === d.dataset.id) }));
+  m.querySelectorAll('[data-share]').forEach(b => b.onclick = async () => {
+    const d = b.dataset.share; const es = days.get(d);
+    const txt = `Aufmaß ${S.p.name} – ${fmtDate(d)}\n` + es.map(e => { const x = posMap().get(e.pos); return `${e.pos}  ${x ? x.text : ''}  ${fmt(e.qty)} ${x ? x.unit : ''}  (${e.raum}${e.sk ? ', SK ' + e.sk : ''})`; }).join('\n');
+    try { if (navigator.share) await navigator.share({ text: txt }); else { await navigator.clipboard.writeText(txt); toast('In die Zwischenablage kopiert'); } }
+    catch (err) { if (err.name !== 'AbortError') { try { await navigator.clipboard.writeText(txt); toast('In die Zwischenablage kopiert'); } catch { } } }
+  });
+}
+
+/* ----- Blätter (Live-Ansicht der Excel) ----- */
+function renderBlaetter() {
+  const m = $('#main'); if (!S.listWeek) S.listWeek = curWeek().key;
+  const L = layout(S.p, weekEntries(S.listWeek));
+  const used = L.blaetter.filter(b => b.rows.some(r => r.raum || r.sk || Object.keys(r.cells).length));
+  const hiPl = S.lastEntryId ? L.place[S.lastEntryId] : null;
+  if (!S.blattSel || !L.blaetter.find(b => b.nr === S.blattSel)) S.blattSel = hiPl?.blatt || used[0]?.nr || L.blaetter[0].nr;
+  const b = L.blaetter.find(x => x.nr === S.blattSel);
+  const showAll = S.blattAll;
+  const chips = (showAll ? L.blaetter : (used.length ? used : L.blaetter));
+  const rows = b.rows.filter(r => r.raum || r.sk || Object.keys(r.cells).length);
+  m.innerHTML = weekChips(S.listWeek) + `
+    <div class="chips">${chips.map(x => `<button data-nr="${x.nr}" class="${x.nr === b.nr ? 'on' : ''}">${esc(x.name)}${x.rows.some(r => Object.values(r.cells).some(c => c.parts.length)) ? '<span class="d"></span>' : ''}</button>`).join('')}
+      <button data-all="1">${showAll ? 'Nur benutzte' : 'Alle ' + L.blaetter.length}</button></div>
+    ${b.clone ? `<p class="hint">Neues Blatt – wird beim Export als Kopie von „${esc(b.src)}“ angelegt, weil dort alle 21 Zeilen belegt sind.</p>` : ''}
+    <div class="gridwrap"><table class="grid"><thead><tr><th class="rm">Raum / SK<br><span class="p">Zeile</span></th>
+      ${b.positions.map((pp, i) => pp ? `<th><span class="p">${BLATT_COLS[i]} · ${esc(pp)}</span>${esc((posMap().get(pp)?.text || '').slice(0, 42))}</th>` : '').join('')}</tr></thead>
+      <tbody>${rows.length ? rows.map(r => `<tr><td class="rm"><b>${esc(r.raum || '–')}</b>${r.sk ? '<br>SK ' + esc(r.sk) : ''}<br><span class="muted small">Z ${r.row}</span></td>
+        ${b.positions.map((pp, i) => { if (!pp) return ''; const c = r.cells[i]; if (!c) return '<td></td>';
+          const isHi = hiPl && hiPl.blatt === b.nr && hiPl.row === r.row && hiPl.col === BLATT_COLS[i];
+          const cls = isHi ? 'hi' : (c.parts.length ? 'new' : (c.old && !c.old.counted && !S.p.countExisting ? 'nc' : 'old'));
+          return `<td class="${cls}">${fmt(cellTotal(c))}</td>`; }).join('')}</tr>`).join('')
+        : `<tr><td class="rm muted">noch leer</td>${b.positions.map(pp => pp ? '<td></td>' : '').join('')}</tr>`}
+      <tr class="sum"><td class="rm">Summe</td>${b.positions.map((pp, i) => { if (!pp) return ''; let s = 0; for (const r of b.rows) if (r.cells[i]) s += cellTotal(r.cells[i]); return `<td>${s ? fmt(s) : ''}</td>`; }).join('')}</tr>
+      </tbody></table></div>
+    <div class="legend"><span><i style="background:var(--cell-new)"></i>neu erfasst</span><span><i style="background:var(--cell-old)"></i>schon in der Vorlage</span><span><i style="background:var(--panel2);border:1px solid var(--line)"></i><s>Altwert, wird nicht gezählt</s></span><span><i style="background:var(--cell-hi)"></i>letzter Eintrag</span></div>
+    <p class="muted small">So sieht ${esc(b.name)} im Aufmaß ${esc(weekLabel(weekByKey(S.listWeek)).split(' · ')[0])} aus. Freie Zeilen: ${b.rows.filter(r => !r.raum && !r.sk && !Object.keys(r.cells).length).length} von 21.</p>`;
+  m.querySelectorAll('.chips button.on').forEach(x => x.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  m.querySelectorAll('[data-wk]').forEach(x => x.onclick = () => { S.listWeek = x.dataset.wk; S.blattSel = null; renderBlaetter(); });
+  m.querySelectorAll('[data-nr],[data-all]').forEach(x => x.onclick = () => { if (x.dataset.all) S.blattAll = !S.blattAll; else S.blattSel = x.dataset.nr; renderBlaetter(); });
+}
+
+/* ----- Export: aktuelles Aufmaß, Liste der Wochen-Aufmaße, Versand, Einstellungen ----- */
+function posSummary(list) {
+  const byPos = new Map(); for (const e of list) byPos.set(e.pos, (byPos.get(e.pos) || 0) + e.qty);
+  if (!byPos.size) return '<p class="muted small">Keine Mengen.</p>';
+  return `<table class="tbl"><tr><th>Position</th><th>Menge</th><th>LV</th></tr>${[...byPos].sort((a, b) => posMap().get(a[0]).row - posMap().get(b[0]).row).map(([pos, q]) => { const x = posMap().get(pos);
+    return `<tr><td><span class="muted small">${esc(pos)}</span><br>${esc(x.text)}</td><td><b>${fmt(q)}</b> ${esc(x.unit)}</td><td>${fmt(x.L)}</td></tr>`; }).join('')}</table>`;
+}
+async function renderExport() {
+  const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
+  const recs = (await DB.aufmasseOf(p.id)).sort((a, b) => b.week.localeCompare(a.week));
+  if (S.tab !== 'export') return;
+  const fmtTs = t => { const d = new Date(t); return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); };
+  const mail = p.mail || {};
+  m.innerHTML = `
+  <div class="card"><h2 style="margin-bottom:2px">Aufmaß ${esc(weekLabel(cw).split(' · ')[0])} <span class="pill">läuft</span></h2>
+    <div class="muted small" style="margin-bottom:10px">${esc(weekLabel(cw).split(' · ')[1])} · wird am Montag, ${dm(weekOf(new Date(Date.parse(cw.to) + 86400000).toISOString().slice(0, 10)).from)} automatisch abgeschlossen</div>
+    <div class="kv"><span>Einträge</span><span>${cur.length}</span><span>Positionen</span><span>${new Set(cur.map(e => e.pos)).size}</span>
+      ${L.problems.length ? `<span class="neg">Nicht exportierbar</span><span class="neg">${L.problems.length}</span>` : ''}</div>
+    <button class="btn block" id="xGo" style="margin-top:12px" ${cur.length ? '' : 'disabled'}>Zwischenstand als Excel</button>
+    <div id="xOut"></div>
+  </div>
+  <div class="card"><h3 style="margin-top:0">Aufmaße</h3>
+    ${recs.length ? recs.map(r => { const st = r.changedAfterSend ? '<span class="neg">geändert nach Versand</span>' : (r.sent?.length ? '<span style="color:var(--ok)">versendet ✓</span>' : '<span class="muted">noch nicht versendet</span>');
+      return `<div class="entry" data-rec="${esc(r.key)}"><div class="grow"><b>${esc(r.label)}</b><div class="w">${r.count} ${r.count === 1 ? 'Eintrag' : 'Einträge'} · ${r.version > 1 ? 'Version ' + r.version + ' · ' : ''}${r.version > 1 ? 'geändert ' : 'erstellt '}${fmtTs(r.updated)}${Sync.configured() ? (r.uploaded === r.hash ? ' · auf dem Pi' : ' · Pi ausstehend') : ''}</div></div>
+        <div class="m small">${st}</div></div>`; }).join('')
+      : '<p class="muted small">Noch keine abgeschlossenen Wochen. Ab Montag erscheint hier automatisch das Aufmaß der Vorwoche.</p>'}
+  </div>
+  <div class="card" id="mailCard"><h3 style="margin-top:0">E-Mail ans Büro</h3>
+    <p class="small" id="mailState">${Sync.mailOk ? '<b style="color:var(--ok)">Direktversand über den Pi ist eingerichtet ✓</b>' : '<b class="neg">Direktversand nicht eingerichtet</b> – „Per E-Mail“ öffnet dann das Teilen-Menü (dort „Mail“ wählen). Einrichten auf dem Pi: <code>python3 /opt/aufmass/aufmass_server.py --mail-einrichten</code>'}</p>
+    <label class="f">Empfänger</label><input class="i" id="mTo" type="email" inputmode="email" autocapitalize="off" value="${esc(mail.to || '')}" placeholder="buero@firma.de">
+    <label class="f">CC (optional, mehrere mit Komma)</label><input class="i" id="mCc" type="email" inputmode="email" autocapitalize="off" value="${esc(mail.cc || '')}">
+    <label class="f">Betreff</label><input class="i" id="mSub" value="${esc(mail.subject || 'Aufmaß {kw} ({zeitraum}) – {baustelle}')}">
+    <label class="f">Text</label><textarea class="i" id="mBody" rows="4">${esc(mail.body || 'Hallo,\n\nanbei das Aufmaß {kw} ({zeitraum}) für {baustelle}.\n\nViele Grüße')}</textarea>
+    <p class="hint">Platzhalter: {kw} {zeitraum} {baustelle}</p>
+    <button class="btn block" id="mSave">Speichern</button></div>
+  <div class="card"><h3 style="margin-top:0">Vorlage &amp; LV</h3>
+    <p class="muted small" style="margin-top:0">Vorlage: ${esc(p.templateName)}<br>${esc((p.header.split('\n').find(l => /Letztes Aufmaß/.test(l)) || '').trim())}</p>
+    ${p.uncountedCells ? `<div class="target" style="margin:0 0 12px"><b>Hinweis zur Vorlage:</b> Auf ${p.uncounted.map(n => 'Blatt ' + n).join(', ')} stehen schon ${p.uncountedCells} Werte, die in der Excel aktuell <u>nicht</u> mitgezählt werden – vermutlich Reste vom letzten Aufmaß. Die App lässt sie stehen und trägt neue Mengen in eigene Zeilen ein.
+      <label class="row" style="margin-top:8px;gap:8px"><input type="checkbox" id="xCnt" ${p.countExisting ? 'checked' : ''} style="width:20px;height:20px"> Altwerte trotzdem mitzählen</label></div>` : ''}
+    <button class="btn block" id="xTpl">Neue Aufmaß-Datei / LV laden</button>
+    <p class="small muted">Jede Woche wird dieselbe Vorlage benutzt – drin stehen nur die Mengen dieser Woche. Die Spalte „bisher“ kommt aus der Vorlage; schickt das Büro eine neue, hier laden.</p></div>
+  <div class="card" id="syncCard"><h3 style="margin-top:0">Automatische Sicherung</h3>
+    <p class="small" id="syncLine"></p>
+    <label class="f">Server-Adresse (Raspberry Pi)</label><input class="i" id="sUrl" placeholder="z. B. https://raspberrypi.tailxxxx.ts.net" value="${esc(Sync.cfg.url)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="f">Token</label><input class="i" id="sTok" type="password" value="${esc(Sync.cfg.token)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="row" style="margin-top:10px"><button class="btn grow" id="sTest">Speichern &amp; testen</button><button class="btn grow" id="sNow">Jetzt sichern</button></div>
+    <button class="btn block" id="sHist" style="margin-top:8px">Verlauf / gelöschte Einträge zurückholen</button>
+    <p class="small muted">Jede Änderung wird automatisch auf den Pi gesichert – mit einem Stand pro Tag, der dort bleibt, bis du ihn löschst. Die Wochen-Aufmaße liegen auf dem Pi unter /opt/aufmass/daten/…/aufmasse.</p></div>
+  <div class="card"><h3 style="margin-top:0">Baustellen &amp; Backup-Datei</h3>
+    <button class="btn block" id="xProj">Baustelle wechseln / neu anlegen</button>
+    <div class="row" style="margin-top:8px"><button class="btn grow" id="xBak">Backup speichern</button><button class="btn grow" id="xRes">Backup laden</button></div>
+    <button class="btn danger block" id="xDel" style="margin-top:8px">Baustelle löschen</button></div>`;
+
+  // aktuelles Aufmaß (Zwischenstand)
+  const showCur = () => { $('#xOut').innerHTML = `<p class="hint ok">Fertig: ${esc(S.curExport.name)} · ${Math.round(S.curExport.buf.byteLength / 1024)} KB</p>` + sendButtons('cur');
+    $('#xOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => S.curExport, cw, 'zwischen', null)); };
+  if (S.curExport && S.curExport.hash === weekHash(p, cur)) showCur();
+  $('#xGo').onclick = async () => {
+    $('#xGo').disabled = true; $('#xGo').textContent = 'Erzeuge …';
+    try { const res = await buildXlsm(p, cur); S.curExport = { buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, cw).replace('.xlsm', '_Zwischenstand.xlsm'), hash: weekHash(p, cur) }; showCur(); }
+    catch (err) { console.error(err); $('#xOut').innerHTML = `<p class="hint warn">Fehler: ${esc(err.message || err)}</p>`; }
+    $('#xGo').disabled = false; $('#xGo').textContent = 'Zwischenstand als Excel';
+  };
+  m.querySelectorAll('[data-rec]').forEach(el => el.onclick = () => openAufmass(el.dataset.rec));
+  // E-Mail
+  $('#mSave').onclick = async () => {
+    p.mail = { to: $('#mTo').value.trim(), cc: $('#mCc').value.trim(), subject: $('#mSub').value.trim(), body: $('#mBody').value };
+    await saveProject(p); toast('E-Mail-Einstellungen gespeichert');
+  };
+  if (Sync.configured()) Sync.refreshStatus().then(() => { const el = $('#mailState'); if (el && Sync.mailOk) el.innerHTML = '<b style="color:var(--ok)">Direktversand über den Pi ist eingerichtet ✓</b>'; });
+  $('#xTpl').onclick = () => renderSetup({ replace: true });
+  const sl = () => { const i = syncInfo(); $('#syncLine').innerHTML = `<b class="${i.cls === 'ok' ? '' : 'neg'}" style="${i.cls === 'ok' ? 'color:var(--ok)' : ''}">${esc(i.long || '')}</b>`; };
+  sl();
+  $('#sTest').onclick = async () => {
+    Sync.cfg = { url: $('#sUrl').value.trim().replace(/\/+$/, '').replace(/#.*$/, ''), token: $('#sTok').value.trim() };
+    if (Sync.cfg.url && !/^https?:\/\//.test(Sync.cfg.url)) Sync.cfg.url = 'http://' + Sync.cfg.url;
+    await DB.put('kv', Sync.cfg, 'syncCfg');
+    try {
+      const j = await Sync.refreshStatus(); if (!j) throw new Error('Server nicht erreichbar');
+      if (j.app !== 'aufmass') throw new Error('Das ist kein Aufmaß-Server');
+      if (!j.auth) throw new Error('Server erreichbar, aber das Token stimmt nicht');
+      (Sync.st[p.id] ||= {}).pending = true; await Sync.run(); sl();
+      toast(Sync.st[p.id]?.pending ? 'Verbunden, aber Sichern fehlgeschlagen: ' + esc(Sync.st[p.id].err) : 'Verbunden und gesichert ✓' + (j.mail ? ' · E-Mail-Versand bereit' : ''));
+      renderExport();
+    } catch (e) { $('#syncLine').innerHTML = `<b class="neg">Keine Verbindung: ${esc(e.message || e)}</b>`; }
+  };
+  $('#sNow').onclick = async () => { await Sync.dirty(p.id); clearTimeout(Sync.timer); await Sync.run(); sl(); toast(esc(syncInfo().long)); };
+  $('#sHist').onclick = openHistory;
+  if ($('#xCnt')) $('#xCnt').onchange = async ev => { p.countExisting = ev.target.checked; S.curExport = null; await saveProject(p); Aufmass.soon(); renderExport(); };
+  $('#xProj').onclick = openProjects;
+  $('#xBak').onclick = saveBackup;
+  $('#xRes').onclick = restoreBackup;
+  $('#xDel').onclick = async () => {
+    if (prompt(`Baustelle „${p.name}“ mit allen ${S.entries.length} Einträgen löschen?\n(Die Sicherung auf dem Pi bleibt erhalten.)\nZum Bestätigen LÖSCHEN eintippen:`) !== 'LÖSCHEN') return;
+    for (const e of S.entries) await DB.del('entries', e.id);
+    for (const r of await DB.aufmasseOf(p.id)) await DB.del('aufmasse', r.key);
+    await DB.del('projects', p.id); await DB.del('kv', 'current'); await loadAll(); render(); toast('Baustelle gelöscht');
+  };
+}
+
+/* ----- ein abgeschlossenes Wochen-Aufmaß ----- */
+async function openAufmass(key) {
+  const r = await DB.get('aufmasse', key); if (!r) return; const w = weekByKey(r.week); const list = weekEntries(r.week);
+  const fmtTs = t => new Date(t).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">${esc(r.label)}</div>
+      <div class="muted small" style="word-break:break-all">${esc(r.fileName)}</div></div><button class="x" id="ax">×</button></div>
+    <div class="kv" style="margin-top:10px"><span>Einträge</span><span>${r.count}</span><span>Version</span><span>${r.version}</span>
+      <span>Erstellt</span><span>${fmtTs(r.created)}</span>${r.version > 1 ? `<span>Zuletzt geändert</span><span>${fmtTs(r.updated)}</span>` : ''}</div>
+    ${r.changedAfterSend ? '<p class="hint warn">Nach dem letzten Versand geändert – bitte neu schicken.</p>' : ''}
+    ${r.sent?.length ? `<p class="small muted">Versendet: ${r.sent.map(x => `${fmtTs(x.at)} (${esc(x.via)}, V${x.version})`).join('<br>')}</p>` : ''}
+    ${sendButtons('rec')}
+    <button class="btn block" id="aEdit" style="margin-top:8px">Einträge dieser Woche ansehen / ändern</button>
+    <h3>Mengen</h3>${posSummary(list)}`);
+  $('#ax').onclick = closeSheet;
+  $('#sheet').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => { const x = await DB.get('aufmasse', key); return { buf: x.file, name: x.fileName }; }, w, 'woche', r));
+  $('#aEdit').onclick = () => { closeSheet(); S.listWeek = r.week; S.tab = 'liste'; render(); };
+}
+
+/* ----- Verlauf: Tagesstände ansehen und fehlende Einträge zurückholen ----- */
+async function openHistory() {
+  const pid = S.p.id;
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:17px">Verlauf</div>
+    <div class="muted small">Ein Stand pro Tag. „Zurückholen“ fügt nur Einträge hinzu, die heute fehlen – nichts wird überschrieben.</div></div><button class="x" id="hx">×</button></div>
+    <div id="hl" style="margin-top:10px" class="muted">Lade …</div>`);
+  $('#hx').onclick = closeSheet;
+  const days = new Map();
+  for (const sn of await DB.snapsOf(pid)) days.set(sn.date, { date: sn.date, local: sn });
+  let srvErr = '';
+  if (Sync.configured()) {
+    try { const list = await (await Sync.get('/api/projekte')).json(); const me = list.find(x => x.id === pid);
+      for (const d of (me?.days || [])) (days.get(d) || days.set(d, { date: d }).get(d)).server = true; }
+    catch (e) { srvErr = e.message || String(e); }
+  }
+  const cur = new Set(S.entries.map(e => e.id));
+  const list = [...days.values()].sort((a, b) => b.date.localeCompare(a.date));
+  $('#hl').innerHTML = (srvErr ? `<p class="hint warn">Server nicht erreichbar (${esc(srvErr)}) – zeige nur Stände auf diesem Gerät.</p>` : '') +
+    (list.length ? list.map(d => { const miss = d.local ? d.local.entries.filter(e => !cur.has(e.id)).length : null;
+      return `<div class="entry" data-d="${d.date}"><div class="grow"><b>${fmtDate(d.date)}</b><div class="w">${d.local ? d.local.entries.length + ' Einträge' : ''}${d.local && d.server ? ' · ' : ''}${d.server ? 'auf dem Server' : ''}${!d.server && Sync.configured() && !srvErr ? ' · nur Gerät' : ''}</div></div>
+      <div class="m">${miss === null ? '<span class="w">laden</span>' : miss ? `<span class="neg">${miss} fehlen</span>` : '<span class="w">vollständig</span>'}</div></div>`; }).join('')
+      : '<div class="empty">Noch keine Stände.</div>');
+  $('#hl').querySelectorAll('[data-d]').forEach(el => el.onclick = async () => {
+    const d = days.get(el.dataset.d); let entries = d.local?.entries;
+    if (!entries && d.server) { try { entries = (await (await Sync.get(`/api/projekt/${pid}/tag/${d.date}`)).json()).entries; } catch (e) { toast('Laden fehlgeschlagen: ' + esc(e.message)); return; } }
+    const miss = entries.filter(e => !cur.has(e.id));
+    if (!miss.length) { toast('In diesem Stand fehlt nichts – alle Einträge sind noch da.'); return; }
+    const lines = miss.slice(0, 8).map(e => { const x = posMap().get(e.pos); return `• ${fmt(e.qty)} ${x?.unit || ''} ${x?.text || e.pos} (${e.raum})`; }).join('\n');
+    if (!confirm(`${miss.length} Einträge aus dem Stand vom ${fmtDate(d.date)} zurückholen?\n\n${lines}${miss.length > 8 ? '\n…' : ''}`)) return;
+    for (const e of miss) { await DB.put('entries', { ...e, projectId: pid }); S.entries.push({ ...e, projectId: pid }); }
+    changed(); S.exportRes = null; closeSheet(); render(); toast(`${miss.length} Einträge zurückgeholt`);
+  });
+}
+
+/* ----- Vom Server wiederherstellen (neues Handy, App gelöscht …) ----- */
+async function openServerRestore() {
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:17px">Vom Server wiederherstellen</div>
+    <div class="muted small">Holt Baustelle, Vorlage und alle Einträge vom Raspberry Pi.</div></div><button class="x" id="rx">×</button></div>
+    <label class="f">Server-Adresse</label><input class="i" id="rUrl" value="${esc(Sync.cfg.url)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="f">Token</label><input class="i" id="rTok" type="password" value="${esc(Sync.cfg.token)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button class="btn block" id="rGo" style="margin-top:10px">Baustellen anzeigen</button><div id="rl" style="margin-top:10px"></div>`);
+  $('#rx').onclick = closeSheet;
+  $('#rGo').onclick = async () => {
+    Sync.cfg = { url: $('#rUrl').value.trim().replace(/\/+$/, '').replace(/#.*$/, ''), token: $('#rTok').value.trim() };
+    if (Sync.cfg.url && !/^https?:\/\//.test(Sync.cfg.url)) Sync.cfg.url = 'http://' + Sync.cfg.url;
+    await DB.put('kv', Sync.cfg, 'syncCfg');
+    try {
+      const list = (await (await Sync.get('/api/projekte')).json()).filter(x => x.hasProject);
+      $('#rl').innerHTML = list.length ? list.map(x => `<div class="entry" data-id="${esc(x.id)}"><div class="grow"><b>${esc(x.name)}</b><div class="w">${x.entries} Einträge · gesichert ${esc((x.saved || '').replace('T', ' ').slice(0, 16))}</div></div><div class="m">laden</div></div>`).join('') : '<div class="empty">Keine Sicherungen auf dem Server.</div>';
+      $('#rl').querySelectorAll('[data-id]').forEach(el => el.onclick = () => restoreFromServer(el.dataset.id));
+    } catch (e) { $('#rl').innerHTML = `<p class="hint warn">${esc(e.message || e)}</p>`; }
+  };
+  if (Sync.configured()) $('#rGo').click();
+}
+async function restoreFromServer(pid) {
+  try {
+    const { project, current } = await (await Sync.get('/api/projekt/' + pid)).json();
+    const tpl = await (await Sync.get(`/api/vorlage/${pid}/${project.templateHash}`)).arrayBuffer();
+    const p = { ...project, template: tpl }; delete p.metaHash;
+    if (project.lvHash) { try { p.lvPdf = await (await Sync.get(`/api/lv/${pid}/${project.lvHash}`)).arrayBuffer(); } catch { p.lvPdf = null; } }
+    const existing = await DB.byProject(pid); const have = new Set(existing.map(e => e.id));
+    await DB.put('projects', stripIdx(p));
+    let n = 0; for (const e of (current.entries || [])) if (!have.has(e.id)) { await DB.put('entries', { ...e, projectId: pid }); n++; }
+    await DB.put('kv', pid, 'current'); await loadAll(); closeSheet(); S.tab = 'erfassen'; render();
+    (Sync.st[pid] ||= {}).ok = Date.now(); Sync.st[pid].pending = false; await Sync.saveState();
+    toast(`„${esc(p.name)}“ wiederhergestellt – ${n} Einträge geladen`);
+  } catch (e) { toast('Wiederherstellen fehlgeschlagen: ' + esc(e.message || e), 5000); }
+}
+
+/* ----- Baustellen ----- */
+function openProjects() {
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Baustellen</div><button class="x" id="px">×</button></div>
+    <div class="projlist" style="margin-top:8px">${S.projects.map(p => `<div class="p" data-id="${p.id}"><div class="grow"><b>${esc(p.name)}</b><div class="small muted">${esc(p.templateName)}</div></div>${p.id === S.p?.id ? '<span class="pill accent">aktiv</span>' : ''}</div>`).join('')}</div>
+    <button class="btn primary block" id="pnew" style="margin-top:14px">+ Neue Baustelle</button>
+    <button class="btn block" id="psrv" style="margin-top:8px">Vom Server wiederherstellen</button>`);
+  $('#psrv').onclick = openServerRestore;
+  $('#px').onclick = closeSheet;
+  $('#sheet').querySelectorAll('.p').forEach(d => d.onclick = () => { closeSheet(); selectProject(d.dataset.id); });
+  $('#pnew').onclick = () => { closeSheet(); renderSetup(); $('#tabs').classList.add('hidden'); };
+}
+
+/* ----- Backup ----- */
+function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
+async function saveBackup() {
+  const { template, lvPdf, ...rest } = S.p;
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
+  const file = new File([blob], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function restoreBackup() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    try {
+      const data = JSON.parse(await inp.files[0].text());
+      if (data.app !== 'aufmass') throw new Error('Keine Aufmaß-Backup-Datei');
+      const p = { ...data.project, template: b64ToBuf(data.project.template), lvPdf: data.project.lvPdf ? b64ToBuf(data.project.lvPdf) : null };
+      const exists = S.projects.find(x => x.id === p.id);
+      if (exists && !confirm(`Baustelle „${p.name}“ gibt es schon. Mit dem Backup überschreiben?`)) return;
+      if (exists) for (const e of await DB.byProject(p.id)) await DB.del('entries', e.id);
+      await saveProject(p);
+      for (const e of data.entries) await DB.put('entries', { ...e, projectId: p.id });
+      Sync.dirty(p.id);
+      await DB.put('kv', p.id, 'current'); await loadAll(); render(); toast(`Backup geladen: ${data.entries.length} Einträge`);
+    } catch (err) { alert('Backup konnte nicht geladen werden: ' + (err.message || err)); }
+  };
+  inp.click();
+}
+
+/* ---------------- Start ---------------- */
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; window.scrollTo(0, 0); render(); });
+$('#projBtn').onclick = () => { if (S.p) openProjects(); };
+$('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $('#syncCard')?.scrollIntoView({ behavior: 'smooth' }), 50); };
+(async () => {
+  try {
+    await DB.open(); await Sync.init(); await loadAll(); render();
+    setTimeout(() => Aufmass.check(), 800);
+    setInterval(() => Aufmass.check(), 10 * 60 * 1000);   // auch wenn die App über Nacht offen bleibt
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Aufmass.check(); });
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // Bibliothek für Einlesen/Export in den Offline-Cache holen
+      navigator.serviceWorker.ready.then(() => setTimeout(() => fetch('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', { mode: 'no-cors' }).catch(() => {}), 1500));
+    }
+    if (typeof JSZip === 'undefined') toast('Ohne Internet gestartet: Erfassen geht, für Einlesen/Export kurz online gehen.', 5000);
+  } catch (err) { $('#main').innerHTML = `<div class="card"><b class="neg">Start fehlgeschlagen</b><p>${esc(err.message || err)}</p></div>`; }
+})();
+// für Tests
+window.__aufmass = { S, Sync, Aufmass, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+</script>
+</body>
+</html>
