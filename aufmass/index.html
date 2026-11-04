@@ -906,6 +906,15 @@ async function selectProject(id) {
 }
 /** Wie oft wurde eine Position schon benutzt? -> bei gleichen Texten zuerst die, die du sonst nimmst */
 function updateUse() { const m = new Map(); for (const e of S.entries) m.set(e.pos, (m.get(e.pos) || 0) + 1); if (S.p) S.p._use = m; }
+/* Bauzeit: Spalte D „Bauzeit / PE“ (Excel-Zeit = Bruchteil eines Tages) je Preiseinheit G */
+const minPerUnit = x => x ? (x.D || 0) * 1440 / (x.G || 1) : 0;
+const minutesOf = e => minPerUnit(posMap().get(e.pos)) * (e.qty || 0);
+const sumMinutes = list => list.reduce((a, e) => a + minutesOf(e), 0);
+function fmtMin(m, short) {
+  m = Math.round(m || 0); const h = Math.floor(Math.abs(m) / 60), mm = Math.abs(m) % 60, sg = m < 0 ? '−' : '';
+  if (short) return `${sg}${h}:${String(mm).padStart(2, '0')} h`;
+  return h ? `${sg}${h} Std ${String(mm).padStart(2, '0')} Min` : `${sg}${mm} Min`;
+}
 const openEntries = () => weekEntries(curWeek().key);
 const posMap = () => S._pm && S._pmFor === S.p ? S._pm : (S._pmFor = S.p, S._pm = new Map(S.p.positions.map(x => [x.pos, x])));
 function erfasst(pos) { let s = 0; for (const e of S.entries) if (e.pos === pos) s += e.qty; return s; }
@@ -1153,7 +1162,7 @@ function render() {
   $('#projName').textContent = p ? p.name : 'Aufmaß';
   $('#projSub').textContent = p ? `${p.positions.length} Positionen · ${p.blaetter.length} Blätter${p.lv ? ' · LV' : ''}` : 'Keine Baustelle';
   const cw = curWeek(); const op = p ? weekEntries(cw.key).length : 0;
-  $('#openPill').textContent = `KW ${cw.week}: ${op}`; $('#openPill').classList.toggle('hidden', !p || !op);
+  $('#openPill').textContent = `KW ${cw.week}: ${op}` + (op ? ` · ${fmtMin(sumMinutes(weekEntries(cw.key)), true)}` : ''); $('#openPill').classList.toggle('hidden', !p || !op);
   $('#tabs').classList.toggle('hidden', !p);
   renderSyncPill();
   for (const b of document.querySelectorAll('nav.tabs button')) b.classList.toggle('on', b.dataset.tab === S.tab);
@@ -1314,6 +1323,7 @@ function openEntryForm({ pos, qty, raum, entry }) {
     <label class="f">Menge</label>
     <div class="qty"><input class="i grow" id="fq" inputmode="decimal" autocomplete="off" value="${esc(e.expr ?? e.qty)}" placeholder="0"><button class="btn plus" id="fplus" type="button">+</button><span class="unit">${esc(x.unit)}</span></div>
     <div class="hint" id="fqh">Mehrere Stücke addieren: 12+8+15</div>
+    <div class="hint" id="fmin"></div>
     <label class="f">Raum</label>
     <input class="i" id="fr" autocomplete="off" value="${esc(e.raum)}" placeholder="aus dem Raumbuch">
     <div class="sugg hidden" id="frs"></div><div class="hint" id="frh"></div>
@@ -1331,6 +1341,8 @@ function openEntryForm({ pos, qty, raum, entry }) {
     const v = evalExpr(fq.value);
     $('#fqh').className = 'hint' + (fq.value && v == null ? ' warn' : '');
     $('#fqh').textContent = fq.value && v == null ? 'Ungültige Menge' : (v != null && /[+*\/]/.test(fq.value) ? '= ' + fmt(v) + ' ' + x.unit : 'Mehrere Stücke addieren: 12+8+15');
+    const mpu = minPerUnit(x);
+    $('#fmin').innerHTML = mpu ? `Bauzeit: ${fmt(mpu)} Min je ${esc(x.unit)}${v ? ` → <b>${fmtMin(mpu * v)}</b>` : ''}` : '<span class="muted">Bauzeit: keine Zeit hinterlegt</span>';
     const r = fr.value.trim();
     const inRb = !r || rooms.includes(r);
     $('#frh').className = 'hint' + (!inRb ? ' warn' : '');
@@ -1487,20 +1499,21 @@ function renderListe() {
   const list = weekEntries(wk).sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
   const L = layout(S.p, weekEntries(wk));
   const days = new Map(); for (const e of list) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
-  m.innerHTML = weekChips(wk) + `<p class="muted small" style="margin:0 2px 8px">Aufmaß ${esc(weekLabel(w))}${wk === cw.key ? ' – wird am Montag automatisch abgeschlossen' : ' – Änderungen erzeugen die Excel automatisch neu'}</p>
+  const wMin = sumMinutes(list), noTime = list.filter(e => !minPerUnit(posMap().get(e.pos))).length;
+  m.innerHTML = weekChips(wk) + (list.length ? `<div class="card" style="padding:10px 14px"><div class="row"><div class="grow"><b>Bauzeit der Woche</b>${noTime ? `<div class="small muted">${noTime} ${noTime === 1 ? 'Eintrag' : 'Einträge'} ohne hinterlegte Zeit</div>` : ''}</div><b style="font-size:18px">${fmtMin(wMin)}</b></div></div>` : '') + `<p class="muted small" style="margin:0 2px 8px">Aufmaß ${esc(weekLabel(w))}${wk === cw.key ? ' – wird am Montag automatisch abgeschlossen' : ' – Änderungen erzeugen die Excel automatisch neu'}</p>
     ${L.problems.length ? `<div class="card" style="border-color:var(--warn)"><b class="neg">${L.problems.length} Einträge können nicht exportiert werden</b><div class="small muted">${L.problems.slice(0, 5).map(p => esc(p.e.pos + ': ' + p.why)).join('<br>')}</div></div>` : ''}
     ${!list.length ? '<div class="empty">Keine Einträge in dieser Woche.</div>' : ''}
-    ${[...days].map(([d, es]) => `<div class="day"><b>${fmtDate(d)}</b><button class="btn" data-share="${d}" style="min-height:34px;padding:5px 11px;font-size:13px">Teilen</button></div>
+    ${[...days].map(([d, es]) => `<div class="day"><b>${fmtDate(d)} <span class="muted small" style="font-weight:600">· ${fmtMin(sumMinutes(es))}</span></b><button class="btn" data-share="${d}" style="min-height:34px;padding:5px 11px;font-size:13px">Teilen</button></div>
       <div class="card" style="padding:2px 14px">${es.map(e => { const x = posMap().get(e.pos); const pl = L.place[e.id];
         return `<div class="entry" data-id="${e.id}"><div class="grow"><div style="font-weight:600">${esc(x ? x.text : e.pos)}</div>
           <div class="w">${esc(e.pos)} · ${esc(e.raum || '–')}${e.sk ? ' · SK ' + esc(e.sk) : ''}${pl ? ` · ${esc(pl.name)} Z${pl.row} ${pl.col}` : ''}${e.note && !e.note.startsWith('Import:') ? ' · ' + esc(e.note) : ''}</div></div>
-          <div class="m">${fmt(e.qty)} ${esc(x ? x.unit : '')}</div></div>`; }).join('')}</div>`).join('')}`;
+          <div class="m">${fmt(e.qty)} ${esc(x ? x.unit : '')}<div class="w">${minPerUnit(x) ? fmtMin(minutesOf(e)) : '–'}</div></div></div>`; }).join('')}</div>`).join('')}`;
   m.querySelector('.chips button.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   m.querySelectorAll('[data-wk]').forEach(b => b.onclick = () => { S.listWeek = b.dataset.wk; renderListe(); });
   m.querySelectorAll('.entry').forEach(d => d.onclick = () => openEntryForm({ entry: S.entries.find(e => e.id === d.dataset.id) }));
   m.querySelectorAll('[data-share]').forEach(b => b.onclick = async () => {
     const d = b.dataset.share; const es = days.get(d);
-    const txt = `Aufmaß ${S.p.name} – ${fmtDate(d)}\n` + es.map(e => { const x = posMap().get(e.pos); return `${e.pos}  ${x ? x.text : ''}  ${fmt(e.qty)} ${x ? x.unit : ''}  (${e.raum}${e.sk ? ', SK ' + e.sk : ''})`; }).join('\n');
+    const txt = `Aufmaß ${S.p.name} – ${fmtDate(d)} (Bauzeit ${fmtMin(sumMinutes(es))})\n` + es.map(e => { const x = posMap().get(e.pos); return `${e.pos}  ${x ? x.text : ''}  ${fmt(e.qty)} ${x ? x.unit : ''}  (${e.raum}${e.sk ? ', SK ' + e.sk : ''})  ${fmtMin(minutesOf(e))}`; }).join('\n');
     try { if (navigator.share) await navigator.share({ text: txt }); else { await navigator.clipboard.writeText(txt); toast('In die Zwischenablage kopiert'); } }
     catch (err) { if (err.name !== 'AbortError') { try { await navigator.clipboard.writeText(txt); toast('In die Zwischenablage kopiert'); } catch { } } }
   });
@@ -1542,8 +1555,10 @@ function renderBlaetter() {
 function posSummary(list) {
   const byPos = new Map(); for (const e of list) byPos.set(e.pos, (byPos.get(e.pos) || 0) + e.qty);
   if (!byPos.size) return '<p class="muted small">Keine Mengen.</p>';
-  return `<table class="tbl"><tr><th>Position</th><th>Menge</th><th>LV</th></tr>${[...byPos].sort((a, b) => posMap().get(a[0]).row - posMap().get(b[0]).row).map(([pos, q]) => { const x = posMap().get(pos);
-    return `<tr><td><span class="muted small">${esc(pos)}</span><br>${esc(x.text)}</td><td><b>${fmt(q)}</b> ${esc(x.unit)}</td><td>${fmt(x.L)}</td></tr>`; }).join('')}</table>`;
+  let tot = 0;
+  const rows = [...byPos].sort((a, b) => posMap().get(a[0]).row - posMap().get(b[0]).row).map(([pos, q]) => { const x = posMap().get(pos); const mn = minPerUnit(x) * q; tot += mn;
+    return `<tr><td><span class="muted small">${esc(pos)}</span><br>${esc(x.text)}</td><td><b>${fmt(q)}</b> ${esc(x.unit)}</td><td>${minPerUnit(x) ? fmtMin(mn) : '–'}</td></tr>`; }).join('');
+  return `<table class="tbl"><tr><th>Position</th><th>Menge</th><th>Bauzeit</th></tr>${rows}<tr><td><b>Summe</b></td><td></td><td><b>${fmtMin(tot)}</b></td></tr></table>`;
 }
 async function renderExport() {
   const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
@@ -1554,14 +1569,14 @@ async function renderExport() {
   m.innerHTML = `
   <div class="card"><h2 style="margin-bottom:2px">Aufmaß ${esc(weekLabel(cw).split(' · ')[0])} <span class="pill">läuft</span></h2>
     <div class="muted small" style="margin-bottom:10px">${esc(weekLabel(cw).split(' · ')[1])} · wird am Montag, ${dm(weekOf(new Date(Date.parse(cw.to) + 86400000).toISOString().slice(0, 10)).from)} automatisch abgeschlossen</div>
-    <div class="kv"><span>Einträge</span><span>${cur.length}</span><span>Positionen</span><span>${new Set(cur.map(e => e.pos)).size}</span>
+    <div class="kv"><span>Einträge</span><span>${cur.length}</span><span>Positionen</span><span>${new Set(cur.map(e => e.pos)).size}</span><span><b>Bauzeit</b></span><span>${fmtMin(sumMinutes(cur))}</span>
       ${L.problems.length ? `<span class="neg">Nicht exportierbar</span><span class="neg">${L.problems.length}</span>` : ''}</div>
     <button class="btn block" id="xGo" style="margin-top:12px" ${cur.length ? '' : 'disabled'}>Zwischenstand als Excel</button>
     <div id="xOut"></div>
   </div>
   <div class="card"><h3 style="margin-top:0">Aufmaße</h3>
     ${recs.length ? recs.map(r => { const st = r.changedAfterSend ? '<span class="neg">geändert nach Versand</span>' : (r.sent?.length ? '<span style="color:var(--ok)">versendet ✓</span>' : '<span class="muted">noch nicht versendet</span>');
-      return `<div class="entry" data-rec="${esc(r.key)}"><div class="grow"><b>${esc(r.label)}</b><div class="w">${r.count} ${r.count === 1 ? 'Eintrag' : 'Einträge'} · ${r.version > 1 ? 'Version ' + r.version + ' · ' : ''}${r.version > 1 ? 'geändert ' : 'erstellt '}${fmtTs(r.updated)}${Sync.configured() ? (r.uploaded === r.hash ? ' · auf dem Pi' : ' · Pi ausstehend') : ''}</div></div>
+      return `<div class="entry" data-rec="${esc(r.key)}"><div class="grow"><b>${esc(r.label)}</b><div class="w">${r.count} ${r.count === 1 ? 'Eintrag' : 'Einträge'} · <b>${fmtMin(sumMinutes(weekEntries(r.week)))}</b> · ${r.version > 1 ? 'Version ' + r.version + ' · ' : ''}${r.version > 1 ? 'geändert ' : 'erstellt '}${fmtTs(r.updated)}${Sync.configured() ? (r.uploaded === r.hash ? ' · auf dem Pi' : ' · Pi ausstehend') : ''}</div></div>
         <div class="m small">${st}</div></div>`; }).join('')
       : '<p class="muted small">Noch keine abgeschlossenen Wochen. Ab Montag erscheint hier automatisch das Aufmaß der Vorwoche.</p>'}
   </div>
@@ -1644,7 +1659,7 @@ async function openAufmass(key) {
   const fmtTs = t => new Date(t).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">${esc(r.label)}</div>
       <div class="muted small" style="word-break:break-all">${esc(r.fileName)}</div></div><button class="x" id="ax">×</button></div>
-    <div class="kv" style="margin-top:10px"><span>Einträge</span><span>${r.count}</span><span>Version</span><span>${r.version}</span>
+    <div class="kv" style="margin-top:10px"><span>Einträge</span><span>${r.count}</span><span><b>Bauzeit</b></span><span>${fmtMin(sumMinutes(list))}</span><span>Version</span><span>${r.version}</span>
       <span>Erstellt</span><span>${fmtTs(r.created)}</span>${r.version > 1 ? `<span>Zuletzt geändert</span><span>${fmtTs(r.updated)}</span>` : ''}</div>
     ${r.changedAfterSend ? '<p class="hint warn">Nach dem letzten Versand geändert – bitte neu schicken.</p>' : ''}
     ${r.sent?.length ? `<p class="small muted">Versendet: ${r.sent.map(x => `${fmtTs(x.at)} (${esc(x.via)}, V${x.version})`).join('<br>')}</p>` : ''}
