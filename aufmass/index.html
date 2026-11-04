@@ -854,6 +854,29 @@ async function buildXlsm(p, entries) {
     zip.file(ub.path, serXml(ud));
   }
 
+  // 3b) Nur benutzte Erfassungsblätter sichtbar lassen – unbenutzte ausblenden (nicht löschen,
+  //     weil jedes Blatt ein Gegenstück im Makro-Projekt hat). Ausgeblendete Blätter werden nicht gedruckt.
+  const usedNames = new Set(L.blaetter.filter(b => b.clone || b.rows.some(r => Object.values(r.cells).some(c => c.parts.length || (p.countExisting && c.old && !c.old.counted)))).map(b => b.name));
+  const blattNames = new Set(p.blaetter.map(b => b.name));
+  let hidden = 0;
+  for (const sh of Array.from(sheetsEl.getElementsByTagName('sheet'))) {
+    const n = sh.getAttribute('name');
+    if (blattNames.has(n) && !usedNames.has(n)) { sh.setAttribute('state', 'hidden'); hidden++; }
+  }
+  // aktives Blatt = Aufmaßdaten (ein ausgeblendetes Blatt darf nicht aktiv sein)
+  const order = Array.from(sheetsEl.getElementsByTagName('sheet')).map(sh => sh.getAttribute('name'));
+  const adIdx = order.indexOf('Aufmaßdaten');
+  for (const bv of wb.wbDoc.getElementsByTagName('workbookView')) { bv.setAttribute('activeTab', String(adIdx)); bv.setAttribute('firstSheet', String(adIdx)); }
+  for (const sinfo of wb.sheets) {
+    if (!sinfo.path || !zip.file(sinfo.path)) continue;
+    let x = await zip.file(sinfo.path).async('string');
+    const want = sinfo.name === 'Aufmaßdaten';
+    if (!want && !x.includes('tabSelected="1"')) continue;
+    const d = parseXml(x);
+    for (const sv of d.getElementsByTagName('sheetView')) { if (want) sv.setAttribute('tabSelected', '1'); else sv.removeAttribute('tabSelected'); }
+    zip.file(sinfo.path, serXml(d));
+  }
+
   // 4) calcChain entfernen (Excel baut ihn beim Öffnen neu auf)
   if (zip.file('xl/calcChain.xml')) {
     zip.remove('xl/calcChain.xml');
@@ -864,7 +887,7 @@ async function buildXlsm(p, entries) {
   zip.file('xl/_rels/workbook.xml.rels', serXml(wb.relDoc));
   zip.file('[Content_Types].xml', serXml(ct));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
-  return { blob, layout: L, brsCount: brs.size, newCols };
+  return { blob, layout: L, brsCount: brs.size, newCols, hidden, visible: usedNames.size };
 }
 
 /* ---------------- App-Zustand ---------------- */
