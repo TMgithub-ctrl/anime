@@ -894,6 +894,7 @@ async function buildXlsm(p, entries, opts = {}) {
   zip.file('xl/workbook.xml', serXml(wb.wbDoc));
   zip.file('xl/_rels/workbook.xml.rels', serXml(wb.relDoc));
   zip.file('[Content_Types].xml', serXml(ct));
+  for (const k of Object.keys(zip.files)) if (zip.files[k].dir) delete zip.files[k];   // keine leeren Ordner-Einträge (wie im Original)
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
   return { blob, layout: L, brsCount: brs.size, newCols, hidden, visible: usedNames.size };
 }
