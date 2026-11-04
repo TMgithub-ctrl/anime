@@ -939,8 +939,11 @@ const Sync = {
   async init() {
     this.cfg = (await DB.get('kv', 'syncCfg')) || { url: '', token: '' };
     this.st = (await DB.get('kv', 'syncState')) || {};
-    const m = /[#&]token=([^&]+)/.exec(location.hash);
-    if (m) { this.cfg.token = decodeURIComponent(m[1]); history.replaceState(null, '', location.pathname + location.search); }
+    // Einrichtungs-Link: …/#server=https://pi.xxx.ts.net&token=…  (der Pi zeigt ihn bei der Installation an)
+    const m = /[#&]token=([^&]+)/.exec(location.hash), ms = /[#&]server=([^&]+)/.exec(location.hash);
+    if (ms) this.cfg.url = decodeURIComponent(ms[1]).replace(/\/+$/, '');
+    if (m) this.cfg.token = decodeURIComponent(m[1]);
+    if (m || ms) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => toast('Pi verbunden: ' + esc(this.cfg.url), 4000), 1200); }
     if (!this.cfg.url && /^https?:$/.test(location.protocol)) {
       try { const r = await fetch(location.origin + '/api/status', { cache: 'no-store' }); const j = await r.json(); if (j.app === 'aufmass') this.cfg.url = location.origin; } catch { }
     }
@@ -972,7 +975,7 @@ const Sync = {
         const p = await DB.get('projects', pid);
         if (!p) { delete this.st[pid]; continue; }
         try { await this.push(p); this.st[pid] = { pending: false, ok: Date.now(), err: null }; }
-        catch (e) { this.st[pid].err = String(e.message || e); this.st[pid].fail = Date.now(); }
+        catch (e) { const msg = String(e.message || e); this.st[pid].err = /fetch|load failed|network/i.test(msg) ? 'Pi nicht erreichbar – ist Tailscale am Handy an?' : msg; this.st[pid].fail = Date.now(); }
       }
     } finally { this.busy = false; await this.saveState(); }
     Aufmass.upload().catch(() => {});
