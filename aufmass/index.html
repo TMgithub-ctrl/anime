@@ -223,6 +223,7 @@ function norm(s) {
   s = s.replace(/(\d),(\d)/g, '$1.$2')
        .replace(/(\d)\.\s*(?=(og|eg|ug|dg)\b)/g, '$1')
        .replace(/(\d)\s*x\s*(\d)/g, '$1x$2')
+       .replace(/([a-z]{3,})(\d)/g, '$1 $2')
        .replace(/[^a-z0-9.+]+/g, ' ')
        .replace(/\.(?=\s|$)/g, '')
        .replace(/\s+/g, ' ').trim();
@@ -297,7 +298,7 @@ function rankTokens(p, toks) {
 function searchPositions(p, q, limit = 40) {
   let toks = norm(q).split(' ').filter(Boolean);
   let qty = null, raum = null;
-  let rawToks = String(q).trim().replace(/(\d)\s+(m|mtr|meter|lfm|st|stk|stck|stück|psch|h|std)\b\.?/gi, '$1$2').split(/\s+/);
+  let rawToks = String(q).trim().replace(/(\d)\s*[x×*]\s*(\d)/gi, '$1x$2').replace(/(\d)\s+(m|mtr|meter|lfm|st|stk|stck|stück|psch|h|std)\b\.?/gi, '$1$2').split(/\s+/);
   const UNIT = /^(\d+(?:[.,]\d+)?)(m|mtr|meter|lfm|st|stk|stck|stück|psch|h|std)\.?$/i, BARE = /^\d+(?:[.,]\d+)?$/;
   let qi = -1;
   if (rawToks.length >= 2) {
@@ -1238,7 +1239,8 @@ function renderErfassen() {
     }
     const { results, qty, partial, raum } = searchPositions(S.p, q.value);
     S.qQty = qty; S.qRaum = raum;
-    info.innerHTML = (qty != null ? `<span class="qchip">Menge ${fmt(qty)}</span> ` : '') + (raum ? `<span class="qchip">Raum ${esc(raum)}</span>` : '') + (partial ? '<p class="hint">Keine Position passt auf alle Wörter – das sind die besten Teiltreffer:</p>' : '');
+    const same = results.length > 1 ? results.filter(r => r.x.text === results[0].x.text && !r.x.repl).length : 0;
+    info.innerHTML = (same > 1 ? `<p class="hint warn" style="margin:0 0 8px">„${esc(results[0].x.text)}“ gibt es ${same}× in verschiedenen Titeln – auf den Titel unter der Bezeichnung achten.</p>` : '') + (qty != null ? `<span class="qchip">Menge ${fmt(qty)}</span> ` : '') + (raum ? `<span class="qchip">Raum ${esc(raum)}</span>` : '') + (partial ? '<p class="hint">Keine Position passt auf alle Wörter – das sind die besten Teiltreffer:</p>' : '');
     box.innerHTML = results.length ? results.map(r => resultHTML(r.x)).join('') : '<div class="empty">Nichts gefunden.</div>';
   };
   q.oninput = run; run();
