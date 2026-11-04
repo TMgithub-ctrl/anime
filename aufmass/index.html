@@ -1768,7 +1768,9 @@ function openSignPad(title, sub, onDone) {
       <canvas id="spc" style="width:100%;height:200px;display:block;touch-action:none"></canvas>
       <div style="position:absolute;left:16px;right:16px;bottom:42px;border-bottom:1px solid #c8ccd2;pointer-events:none"></div>
       <div style="position:absolute;left:16px;bottom:16px;color:#8b939e;font-size:12px;pointer-events:none">Hier mit dem Finger unterschreiben</div></div>
-    <div class="row" style="margin-top:12px"><button class="btn grow" id="spclr">Löschen</button><button class="btn primary grow" id="spok">Übernehmen</button></div>`);
+    <div class="row" style="margin-top:12px"><button class="btn grow" id="spclr">Löschen</button><button class="btn primary grow" id="spok">Übernehmen</button></div>
+    <button class="btn block" id="spphoto" style="margin-top:10px">📷 Unterschrift vom Papier fotografieren</button>
+    <input type="file" id="spfile" accept="image/*" style="display:none">`);
   const c = $('#spc'); const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const r = c.getBoundingClientRect(); c.width = Math.round(r.width * dpr); c.height = Math.round(200 * dpr);
   const g = c.getContext('2d'); g.scale(dpr, dpr); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#10204a';
@@ -1780,6 +1782,8 @@ function openSignPad(title, sub, onDone) {
     g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p2.x, p2.y); g.stroke(); last = p2; });
   const up = () => { drawing = false; }; c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
   $('#spx').onclick = closeSheet;
+  $('#spphoto').onclick = () => $('#spfile').click();
+  $('#spfile').onchange = async () => { const f = $('#spfile').files[0]; if (f) openPhotoSig(f, title, sub, onDone); };
   $('#spclr').onclick = () => { g.clearRect(0, 0, c.width, c.height); empty = true; };
   $('#spok').onclick = () => {
     if (empty) { toast('Bitte zuerst unterschreiben'); return; }
@@ -1791,6 +1795,100 @@ function openSignPad(title, sub, onDone) {
     onDone(o.toDataURL('image/png'));
   };
 }
+
+/* ---------------- Unterschrift vom Foto ----------------
+   Papier-Unterschrift fotografieren -> Ausleuchtung ausgleichen (Schatten/Verläufe raus),
+   Tinte freistellen (Hintergrund durchsichtig), einheitlich einfärben, Krümel/Ränder entfernen, zuschneiden. */
+async function loadPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try { return await loadImg(url); } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
+}
+function inkPrep(img) {
+  const max = 1400, sc = Math.min(1, max / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+  const W = Math.max(1, Math.round((img.naturalWidth || img.width) * sc)), H = Math.max(1, Math.round((img.naturalHeight || img.height) * sc));
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.drawImage(img, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data; const gray = new Float32Array(W * H);
+  for (let i = 0, j = 0; i < gray.length; i++, j += 4) gray[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+  // Hintergrund (Papierhelligkeit) per großem Mittelwertfilter über ein Summenbild schätzen
+  const I = new Float64Array((W + 1) * (H + 1));
+  for (let y = 1; y <= H; y++) { let row = 0; for (let x = 1; x <= W; x++) { row += gray[(y - 1) * W + x - 1]; I[y * (W + 1) + x] = I[(y - 1) * (W + 1) + x] + row; } }
+  const R = Math.max(8, Math.round(Math.max(W, H) / 22)); const dark = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) { const y0 = Math.max(0, y - R), y1 = Math.min(H, y + R + 1);
+    for (let x = 0; x < W; x++) { const x0 = Math.max(0, x - R), x1 = Math.min(W, x + R + 1);
+      const sum = I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0];
+      const bg = Math.max(1, sum / ((x1 - x0) * (y1 - y0)));
+      dark[y * W + x] = Math.max(0, 1 - gray[y * W + x] / bg); } }   // 0 = Papier, 1 = schwarz
+  return { W, H, dark };
+}
+function inkExtract(prep, strength) {   // strength 0..1 (0.5 = normal)
+  const { W, H, dark } = prep; const t = 0.30 - strength * 0.22;     // Schwelle: je stärker, desto mehr Tinte
+  const lo = t * 0.65, hi = t * 1.5; const alpha = new Float32Array(W * H);
+  for (let i = 0; i < alpha.length; i++) { const v = (dark[i] - lo) / (hi - lo); alpha[i] = v <= 0 ? 0 : v >= 1 ? 1 : v * v * (3 - 2 * v); }
+  // zusammenhängende Flächen: Krümel und alles, was den Bildrand berührt (Tisch, Papierkante, Schatten), entfernen
+  const lab = new Int32Array(W * H); const keep = []; let n = 0; const stack = new Int32Array(W * H);
+  const minArea = Math.max(12, Math.round(W * H * 0.00003));
+  for (let i = 0; i < lab.length; i++) {
+    if (alpha[i] < 0.5 || lab[i]) continue;
+    n++; let sp = 0, area = 0, edge = false, x0 = W, y0 = H, x1 = 0, y1 = 0; stack[sp++] = i; lab[i] = n;
+    while (sp) { const k = stack[--sp]; area++; const x = k % W, y = (k / W) | 0;
+      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const q of [k - 1, k + 1, k - W, k + W]) { if (q < 0 || q >= lab.length || lab[q] || alpha[q] < 0.5) continue; if ((q === k - 1 && x === 0) || (q === k + 1 && x === W - 1)) continue; lab[q] = n; stack[sp++] = q; } }
+    keep[n] = !edge && area >= minArea ? { x0, y0, x1, y1, area } : null;
+  }
+  // nur, was zur Unterschrift gehört: vom größten Strich aus alles in der Nähe einsammeln, Entferntes verwerfen
+  const comps = []; for (let k = 1; k <= n; k++) if (keep[k]) comps.push(k);
+  if (comps.length) {
+    comps.sort((a, b) => keep[b].area - keep[a].area);
+    const G = Math.max(W, H) * 0.06; const u = { ...keep[comps[0]] }; const inc = new Set([comps[0]]); let grew = true;
+    const gap = b => Math.max(0, b.x0 - u.x1, u.x0 - b.x1) + Math.max(0, b.y0 - u.y1, u.y0 - b.y1);
+    while (grew) { grew = false; for (const k of comps) { if (inc.has(k)) continue; const b = keep[k]; if (gap(b) <= G) { inc.add(k); u.x0 = Math.min(u.x0, b.x0); u.y0 = Math.min(u.y0, b.y0); u.x1 = Math.max(u.x1, b.x1); u.y1 = Math.max(u.y1, b.y1); grew = true; } } }
+    for (const k of comps) if (!inc.has(k)) keep[k] = null;
+  }
+  let bx0 = W, by0 = H, bx1 = -1, by1 = -1;
+  for (let k = 1; k <= n; k++) if (keep[k]) { const b = keep[k]; bx0 = Math.min(bx0, b.x0); by0 = Math.min(by0, b.y0); bx1 = Math.max(bx1, b.x1); by1 = Math.max(by1, b.y1); }
+  if (bx1 < 0) return null;
+  // weiche Kanten: Pixel mit wenig Deckung nur behalten, wenn ein behaltener Strich direkt daneben liegt
+  const pad = 10; bx0 = Math.max(0, bx0 - pad); by0 = Math.max(0, by0 - pad); bx1 = Math.min(W - 1, bx1 + pad); by1 = Math.min(H - 1, by1 + pad);
+  const ow = bx1 - bx0 + 1, oh = by1 - by0 + 1; const o = document.createElement('canvas'); o.width = ow; o.height = oh;
+  const og = o.getContext('2d'); const out = og.createImageData(ow, oh); const od = out.data;
+  const kept = i => lab[i] && keep[lab[i]];
+  for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
+    const i = y * W + x; let a = alpha[i];
+    if (a > 0 && !kept(i)) { let near = false; for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) { const yy = y + dy, xx = x + dx; if (yy >= 0 && yy < H && xx >= 0 && xx < W && kept(yy * W + xx)) { near = true; break; } } if (!near) a = 0; }
+    const j = ((y - by0) * ow + (x - bx0)) * 4; od[j] = 16; od[j + 1] = 32; od[j + 2] = 74; od[j + 3] = Math.round(a * 255);
+  }
+  og.putImageData(out, 0, 0);
+  // auf max. 1000 px Breite verkleinern
+  if (ow > 1000) { const f = 1000 / ow; const s2 = document.createElement('canvas'); s2.width = 1000; s2.height = Math.round(oh * f); s2.getContext('2d').drawImage(o, 0, 0, s2.width, s2.height); return s2; }
+  return o;
+}
+async function openPhotoSig(file, title, sub, onDone) {
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:17px">Unterschrift vom Foto</div><div class="muted small">${esc(sub || '')}</div></div><button class="x" id="ppx">×</button></div>
+    <div id="ppbox" style="margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-height:140px;display:flex;align-items:center;justify-content:center;padding:10px">
+      <span style="color:#8b939e">Bild wird bearbeitet …</span></div>
+    <label class="f">Stärke der Linie</label><input type="range" id="ppstr" min="0" max="100" value="50" style="width:100%">
+    <div class="row small muted"><span class="grow">dünner</span><span>dicker</span></div>
+    <p class="hint">Tipp: auf weißes, unliniertes Papier mit Kugelschreiber oder Filzstift unterschreiben, von nah und ohne eigenen Schatten fotografieren. Das Blatt darf größer sein als das Foto – Ränder werden entfernt.</p>
+    <div class="row" style="margin-top:6px"><button class="btn grow" id="ppnew">Neues Foto</button><button class="btn primary grow" id="ppok" disabled>Übernehmen</button></div>
+    <input type="file" id="ppfile" accept="image/*" style="display:none">`);
+  $('#ppx').onclick = closeSheet;
+  $('#ppnew').onclick = () => $('#ppfile').click();
+  $('#ppfile').onchange = () => { const f = $('#ppfile').files[0]; if (f) openPhotoSig(f, title, sub, onDone); };
+  let prep, cur = null;
+  try { await new Promise(r => setTimeout(r, 30)); prep = inkPrep(await loadPhoto(file)); }
+  catch (e) { $('#ppbox').innerHTML = '<span class="neg">Bild konnte nicht gelesen werden.</span>'; return; }
+  const show = () => {
+    cur = inkExtract(prep, $('#ppstr').value / 100);
+    const box = $('#ppbox'); box.innerHTML = '';
+    if (!cur) { box.innerHTML = '<span class="neg">Keine Unterschrift erkannt – Regler nach rechts oder Foto von näher.</span>'; $('#ppok').disabled = true; return; }
+    cur.style.maxWidth = '100%'; cur.style.maxHeight = '180px'; box.appendChild(cur); $('#ppok').disabled = false;
+  };
+  show();
+  let tm; $('#ppstr').oninput = () => { clearTimeout(tm); tm = setTimeout(show, 120); };
+  $('#ppok').onclick = () => { if (cur) onDone(cur.toDataURL('image/png')); };
+}
+
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 /** Unterschrift + Datum (+ Name) zu einem Bild für die Excel zusammensetzen */
 async function composeSig(sig) {
