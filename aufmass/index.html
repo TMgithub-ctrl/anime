@@ -703,7 +703,7 @@ function prepareClone(doc, nr) {
   for (let r = DATA_ROW_FIRST; r <= DATA_ROW_LAST; r++) for (const col of ['A', 'B', ...BLATT_COLS]) { const c = getCell(doc, sd, col + r, false); if (c) clearCell(c); }
 }
 
-async function buildXlsm(p, entries) {
+async function buildXlsm(p, entries, opts = {}) {
   const L = layout(p, entries);
   const wb = await openWorkbook(p.template);
   const zip = wb.zip;
@@ -727,7 +727,7 @@ async function buildXlsm(p, entries) {
       const doc = parseXml(await zip.file(b.srcPath).async('string'));
       prepareClone(doc, b.nr);
       writeBlattGrid(doc, b, true);
-      const path = `xl/worksheets/sheet${++maxSheetFile}.xml`;
+      const path = `xl/worksheets/sheet${++maxSheetFile}.xml`; b.path = path;
       zip.file(path, serXml(doc));
       const rid = 'rId' + (++maxRid);
       const rel = wb.relDoc.createElementNS(NS_PKG, 'Relationship');
@@ -877,6 +877,14 @@ async function buildXlsm(p, entries) {
     zip.file(sinfo.path, serXml(d));
   }
 
+  // 3c) Unterschriften als Bild in die Felder „Erstellt am“ / „Auftraggeber“
+  if (opts.sigs && (opts.sigs.erstellt || opts.sigs.ag)) {
+    const targets = [];
+    for (const b of L.blaetter) if (usedNames.has(b.name) && b.path) targets.push({ path: b.path, areas: { erstellt: [0, 4, 33, 36], ag: [5, 9, 33, 36] } });
+    targets.push({ path: ad.path, areas: { erstellt: [6, 10, 6, 9], ag: [6, 10, 10, 13] } });
+    await addSignatures(zip, ct, targets, opts.sigs);
+  }
+
   // 4) calcChain entfernen (Excel baut ihn beim Öffnen neu auf)
   if (zip.file('xl/calcChain.xml')) {
     zip.remove('xl/calcChain.xml');
@@ -888,6 +896,88 @@ async function buildXlsm(p, entries) {
   zip.file('[Content_Types].xml', serXml(ct));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
   return { blob, layout: L, brsCount: brs.size, newCols, hidden, visible: usedNames.size };
+}
+
+
+/* ---------------- Unterschrift als Bild in die Excel ----------------
+   Bild wird in die verbundenen Felder gesetzt (Blatt: A34:E37 / F34:J37, Aufmaßdaten: G7:K10 / G11:K14),
+   oben mittig, damit die Beschriftung „Datum / Unterschrift“ unten lesbar bleibt. */
+const NS_XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const REL_DRAWING = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing', REL_IMAGE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+function colPxList(doc) {
+  const fmt = doc.getElementsByTagName('sheetFormatPr')[0];
+  const defW = parseFloat(fmt?.getAttribute('defaultColWidth')) || ((parseFloat(fmt?.getAttribute('baseColWidth')) || 8) + 0.71);
+  const out = Array(40).fill(Math.trunc(defW * 7 + 5));
+  for (const c of doc.getElementsByTagName('col')) { const w = parseFloat(c.getAttribute('width')); for (let i = +c.getAttribute('min'); i <= +c.getAttribute('max') && i <= 40; i++) out[i - 1] = Math.trunc(w * 7 + 5); }
+  return out;
+}
+function rowPx(doc, r0) { // r0 = 0-basiert
+  const fmt = doc.getElementsByTagName('sheetFormatPr')[0]; const def = parseFloat(fmt?.getAttribute('defaultRowHeight')) || 15;
+  const row = Array.from(doc.getElementsByTagName('row')).find(x => +x.getAttribute('r') === r0 + 1);
+  return Math.round((parseFloat(row?.getAttribute('ht')) || def) * 96 / 72);
+}
+async function relsDoc(zip, path) {
+  const f = zip.file(path); return f ? parseXml(await f.async('string')) : parseXml(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS_PKG}"/>`);
+}
+function addRel(doc, type, target) {
+  const ids = Array.from(doc.getElementsByTagName('Relationship')).map(r => +String(r.getAttribute('Id')).replace(/\D/g, '') || 0);
+  const id = 'rId' + (Math.max(0, ...ids) + 1);
+  const r = doc.createElementNS(NS_PKG, 'Relationship'); r.setAttribute('Id', id); r.setAttribute('Type', type); r.setAttribute('Target', target);
+  doc.documentElement.appendChild(r); return id;
+}
+async function addSignatures(zip, ct, targets, sigs) {
+  const CTNS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  if (!Array.from(ct.getElementsByTagName('Default')).some(d => d.getAttribute('Extension') === 'png')) {
+    const d = ct.createElementNS(CTNS, 'Default'); d.setAttribute('Extension', 'png'); d.setAttribute('ContentType', 'image/png'); ct.documentElement.insertBefore(d, ct.documentElement.firstChild);
+  }
+  const media = {};
+  for (const k of ['erstellt', 'ag']) if (sigs[k]) { const name = `xl/media/aufmass_unterschrift_${k}.png`; zip.file(name, sigs[k].png); media[k] = { target: `../media/aufmass_unterschrift_${k}.png`, w: sigs[k].w, h: sigs[k].h }; }
+  let maxDrawing = 0; zip.forEach(pth => { const m = /^xl\/drawings\/drawing(\d+)\.xml$/.exec(pth); if (m) maxDrawing = Math.max(maxDrawing, +m[1]); });
+  let picId = 4000;
+  for (const t of targets) {
+    if (!zip.file(t.path)) continue;
+    const sdoc = parseXml(await zip.file(t.path).async('string'));
+    const srelPath = t.path.replace(/worksheets\/(sheet\d+\.xml)$/, 'worksheets/_rels/$1.rels');
+    const srels = await relsDoc(zip, srelPath);
+    // vorhandene Zeichnungsebene (z. B. Makro-Knöpfe) nutzen oder neue anlegen
+    let drawPath, ddoc;
+    const dEl = sdoc.getElementsByTagName('drawing')[0];
+    if (dEl) {
+      const rid = dEl.getAttributeNS(NS_R, 'id') || dEl.getAttribute('r:id');
+      const rel = Array.from(srels.getElementsByTagName('Relationship')).find(r => r.getAttribute('Id') === rid);
+      drawPath = 'xl/' + rel.getAttribute('Target').replace(/^\.\.\//, '');
+      ddoc = parseXml(await zip.file(drawPath).async('string'));
+    } else {
+      drawPath = `xl/drawings/drawing${++maxDrawing}.xml`;
+      ddoc = parseXml(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="${NS_XDR}" xmlns:a="${NS_A}"/>`);
+      const rid = addRel(srels, REL_DRAWING, '../drawings/' + drawPath.split('/').pop());
+      const de = sdoc.createElementNS(NS, 'drawing'); de.setAttributeNS(NS_R, 'r:id', rid);
+      const later = ['legacyDrawing', 'legacyDrawingHF', 'drawingHF', 'picture', 'oleObjects', 'controls', 'webPublishItems', 'tableParts', 'extLst'];
+      const before = Array.from(sdoc.documentElement.childNodes).find(n => n.nodeType === 1 && later.includes(n.localName));
+      sdoc.documentElement.insertBefore(de, before || null);
+      const ov = ct.createElementNS(CTNS, 'Override'); ov.setAttribute('PartName', '/' + drawPath); ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.drawing+xml'); ct.documentElement.appendChild(ov);
+    }
+    const drelPath = drawPath.replace(/drawings\/(drawing\d+\.xml)$/, 'drawings/_rels/$1.rels');
+    const drels = await relsDoc(zip, drelPath);
+    const cols = colPxList(sdoc);
+    for (const k of ['erstellt', 'ag']) {
+      if (!media[k]) continue;
+      const [c0, c1, r0, r1] = t.areas[k];
+      let areaW = 0; for (let c = c0; c <= c1; c++) areaW += cols[c];
+      let areaH = 0; for (let r = r0; r <= r1; r++) areaH += rowPx(sdoc, r);
+      const hPx = Math.min(Math.round(areaH * 0.66), 58), wPx = Math.min(Math.round(hPx * media[k].w / media[k].h), Math.round(areaW * 0.92));
+      const hFit = Math.round(wPx * media[k].h / media[k].w);
+      let x = Math.round((areaW - wPx) / 2), col = c0; while (col < c1 && x >= cols[col]) { x -= cols[col]; col++; }
+      const rid = addRel(drels, REL_IMAGE, media[k].target);
+      const E = px => String(Math.round(px * 9525));
+      const xml = `<xdr:oneCellAnchor xmlns:xdr="${NS_XDR}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>${E(x)}</xdr:colOff><xdr:row>${r0}</xdr:row><xdr:rowOff>${E(3)}</xdr:rowOff></xdr:from>`
+        + `<xdr:ext cx="${E(wPx)}" cy="${E(hFit)}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${++picId}" name="Unterschrift ${k === 'ag' ? 'Auftraggeber' : 'Ersteller'}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>`
+        + `<xdr:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${E(wPx)}" cy="${E(hFit)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+      ddoc.documentElement.appendChild(ddoc.importNode(parseXml(xml).documentElement, true));
+    }
+    zip.file(t.path, serXml(sdoc)); zip.file(srelPath, serXml(srels));
+    zip.file(drawPath, serXml(ddoc)); zip.file(drelPath, serXml(drels));
+  }
 }
 
 /* ---------------- App-Zustand ---------------- */
@@ -1075,10 +1165,10 @@ const Aufmass = {
       const weeks = new Set(S.entries.map(e => weekOf(e.date).key).filter(k => k < cw));
       for (const k of recs.keys()) if (k < cw) weeks.add(k);
       for (const wk of [...weeks].sort()) {
-        const list = weekEntries(wk); const rec = recs.get(wk); const h = weekHash(p, list);
+        const list = weekEntries(wk); const rec = recs.get(wk); const sm = sigMeta(p, wk, rec?.created || Date.now()); const h = weekHash(p, list) + sigHash(sm);
         if (rec && rec.hash === h) continue;
         if (!rec && !list.length) continue;
-        const w = weekByKey(wk); const res = await buildXlsm(p, list);
+        const w = weekByKey(wk); const res = await buildXlsm(p, list, { sigs: await renderSigs(sm) });
         const nr = { key: p.id + '|' + wk, pid: p.id, week: wk, from: w.from, to: w.to, label: weekLabel(w), fileName: aufmassFileName(p, w),
           file: await res.blob.arrayBuffer(), hash: h, count: list.length, created: rec?.created || Date.now(), updated: Date.now(),
           version: (rec?.version || 0) + 1, sent: rec?.sent || [], changedAfterSend: !!(rec?.sent?.length), uploaded: null };
@@ -1576,6 +1666,7 @@ async function renderExport() {
       ${L.problems.length ? `<span class="neg">Nicht exportierbar</span><span class="neg">${L.problems.length}</span>` : ''}</div>
     <button class="btn block" id="xGo" style="margin-top:12px" ${cur.length ? '' : 'disabled'}>Zwischenstand als Excel</button>
     <div id="xOut"></div>
+    <div id="curSig">${sigBlock(cw.key, Date.now(), 'cur')}</div>
   </div>
   <div class="card"><h3 style="margin-top:0">Aufmaße</h3>
     ${recs.length ? recs.map(r => { const st = r.changedAfterSend ? '<span class="neg">geändert nach Versand</span>' : (r.sent?.length ? '<span style="color:var(--ok)">versendet ✓</span>' : '<span class="muted">noch nicht versendet</span>');
@@ -1583,6 +1674,10 @@ async function renderExport() {
         <div class="m small">${st}</div></div>`; }).join('')
       : '<p class="muted small">Noch keine abgeschlossenen Wochen. Ab Montag erscheint hier automatisch das Aufmaß der Vorwoche.</p>'}
   </div>
+  <div class="card"><h3 style="margin-top:0">Meine Unterschrift</h3>
+    ${p.sign?.my ? `<img src="${p.sign.my}" alt="" style="max-height:60px;max-width:220px;background:#fff;border-radius:8px;padding:4px 8px"><div class="small muted">${esc(p.sign.name || '')}</div>
+      <label class="row" style="margin-top:10px;gap:8px"><input type="checkbox" id="mySigAuto" ${p.sign.auto ? 'checked' : ''} style="width:20px;height:20px"> automatisch in jedes Wochen-Aufmaß setzen (mit Datum)</label>` : '<p class="small muted" style="margin-top:0">Noch keine hinterlegt. Du kannst auch jedes Aufmaß einzeln unterschreiben.</p>'}
+    <div class="row" style="margin-top:10px"><button class="btn grow" id="mySigBtn">${p.sign?.my ? 'Neu unterschreiben' : 'Unterschrift hinterlegen'}</button>${p.sign?.my ? '<button class="btn danger" id="mySigDel">Löschen</button>' : ''}</div></div>
   <div class="card" id="mailCard"><h3 style="margin-top:0">E-Mail ans Büro</h3>
     <p class="small" id="mailState">${Sync.mailOk ? '<b style="color:var(--ok)">Direktversand über den Pi ist eingerichtet ✓</b>' : '<b class="neg">Direktversand nicht eingerichtet</b> – „Per E-Mail“ öffnet dann das Teilen-Menü (dort „Mail“ wählen). Einrichten auf dem Pi: <code>python3 /opt/aufmass/aufmass_server.py --mail-einrichten</code>'}</p>
     <label class="f">Empfänger</label><input class="i" id="mTo" type="email" inputmode="email" autocapitalize="off" value="${esc(mail.to || '')}" placeholder="buero@firma.de">
@@ -1612,14 +1707,22 @@ async function renderExport() {
   // aktuelles Aufmaß (Zwischenstand)
   const showCur = () => { $('#xOut').innerHTML = `<p class="hint ok">Fertig: ${esc(S.curExport.name)} · ${Math.round(S.curExport.buf.byteLength / 1024)} KB</p>` + sendButtons('cur');
     $('#xOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => S.curExport, cw, 'zwischen', null)); };
-  if (S.curExport && S.curExport.hash === weekHash(p, cur)) showCur();
+  if (S.curExport && S.curExport.hash === weekHash(p, cur) + sigHash(sigMeta(p, cw.key, Date.now()))) showCur();
   $('#xGo').onclick = async () => {
     $('#xGo').disabled = true; $('#xGo').textContent = 'Erzeuge …';
-    try { const res = await buildXlsm(p, cur); S.curExport = { buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, cw).replace('.xlsm', '_Zwischenstand.xlsm'), hash: weekHash(p, cur) }; showCur(); }
+    try { const sm = sigMeta(p, cw.key, Date.now()); const res = await buildXlsm(p, cur, { sigs: await renderSigs(sm) }); S.curExport = { buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, cw).replace('.xlsm', '_Zwischenstand.xlsm'), hash: weekHash(p, cur) + sigHash(sm) }; showCur(); }
     catch (err) { console.error(err); $('#xOut').innerHTML = `<p class="hint warn">Fehler: ${esc(err.message || err)}</p>`; }
     $('#xGo').disabled = false; $('#xGo').textContent = 'Zwischenstand als Excel';
   };
   m.querySelectorAll('[data-rec]').forEach(el => el.onclick = () => openAufmass(el.dataset.rec));
+  wireSig($('#curSig'), () => renderExport());
+  // eigene Unterschrift hinterlegen
+  $('#mySigBtn').onclick = () => openSignPad('Deine Unterschrift hinterlegen', 'Wird – wenn eingeschaltet – automatisch in jedes Wochen-Aufmaß gesetzt (Feld „Erstellt am“).', async img => {
+    const nm = prompt('Dein Name unter der Unterschrift (optional):', p.sign?.name || '') ?? (p.sign?.name || '');
+    p.sign = { ...(p.sign || {}), my: img, name: nm.trim(), auto: p.sign?.auto ?? true }; await saveProject(p); closeSheet(); Aufmass.soon(); renderExport(); toast('Unterschrift hinterlegt');
+  });
+  if ($('#mySigAuto')) $('#mySigAuto').onchange = async ev => { p.sign = { ...(p.sign || {}), auto: ev.target.checked }; await saveProject(p); S.curExport = null; Aufmass.soon(); renderExport(); };
+  if ($('#mySigDel')) $('#mySigDel').onclick = async () => { if (!confirm('Hinterlegte Unterschrift löschen?')) return; p.sign = { ...(p.sign || {}), my: null }; await saveProject(p); Aufmass.soon(); renderExport(); };
   // E-Mail
   $('#mSave').onclick = async () => {
     p.mail = { to: $('#mTo').value.trim(), cc: $('#mCc').value.trim(), subject: $('#mSub').value.trim(), body: $('#mBody').value };
@@ -1656,6 +1759,87 @@ async function renderExport() {
   };
 }
 
+
+/* ---------------- Unterschreiben (Finger auf dem Display) ---------------- */
+function openSignPad(title, sub, onDone) {
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:17px">${esc(title)}</div><div class="muted small">${esc(sub || '')}</div></div><button class="x" id="spx">×</button></div>
+    <div style="margin-top:12px;border:1.5px dashed var(--line);border-radius:12px;background:#fff;position:relative;touch-action:none">
+      <canvas id="spc" style="width:100%;height:200px;display:block;touch-action:none"></canvas>
+      <div style="position:absolute;left:16px;right:16px;bottom:42px;border-bottom:1px solid #c8ccd2;pointer-events:none"></div>
+      <div style="position:absolute;left:16px;bottom:16px;color:#8b939e;font-size:12px;pointer-events:none">Hier mit dem Finger unterschreiben</div></div>
+    <div class="row" style="margin-top:12px"><button class="btn grow" id="spclr">Löschen</button><button class="btn primary grow" id="spok">Übernehmen</button></div>`);
+  const c = $('#spc'); const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const r = c.getBoundingClientRect(); c.width = Math.round(r.width * dpr); c.height = Math.round(200 * dpr);
+  const g = c.getContext('2d'); g.scale(dpr, dpr); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#10204a';
+  let drawing = false, last = null, empty = true;
+  const pos = e => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top, t: e.timeStamp }; };
+  c.addEventListener('pointerdown', e => { e.preventDefault(); c.setPointerCapture(e.pointerId); drawing = true; last = pos(e); g.beginPath(); g.arc(last.x, last.y, 1.2, 0, 7); g.fillStyle = '#10204a'; g.fill(); empty = false; });
+  c.addEventListener('pointermove', e => { if (!drawing) return; e.preventDefault(); const p2 = pos(e);
+    const v = Math.hypot(p2.x - last.x, p2.y - last.y) / Math.max(1, p2.t - last.t); g.lineWidth = Math.max(1.4, Math.min(3.2, 3.4 - v * 1.2));
+    g.beginPath(); g.moveTo(last.x, last.y); g.lineTo(p2.x, p2.y); g.stroke(); last = p2; });
+  const up = () => { drawing = false; }; c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+  $('#spx').onclick = closeSheet;
+  $('#spclr').onclick = () => { g.clearRect(0, 0, c.width, c.height); empty = true; };
+  $('#spok').onclick = () => {
+    if (empty) { toast('Bitte zuerst unterschreiben'); return; }
+    // auf die gezeichnete Fläche zuschneiden
+    const d = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) if (d[(y * c.width + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const pad = 6 * dpr; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(c.width, x1 + pad); y1 = Math.min(c.height, y1 + pad);
+    const o = document.createElement('canvas'); o.width = x1 - x0; o.height = y1 - y0; o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+    onDone(o.toDataURL('image/png'));
+  };
+}
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+/** Unterschrift + Datum (+ Name) zu einem Bild für die Excel zusammensetzen */
+async function composeSig(sig) {
+  const img = await loadImg(sig.img);
+  const W = 800, H = 200, textH = 44; const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const sc = Math.min((W - 20) / img.width, (H - textH - 8) / img.height);
+  const w = img.width * sc, h = img.height * sc; g.drawImage(img, (W - w) / 2, 4 + (H - textH - 8 - h) / 2, w, h);
+  g.fillStyle = '#10204a'; g.font = '600 30px -apple-system, Segoe UI, Roboto, Arial, sans-serif'; g.textAlign = 'center';
+  g.fillText([fmtDateShort(sig.date), sig.name].filter(Boolean).join(' · '), W / 2, H - 10);
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  return { png: new Uint8Array(await blob.arrayBuffer()), w: W, h: H };
+}
+const fmtDateShort = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+const isoOf = ts => { const d = new Date(ts); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+/** Welche Unterschriften gehören in das Aufmaß dieser Woche? */
+function sigMeta(p, wk, createdTs) {
+  const ws = p.weekSigs?.[wk] || {}; const out = {};
+  if (ws.erstellt) out.erstellt = ws.erstellt;
+  else if (p.sign?.auto && p.sign?.my) out.erstellt = { img: p.sign.my, date: isoOf(createdTs || Date.now()), name: p.sign.name || '', auto: true };
+  if (ws.ag) out.ag = ws.ag;
+  return out;
+}
+const sigHash = m => hashStr(JSON.stringify(['erstellt', 'ag'].map(k => m[k] ? [hashStr(m[k].img), m[k].date, m[k].name || ''] : null)));
+async function renderSigs(m) { const o = {}; for (const k of ['erstellt', 'ag']) if (m[k]) o[k] = await composeSig(m[k]); return o; }
+async function signWeek(wk, kind, back) {
+  const isAg = kind === 'ag';
+  openSignPad(isAg ? 'Unterschrift Auftraggeber' : 'Deine Unterschrift', `Aufmaß ${weekLabel(weekByKey(wk))} · Feld „${isAg ? 'Auftraggeber' : 'Erstellt am'}: Datum / Unterschrift“`, async img => {
+    let name = isAg ? (prompt('Name des Unterschreibenden (optional):', S.p.weekSigs?.[wk]?.ag?.name || '') || '') : (S.p.sign?.name || '');
+    S.p.weekSigs = { ...(S.p.weekSigs || {}) }; S.p.weekSigs[wk] = { ...(S.p.weekSigs[wk] || {}), [kind]: { img, date: todayISO(), name: name.trim() } };
+    await saveProject(S.p); S.curExport = null; closeSheet(); toast('Unterschrift übernommen'); Aufmass.soon(); if (back) back(); else render();
+  });
+}
+async function clearWeekSig(wk, kind, back) {
+  if (!confirm('Unterschrift entfernen?')) return;
+  const ws = { ...(S.p.weekSigs?.[wk] || {}) }; delete ws[kind]; S.p.weekSigs = { ...(S.p.weekSigs || {}), [wk]: ws };
+  await saveProject(S.p); S.curExport = null; Aufmass.soon(); if (back) back(); else render();
+}
+function sigBlock(wk, createdTs, idp) {
+  const m = sigMeta(S.p, wk, createdTs);
+  const row = (k, label) => `<div class="row" style="margin-top:8px;align-items:center"><div class="grow"><div class="small" style="font-weight:600">${label}</div>
+      ${m[k] ? `<img src="${m[k].img}" alt="" style="max-height:44px;max-width:180px;background:#fff;border-radius:6px;padding:2px 6px;margin-top:3px"><div class="w small muted">${fmtDateShort(m[k].date)}${m[k].name ? ' · ' + esc(m[k].name) : ''}${m[k].auto ? ' · automatisch' : ''}</div>` : '<div class="small muted">noch nicht unterschrieben</div>'}</div>
+      <div style="display:flex;flex-direction:column;gap:6px"><button class="btn" data-sign="${k}" data-wk="${wk}" data-id="${idp}" style="min-height:38px;padding:6px 12px">${m[k] ? 'Neu' : 'Unterschreiben'}</button>
+      ${m[k] && !m[k].auto ? `<button class="btn danger" data-unsign="${k}" data-wk="${wk}" style="min-height:32px;padding:4px 10px;font-size:13px">Entfernen</button>` : ''}</div></div>`;
+  return `<h3>Unterschriften</h3>${row('erstellt', 'Erstellt am: Datum / Unterschrift')}${row('ag', 'Auftraggeber: Datum / Unterschrift')}`;
+}
+function wireSig(root, back) {
+  root.querySelectorAll('[data-sign]').forEach(b => b.onclick = () => signWeek(b.dataset.wk, b.dataset.sign, back));
+  root.querySelectorAll('[data-unsign]').forEach(b => b.onclick = () => clearWeekSig(b.dataset.wk, b.dataset.unsign, back));
+}
+
 /* ----- ein abgeschlossenes Wochen-Aufmaß ----- */
 async function openAufmass(key) {
   const r = await DB.get('aufmasse', key); if (!r) return; const w = weekByKey(r.week); const list = weekEntries(r.week);
@@ -1668,7 +1852,10 @@ async function openAufmass(key) {
     ${r.sent?.length ? `<p class="small muted">Versendet: ${r.sent.map(x => `${fmtTs(x.at)} (${esc(x.via)}, V${x.version})`).join('<br>')}</p>` : ''}
     ${sendButtons('rec')}
     <button class="btn block" id="aEdit" style="margin-top:8px">Einträge dieser Woche ansehen / ändern</button>
+    <div id="aSig">${sigBlock(r.week, r.created, 'rec')}</div>
+    <p class="hint">Nach dem Unterschreiben wird die Excel automatisch neu erzeugt (neue Version).</p>
     <h3>Mengen</h3>${posSummary(list)}`);
+  wireSig($('#aSig'), () => setTimeout(() => openAufmass(key), 3500));
   $('#ax').onclick = closeSheet;
   $('#sheet').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => { const x = await DB.get('aufmasse', key); return { buf: x.file, name: x.fileName }; }, w, 'woche', r));
   $('#aEdit').onclick = () => { closeSheet(); S.listWeek = r.week; S.tab = 'liste'; render(); };
