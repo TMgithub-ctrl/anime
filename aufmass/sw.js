@@ -1,5 +1,5 @@
 // Offline-Cache für die Aufmaß-App: App öffnet sich auch ohne Netz (Zug, Keller, Funkloch).
-const CACHE = 'aufmass-v13';
+const CACHE = 'aufmass-v14';
 const LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled([c.add('./'), ...LIBS.map(u => c.add(new Request(u, { mode: 'no-cors' })))])));

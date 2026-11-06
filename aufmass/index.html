@@ -82,6 +82,7 @@ input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
 .angrid label span{line-height:1.15;min-height:26px}
 .angrid.z label span{min-height:40px;font-size:10px}
 .angrid .i{text-align:center;padding:8px 2px;font-size:15px}
+.berow{border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:8px}.berow .i{font-size:15px;padding:9px}
 .anmat{margin-top:6px}.anmat .i{font-size:15px;padding:9px}
 .nact{margin-top:6px;text-align:right}.nact .nsx{border:1px solid var(--line);border-radius:8px}
 .ntext{white-space:pre-wrap;margin-top:6px;cursor:pointer;word-break:break-word}
@@ -362,7 +363,7 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('aufmass-app', 5);
+      const r = indexedDB.open('aufmass-app', 6);
       r.onupgradeneeded = () => {
         const d = r.result; const has = n => d.objectStoreNames.contains(n);
         if (!has('projects')) d.createObjectStore('projects', { keyPath: 'id' });
@@ -372,6 +373,7 @@ const DB = {
         if (!has('aufmasse')) { const a = d.createObjectStore('aufmasse', { keyPath: 'key' }); a.createIndex('pid', 'pid'); }
         if (!has('notes')) { const nt = d.createObjectStore('notes', { keyPath: 'id' }); nt.createIndex('projectId', 'projectId'); }
         if (!has('nachweise')) { const an = d.createObjectStore('nachweise', { keyPath: 'id' }); an.createIndex('projectId', 'projectId'); }
+        if (!has('bestellungen')) { const be = d.createObjectStore('bestellungen', { keyPath: 'id' }); be.createIndex('projectId', 'projectId'); }
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -392,7 +394,8 @@ const DB = {
   snapsOf(pid) { return this.tx('snapshots', 'readonly', s => s.index('pid').getAll(pid)); },
   aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); },
   notesOf(pid) { return this.tx('notes', 'readonly', s => s.index('projectId').getAll(pid)); },
-  nachweiseOf(pid) { return this.tx('nachweise', 'readonly', s => s.index('projectId').getAll(pid)); }
+  nachweiseOf(pid) { return this.tx('nachweise', 'readonly', s => s.index('projectId').getAll(pid)); },
+  bestellungenOf(pid) { return this.tx('bestellungen', 'readonly', s => s.index('projectId').getAll(pid)); }
 };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -1018,7 +1021,7 @@ async function loadAll() {
   S.projects = await DB.all('projects');
   const cur = await DB.get('kv', 'current');
   S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
-  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); updateUse(); } else { S.notes = []; S.nachweise = []; }
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); S.bestellungen = await DB.bestellungenOf(S.p.id); updateUse(); } else { S.notes = []; S.nachweise = []; S.bestellungen = []; }
 }
 const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, _roomVocab: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
 async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
@@ -1102,7 +1105,7 @@ const Sync = {
     Aufmass.upload().catch(() => {});
   },
   async push(p) {
-    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id); const nachweise = (await DB.nachweiseOf(p.id)).map(({ pdf, ...r }) => r);
+    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id); const nachweise = (await DB.nachweiseOf(p.id)).map(({ pdf, ...r }) => r); const bestellungen = (await DB.bestellungenOf(p.id)).map(({ pdf, ...r }) => r);
     if (!p.templateHash) { p.templateHash = hashBuf(p.template); }
     if (p.lvPdf && !p.lvHash) p.lvHash = hashBuf(p.lvPdf);
     const { template, lvPdf, ...metaRaw } = stripIdx(p);
@@ -1110,7 +1113,7 @@ const Sync = {
     const metaHash = hashStr(metaJson);
     const post = async extra => {
       const r = await fetch(this.api('/api/sync'), { method: 'POST', headers: this.hdr({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, nachweise, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
+        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, nachweise, bestellungen, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
       if (r.status === 401) throw new Error('Token falsch');
       if (!r.ok) throw new Error('Server-Fehler ' + r.status);
       return r.json();
@@ -1247,12 +1250,12 @@ function downloadFile(buf, name) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: typeOf(name) })); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
-async function mailDirect(buf, name, subject, body) {
-  const to = (S.p.mail?.to || '').trim();
+async function mailDirect(buf, name, subject, body, toOverride, ccOverride) {
+  const to = (toOverride || S.p.mail?.to || '').trim();
   if (!to) throw new Error('Keine Empfänger-Adresse – unter Export → „E-Mail ans Büro“ eintragen.');
   if (!Sync.configured()) throw new Error('Kein Pi verbunden.');
   const r = await fetch(Sync.api('/api/mail'), { method: 'POST', headers: Sync.hdr({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ to, cc: S.p.mail?.cc || '', subject, body, filename: name, data: bufToB64(buf) }) });
+    body: JSON.stringify({ to, cc: ccOverride ?? (S.p.mail?.cc || ''), subject, body, filename: name, data: bufToB64(buf) }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || ('Fehler ' + r.status));
   return j;
@@ -1624,9 +1627,10 @@ function wireSugg(root, after) {
 }
 function renderNotizen() {
   const m = $('#main'); S.noteView ||= 'notes';
-  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Arbeitsnachweise</button></div>`;
+  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Arbeitsnachw.</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellungen</button></div>`;
   const wireSeg = () => m.querySelectorAll('[data-nv]').forEach(b => b.onclick = () => { S.noteView = b.dataset.nv; renderNotizen(); });
   if (S.noteView === 'an') { m.innerHTML = seg; wireSeg(); renderNachweisListe(m); return; }
+  if (S.noteView === 'be') { m.innerHTML = seg; wireSeg(); renderBestellListe(m); return; }
   const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
   m.innerHTML = seg + `<div class="card" style="padding:12px">
       <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
@@ -1680,6 +1684,7 @@ const FIRMA_DEFAULT = {
   adresse: 'Langenhausen 20, 27442 Gnarrenburg', kontakt: 'Tel 04763-9375971, Fax 04763-9375972, www.etech1punkt1.de, info@etech1punkt1.de',
   anfahrt: 'An- und Abfahrtskosten werden gesondert ausgewiesen. Eine Abrechnung erfolgt zum Leistungsnachweis.',
   fuss: 'Die Arbeitszeit und der Materialverbrauch werden hiermit bestätigt. Die Höhe der Stundenlöhne sind Ihnen bekannt. Beanstandungen haben sofort nach Empfang der Ware bzw. Lieferung zu erfolgen. Die oben aufgeführten Leistungen wurden ordnungsgemäß und mängelfrei entsprechend der vertraglichen Vereinbarungen durchgeführt. Für bauseits geliefertes Material übernimmt der Auftragnehmer keine Garantie. Ansonsten gelten unsere Lieferungs- und Zahlungsbedingungen.',
+  bestellTitel: 'Bestellschein etech 1.1',
   logo: null
 };
 async function getFirma() { return { ...FIRMA_DEFAULT, ...((await DB.get('kv', 'firma')) || {}) }; }
@@ -1944,11 +1949,12 @@ async function openFirma() {
     <label class="f">Firmenname (Fußzeile)</label><input class="i" id="fiN" value="${esc(f.name)}">
     <label class="f">Adresse</label><input class="i" id="fiA" value="${esc(f.adresse)}">
     <label class="f">Kontakt</label><input class="i" id="fiC" value="${esc(f.kontakt)}">
+    <label class="f">Überschrift Bestellschein</label><input class="i" id="fiB" value="${esc(f.bestellTitel)}">
     <label class="f">Text An- und Abfahrtskosten</label><textarea class="i" id="fiF" rows="2">${esc(f.anfahrt)}</textarea>
     <label class="f">Bestätigungstext über der Fußzeile</label><textarea class="i" id="fiT" rows="5">${esc(f.fuss)}</textarea>
     <button class="btn primary block" id="fiSave" style="margin-top:12px">Speichern</button>`);
   $('#fix').onclick = closeSheet;
-  const save = async extra => { const v = { kurz: $('#fiK').value, slogan: $('#fiS').value, name: $('#fiN').value, adresse: $('#fiA').value, kontakt: $('#fiC').value, anfahrt: $('#fiF').value, fuss: $('#fiT').value, logo: f.logo, ...extra };
+  const save = async extra => { const v = { kurz: $('#fiK').value, slogan: $('#fiS').value, name: $('#fiN').value, adresse: $('#fiA').value, kontakt: $('#fiC').value, anfahrt: $('#fiF').value, fuss: $('#fiT').value, bestellTitel: $('#fiB').value, logo: f.logo, ...extra };
     await DB.put('kv', v, 'firma'); };
   $('#fiSave').onclick = async () => { await save(); closeSheet(); toast('Firmenkopf gespeichert'); };
   $('#fiLogo').onclick = () => $('#fiLogoF').click();
@@ -2067,6 +2073,141 @@ async function buildNachweisPdf(n, firma) {
     if (mat.length > MROWS) { T(p3, 'Materialnachweis (Fortsetzung):', X0, y, { bold: true, size: 10.5, underline: true }); const rest = mat.slice(MROWS, MROWS + 40); drawMat(p3, y + 3, rest, Math.max(rest.length, 5)); }
     footer(p3);
   }
+  return (await doc.save()).buffer;
+}
+
+
+/* =====================================================================
+   Bestellscheine – wie das Papierformular „Bestellschein etech 1.1“.
+   Kopf (Datum, Bauvorhaben, Lieferanschrift, Angebot Nr., Liefertermin, Monteur),
+   Tabelle Menge | Artikelbezeichnung | LV Pos. | Kalk. EK | Lieferant. PDF + Versand.
+   ===================================================================== */
+async function newBestellung() {
+  const prev = (S.bestellungen || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0))[0];
+  const firma = await getFirma();
+  return { id: uid(), projectId: S.p.id, datum: todayISO(), created: Date.now(), updated: Date.now(),
+    bauvorhaben: prev?.bauvorhaben || S.p.name, lieferanschrift: prev?.lieferanschrift || '', angebot: '', liefertermin: '',
+    monteur: prev?.monteur || S.p.sign?.name || '', mailTo: prev?.mailTo || '', rows: [{}, {}, {}], sent: [], titel: firma.bestellTitel };
+}
+async function saveBestellung(b) { b.updated = Date.now(); await DB.put('bestellungen', b); S.bestellungen = (S.bestellungen || []).filter(x => x.id !== b.id).concat(b); changed(); }
+function renderBestellListe(m) {
+  const list = (S.bestellungen || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
+  m.insertAdjacentHTML('beforeend', `<button class="btn primary block" id="beNew" style="margin-bottom:12px">+ Neuer Bestellschein</button>
+    ${list.length ? list.map(b => { const n = (b.rows || []).filter(r => r.menge || r.text).length;
+      return `<div class="card entry" data-be="${b.id}" style="padding:12px 14px"><div class="grow"><b>${fmtDateShort(b.datum)}</b> <span class="muted small">${esc(b.bauvorhaben || '')}</span>
+        <div class="w">${n} ${n === 1 ? 'Artikel' : 'Artikel'}${b.liefertermin ? ' · Liefertermin ' + fmtDateShort(b.liefertermin) : ''}${b.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
+      : '<div class="empty">Noch keine Bestellscheine.</div>'}
+    <button class="btn block" id="beBlank" style="margin-top:6px">Leeren Bestellschein als PDF</button>`);
+  $('#beNew').onclick = async () => openBestellung(await newBestellung(), true);
+  m.querySelectorAll('[data-be]').forEach(el => el.onclick = () => openBestellung(S.bestellungen.find(x => x.id === el.dataset.be)));
+  $('#beBlank').onclick = async () => { const f = await getFirma(); const buf = await buildBestellPdf({ rows: [], titel: f.bestellTitel }, f, true); await shareFile(buf, 'Bestellschein_leer.pdf', 'Bestellschein', ''); };
+}
+function openPosPicker(onPick, start) {
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">LV-Position wählen</div><button class="x" id="ppkx">×</button></div>
+    <input class="i" id="ppkq" type="search" autocomplete="off" placeholder="z. B. nym 5x4 oder 03.02" value="${esc(start || '')}" style="margin-top:10px">
+    <div id="ppkr" style="margin-top:10px"></div>`);
+  const run = () => { const q = $('#ppkq').value; const r = q.trim() ? searchPositions(S.p, q, 25).results.map(o => o.x) : [];
+    $('#ppkr').innerHTML = r.map(x => { const t = posTitle(S.p, x.pos); return `<div class="res" data-pos="${esc(x.pos)}"><div class="grow"><div class="pos">${esc(x.pos)}</div><div class="tx">${esc(x.text)}</div>${t.titel || t.bereich ? `<div class="ti">${esc(t.titel || t.bereich)}</div>` : ''}</div><div class="q">${esc(x.unit)}</div></div>`; }).join('') || '<div class="empty">Suchbegriff eingeben</div>';
+    $('#ppkr').querySelectorAll('.res').forEach(el => el.onclick = () => onPick(posMap().get(el.dataset.pos))); };
+  $('#ppkq').oninput = run; run(); setTimeout(() => $('#ppkq').focus(), 200);
+  $('#ppkx').onclick = () => onPick(null);
+}
+function openBestellung(b, isNew) {
+  b = JSON.parse(JSON.stringify(b)); b.rows ||= [];
+  const rowHTML = (r, i) => `<div class="berow" data-i="${i}" data-pos="${esc(r.pos || '')}">
+      <div class="row"><input class="i be-m" value="${esc(r.menge || '')}" placeholder="Menge" style="width:30%"><input class="i be-t grow" value="${esc(r.text || '')}" placeholder="Artikelbezeichnung"><button class="nsx be-del" title="Zeile löschen">✕</button></div>
+      <div class="row" style="margin-top:5px"><button class="btn be-lv" style="min-height:38px;padding:5px 9px;font-size:13px;white-space:nowrap">${r.pos ? esc(r.pos) : 'LV-Pos. 🔍'}</button>
+        <input class="i be-ek" value="${esc(r.ek || '')}" placeholder="Kalk. EK" inputmode="decimal" style="width:27%"><input class="i be-l grow" value="${esc(r.lief || '')}" placeholder="Lieferant"></div></div>`;
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">Bestellschein</div><div class="muted small">wird wie euer Formular als PDF erzeugt</div></div><button class="x" id="bex">×</button></div>
+    <div class="row"><div class="grow"><label class="f">Datum</label><input class="i" id="beD" type="date" value="${esc(b.datum || todayISO())}"></div><div class="grow"><label class="f">Liefertermin</label><input class="i" id="beLt" type="date" value="${esc(b.liefertermin || '')}"></div></div>
+    <label class="f">Bauvorhaben</label><input class="i" id="beBv" value="${esc(b.bauvorhaben || '')}">
+    <label class="f">Lieferanschrift</label><input class="i" id="beLa" value="${esc(b.lieferanschrift || '')}" placeholder="z. B. Firma / Baustelle">
+    <div class="row"><div class="grow"><label class="f">Angebot Nr.</label><input class="i" id="beAn" value="${esc(b.angebot || '')}"></div><div class="grow"><label class="f">Monteur</label><input class="i" id="beMo" value="${esc(b.monteur || '')}"></div></div>
+    <h3>Artikel</h3><div id="beRows">${b.rows.map(rowHTML).join('')}</div>
+    <button class="btn block" id="beAdd" style="margin-top:6px">+ Artikel</button>
+    <label class="f">Bestellung per E-Mail an (z. B. Großhandel / Einkauf)</label><input class="i" id="beTo" type="email" inputmode="email" autocapitalize="off" value="${esc(b.mailTo || '')}" placeholder="leer = Büro-Adresse">
+    <div class="row" style="margin-top:14px"><button class="btn primary grow" id="beSave">Speichern</button></div>
+    <button class="btn block" id="bePdf" style="margin-top:8px">PDF erzeugen</button><div id="beOut"></div>
+    ${!isNew ? '<button class="btn danger block" id="beDel" style="margin-top:14px">Bestellschein löschen</button>' : ''}`);
+  const read = () => {
+    b.datum = $('#beD').value || todayISO(); b.liefertermin = $('#beLt').value; b.bauvorhaben = $('#beBv').value.trim(); b.lieferanschrift = $('#beLa').value.trim();
+    b.angebot = $('#beAn').value.trim(); b.monteur = $('#beMo').value.trim(); b.mailTo = $('#beTo').value.trim();
+    b.rows = Array.from(document.querySelectorAll('#beRows .berow')).map(el => ({ menge: el.querySelector('.be-m').value.trim(), text: el.querySelector('.be-t').value.trim(),
+      pos: el.dataset.pos || '', ek: el.querySelector('.be-ek').value.trim(), lief: el.querySelector('.be-l').value.trim() }));
+    return b;
+  };
+  const wire = () => {
+    document.querySelectorAll('#beRows .berow').forEach((el, i) => { el.dataset.i = i;
+      el.querySelector('.be-del').onclick = () => { el.remove(); };
+      el.querySelector('.be-lv').onclick = () => { read(); const idx = i; const q = b.rows[idx]?.text || '';
+        openPosPicker(x => { if (x) { const r = b.rows[idx] || (b.rows[idx] = {}); r.pos = x.pos; if (!r.text) r.text = x.text; if (r.menge && !/[a-z]/i.test(r.menge)) r.menge += ' ' + x.unit; }
+          openBestellung(b, isNew); }, q); }; });
+  };
+  wire();
+  $('#bex').onclick = () => { closeSheet(); render(); };
+  $('#beAdd').onclick = () => { $('#beRows').insertAdjacentHTML('beforeend', rowHTML({}, document.querySelectorAll('#beRows .berow').length)); wire(); };
+  $('#beSave').onclick = async () => { read(); await saveBestellung(b); toast('Bestellschein gespeichert'); };
+  if ($('#beDel')) $('#beDel').onclick = async () => { if (!confirm('Bestellschein löschen?')) return; await DB.del('bestellungen', b.id); S.bestellungen = S.bestellungen.filter(x => x.id !== b.id); changed(); closeSheet(); render(); };
+  $('#bePdf').onclick = async () => {
+    read(); await saveBestellung(b); $('#bePdf').disabled = true; $('#bePdf').textContent = 'Erzeuge PDF …';
+    try {
+      const buf = await buildBestellPdf(b, await getFirma()); const name = `Bestellschein_${safeName(b.bauvorhaben || S.p.name)}_${b.datum}.pdf`;
+      b.pdfName = name; b.pdf = buf; await saveBestellung(b); uploadNachweis({ pdf: buf, pdfName: name }).catch(() => {});
+      $('#beOut').innerHTML = `<p class="hint ok">Fertig: ${esc(name)}</p>
+        <div class="row" style="margin-top:10px"><button class="btn primary grow" data-act="mail">✉ Per E-Mail senden</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn grow" data-act="share">Teilen …</button><button class="btn grow" data-act="dl">Herunterladen</button></div>`;
+      $('#beOut').querySelectorAll('[data-act]').forEach(x => x.onclick = () => onSendBe(x.dataset.act, b));
+    } catch (e) { console.error(e); $('#beOut').innerHTML = `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`; }
+    $('#bePdf').disabled = false; $('#bePdf').textContent = 'PDF erzeugen';
+  };
+}
+async function onSendBe(act, b) {
+  const subject = `Bestellung ${b.bauvorhaben || S.p.name} vom ${fmtDateShort(b.datum)}${b.liefertermin ? ' – Liefertermin ' + fmtDateShort(b.liefertermin) : ''}`;
+  const body = `Hallo,\n\nanbei unsere Bestellung für ${b.bauvorhaben || S.p.name}${b.liefertermin ? ', Liefertermin ' + fmtDateShort(b.liefertermin) : ''}${b.lieferanschrift ? ', Lieferanschrift: ' + b.lieferanschrift : ''}.\n\nViele Grüße${b.monteur ? '\n' + b.monteur : ''}`;
+  const mark = async via => { b.sent = [...(b.sent || []), { at: Date.now(), via }]; await saveBestellung(b); };
+  if (act === 'dl') return downloadFile(b.pdf, b.pdfName);
+  if (act === 'share' || !Sync.mailOk) { if (act === 'mail') toast('Direktversand ist auf dem Pi nicht eingerichtet – Teilen-Menü, dort „Mail“ wählen.', 4000); if (await shareFile(b.pdf, b.pdfName, subject, body)) await mark('Teilen'); return; }
+  const to = b.mailTo || S.p.mail?.to; if (!to) { toast('Bitte eine E-Mail-Adresse eintragen.'); return; }
+  if (!confirm(`„${b.pdfName}“ jetzt an ${to} senden?`)) return;
+  try { await mailDirect(b.pdf, b.pdfName, subject, body, to, b.mailTo ? '' : undefined); await mark('E-Mail an ' + to); toast('E-Mail verschickt ✓'); } catch (e) { toast('Nicht verschickt: ' + esc(e.message || e), 5000); }
+}
+async function buildBestellPdf(b, firma, blank) {
+  const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
+  const doc = await PDFDocument.create(); doc.setTitle('Bestellschein'); doc.setCreator('Aufmaß-App');
+  const F = await doc.embedFont(StandardFonts.Helvetica), FB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const MM = 2.8346, H = 841.89, ink = rgb(0.1, 0.1, 0.12), blue = rgb(0.05, 0.12, 0.35);
+  const logo = firma.logo ? await doc.embedPng(firma.logo) : null;
+  const T = (p, s, x, y, o = {}) => { const f = o.bold ? FB : F, size = o.size || 11; const t = pdfSafe(s); let xx = x * MM; const w = f.widthOfTextAtSize(t, size);
+    if (o.align === 'center') xx -= w / 2; if (o.align === 'right') xx -= w; p.drawText(t, { x: xx, y: H - y * MM, size, font: f, color: o.color || ink }); return w / MM; };
+  const L = (p, x1, y1, x2, y2, t = 0.6) => p.drawLine({ start: { x: x1 * MM, y: H - y1 * MM }, end: { x: x2 * MM, y: H - y2 * MM }, thickness: t, color: ink });
+  const fit = (s, f, size, maxMm) => { let t = pdfSafe(s); while (t && f.widthOfTextAtSize(t, size) / MM > maxMm) t = t.slice(0, -1); return t; };
+  const rows = (b.rows || []).filter(r => r.menge || r.text || r.pos || r.ek || r.lief);
+  const X0 = 26, X1 = 189, cols = [X0, 51.7, 122.3, 143.2, 163.7, X1];   // Breiten wie im Papierformular   // Menge | Artikelbezeichnung | LV Pos. | Kalk. EK | Lieferant
+  const ROWS1 = 21, ROWSN = 34, rh = 6.4;
+  const page = (first, items, nRows) => {
+    const p = doc.addPage([595.28, H]);
+    if (logo) { const d = logo.scaleToFit(58 * MM, 13 * MM); p.drawImage(logo, { x: X1 * MM - d.width, y: H - 13 * MM - d.height, width: d.width, height: d.height }); }
+    else { T(p, firma.kurz, X1, 22, { bold: true, size: 20, align: 'right', color: rgb(0.62, 0.08, 0.2) }); T(p, firma.slogan, X1, 26.3, { bold: true, size: 6.5, align: 'right', color: rgb(0.62, 0.08, 0.2) }); }
+    let ty;
+    if (first) {
+      T(p, b.titel || firma.bestellTitel, 105, 52, { size: 16, align: 'center' });
+      const dw = T(p, 'Datum :', 129, 68, { bold: true, size: 11 }); L(p, 129 + dw + 1.5, 68.8, X1 - 1, 68.8, 0.5);
+      if (!blank && b.datum) T(p, fmtDateShort(b.datum), 129 + dw + 3, 67.6, { size: 11, color: blue });
+      const fields = [['Bauvorhaben :', b.bauvorhaben], ['Lieferanschrift :', b.lieferanschrift], ['Angebot Nr. :', b.angebot], ['Liefertermin :', b.liefertermin ? fmtDateShort(b.liefertermin) : ''], [`Monteur ${firma.kurz}:`, b.monteur]];
+      fields.forEach(([lab, val], i) => { const y = 81 + i * 8.6; T(p, lab, X0, y, { bold: true, size: 11 }); const lx = X0 + 38; L(p, lx, y + 0.8, 133, y + 0.8, 0.5);
+        if (!blank && val) T(p, fit(val, F, 11, 133 - lx - 2), lx + 2, y - 0.4, { size: 11, color: blue }); });
+      ty = 128;
+    } else { T(p, (b.titel || firma.bestellTitel) + ' – Fortsetzung', 105, 40, { size: 12, align: 'center' }); ty = 48; }
+    const hh = 6.4, total = hh + nRows * rh;
+    p.drawRectangle({ x: X0 * MM, y: H - (ty + total) * MM, width: (X1 - X0) * MM, height: total * MM, borderColor: ink, borderWidth: 1 });
+    ['Menge', 'Artikelbezeichnung', 'LV Pos.', 'Kalk. EK', 'Lieferant'].forEach((h, i) => T(p, h, (cols[i] + cols[i + 1]) / 2, ty + 4.6, { bold: true, size: 10, align: 'center' }));
+    for (let i = 1; i < cols.length - 1; i++) L(p, cols[i], ty, cols[i], ty + total, 0.7);
+    for (let r = 0; r < nRows; r++) L(p, X0, ty + hh + r * rh, X1, ty + hh + r * rh, r === 0 ? 0.9 : 0.5);
+    items.forEach((r, i) => { const y = ty + hh + (i + 1) * rh - 1.9; const vals = [r.menge, r.text, r.pos, r.ek, r.lief];
+      vals.forEach((v, c) => { if (v) T(p, fit(v, F, 9.5, cols[c + 1] - cols[c] - 2.4), c === 1 ? cols[c] + 1.4 : (cols[c] + cols[c + 1]) / 2, y, { size: 9.5, color: blue, align: c === 1 ? undefined : 'center' }); }); });
+  };
+  page(true, rows.slice(0, ROWS1), ROWS1);
+  for (let k = ROWS1; k < rows.length; k += ROWSN) page(false, rows.slice(k, k + ROWSN), Math.min(ROWSN, Math.max(rows.length - k, 10)));
   return (await doc.save()).buffer;
 }
 
@@ -2592,6 +2733,7 @@ async function restoreFromServer(pid) {
     let n = 0; for (const e of (current.entries || [])) if (!have.has(e.id)) { await DB.put('entries', { ...e, projectId: pid }); n++; }
     const haveN = new Set((await DB.notesOf(pid)).map(x => x.id)); for (const nt of (current.notes || [])) if (!haveN.has(nt.id)) await DB.put('notes', { ...nt, projectId: pid });
     const haveA = new Set((await DB.nachweiseOf(pid)).map(x => x.id)); for (const an of (current.nachweise || [])) if (!haveA.has(an.id)) await DB.put('nachweise', { ...an, projectId: pid });
+    const haveB = new Set((await DB.bestellungenOf(pid)).map(x => x.id)); for (const be of (current.bestellungen || [])) if (!haveB.has(be.id)) await DB.put('bestellungen', { ...be, projectId: pid });
     await DB.put('kv', pid, 'current'); await loadAll(); closeSheet(); S.tab = 'erfassen'; render();
     (Sync.st[pid] ||= {}).ok = Date.now(); Sync.st[pid].pending = false; await Sync.saveState();
     toast(`„${esc(p.name)}“ wiederhergestellt – ${n} Einträge geladen`);
@@ -2615,7 +2757,7 @@ function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i =
 function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
 async function saveBackup() {
   const { template, lvPdf, ...rest } = S.p;
-  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), firma: await DB.get('kv', 'firma') };
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), bestellungen: (S.bestellungen || []).map(({ pdf, ...r }) => r), firma: await DB.get('kv', 'firma') };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
   const file = new File([blob], name, { type: 'application/json' });
@@ -2636,6 +2778,7 @@ function restoreBackup() {
       for (const e of data.entries) await DB.put('entries', { ...e, projectId: p.id });
       for (const n of (data.notes || [])) await DB.put('notes', { ...n, projectId: p.id });
       for (const n of (data.nachweise || [])) await DB.put('nachweise', { ...n, projectId: p.id });
+      for (const n of (data.bestellungen || [])) await DB.put('bestellungen', { ...n, projectId: p.id });
       if (data.firma && !(await DB.get('kv', 'firma'))) await DB.put('kv', data.firma, 'firma');
       Sync.dirty(p.id);
       await DB.put('kv', p.id, 'current'); await loadAll(); render(); toast(`Backup geladen: ${data.entries.length} Einträge`);
@@ -2663,7 +2806,8 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
   } catch (err) { $('#main').innerHTML = `<div class="card"><b class="neg">Start fehlgeschlagen</b><p>${esc(err.message || err)}</p></div>`; }
 })();
 // für Tests
-window.__aufmass = { S, Sync, Aufmass, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass_getFirma = () => getFirma();
+window.__aufmass = { S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
