@@ -74,6 +74,18 @@ input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
 .tlink{cursor:pointer}
 .lvbtn{display:inline-block;margin-left:4px;padding:0 7px;border-radius:6px;background:var(--panel2);color:var(--accent);font-weight:700;font-size:12px}
 .pdfpages canvas{width:100%;height:auto;display:block;margin:0 0 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.ntext{white-space:pre-wrap;margin-top:6px;cursor:pointer;word-break:break-word}
+.nsugg{margin-top:10px;border-top:1px dashed var(--line);padding-top:6px}
+.ns{font-size:13px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--line)}
+.ns:last-child{border-bottom:0}
+.ns .nsl1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ns b{color:var(--text);font-weight:600}
+.ns .nsl2{display:flex;align-items:center;gap:2px;margin-top:1px}
+.ns .nst{flex:1;min-width:0;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+.ns.done{color:var(--ok);border-bottom:0}
+.nsb{border:0;background:none;color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;padding:4px 6px}
+.nsx{border:0;background:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:4px 6px;white-space:nowrap}
+nav.tabs button{font-size:11px}
 .qchip{display:inline-block;margin:0 0 10px;padding:6px 11px;border-radius:9px;background:var(--cell-new);font-weight:600;font-size:14px}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:none}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--panel);border-radius:18px 18px 0 0;max-height:92vh;overflow:auto;padding:8px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .22s ease;max-width:760px;margin:0 auto}
@@ -162,6 +174,7 @@ table.grid tr.sum td{font-weight:700;background:var(--panel2)}
 <nav class="tabs hidden" id="tabs">
   <button data-tab="erfassen" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Erfassen</button>
   <button data-tab="liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Einträge</button>
+  <button data-tab="notizen"><span style="position:relative;display:inline-block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><i id="noteDot" class="hidden" style="position:absolute;top:-1px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)"></i></span>Notizen</button>
   <button data-tab="blaetter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>Blätter</button>
   <button data-tab="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export</button>
 </nav>
@@ -226,6 +239,7 @@ function norm(s) {
   s = s.replace(/(\d),(\d)/g, '$1.$2')
        .replace(/(\d)\.\s*(?=(og|eg|ug|dg)\b)/g, '$1')
        .replace(/(\d)\s*x\s*(\d)/g, '$1x$2')
+       .replace(/(\d)\s*-\s*(?=[a-z])/g, '$1').replace(/(\d)\s+(fach|polig|pol|adrig|feldig|reihig)\b/g, '$1$2')
        .replace(/([a-z]{3,})(\d)/g, '$1 $2')
        .replace(/[^a-z0-9.+]+/g, ' ')
        .replace(/\.(?=\s|$)/g, '')
@@ -272,6 +286,7 @@ function scoreToken(x, tok) {
     else if (tok.length >= 5 && lev1(w.slice(0, tok.length + 1), tok)) best = Math.max(best, 2);
   }
   if (!best && tok.length >= 3 && x._nospace.includes(tok)) best = 3;
+  if (!best && tok.length >= 6) { const st = tok.replace(/(en|n|e|s)$/, ''); if (st !== tok && st.length >= 5 && (x._nospace.includes(st))) best = 3; }   // Mehrzahl: Steckdosen -> Steckdose
   if (best && inText) best += 2;       // Treffer im Positionstext zählt mehr als im Titel
   return best;
 }
@@ -327,6 +342,7 @@ function searchPositions(p, q, limit = 40) {
     }
   }
   const list = (full.length ? full : out);
+  if (!toks.some(t => t.startsWith('demont') || t.startsWith('abbau'))) for (const o of list) if (/^\s*(demontage|demontieren|abbau)/i.test(o.x.text)) o.s *= 0.6;
   list.sort((a, b) => b.m - a.m || b.s - a.s || a.x.row - b.x.row);
   return { results: list.slice(0, limit), qty, raum, partial: !full.length && out.length > 0 };
 }
@@ -336,7 +352,7 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('aufmass-app', 3);
+      const r = indexedDB.open('aufmass-app', 4);
       r.onupgradeneeded = () => {
         const d = r.result; const has = n => d.objectStoreNames.contains(n);
         if (!has('projects')) d.createObjectStore('projects', { keyPath: 'id' });
@@ -344,6 +360,7 @@ const DB = {
         if (!has('kv')) d.createObjectStore('kv');
         if (!has('snapshots')) { const sn = d.createObjectStore('snapshots', { keyPath: 'key' }); sn.createIndex('pid', 'pid'); }
         if (!has('aufmasse')) { const a = d.createObjectStore('aufmasse', { keyPath: 'key' }); a.createIndex('pid', 'pid'); }
+        if (!has('notes')) { const nt = d.createObjectStore('notes', { keyPath: 'id' }); nt.createIndex('projectId', 'projectId'); }
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -362,7 +379,8 @@ const DB = {
   get(store, k) { return this.tx(store, 'readonly', s => s.get(k)); },
   byProject(pid) { return this.tx('entries', 'readonly', s => s.index('projectId').getAll(pid)); },
   snapsOf(pid) { return this.tx('snapshots', 'readonly', s => s.index('pid').getAll(pid)); },
-  aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); }
+  aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); },
+  notesOf(pid) { return this.tx('notes', 'readonly', s => s.index('projectId').getAll(pid)); }
 };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -988,9 +1006,9 @@ async function loadAll() {
   S.projects = await DB.all('projects');
   const cur = await DB.get('kv', 'current');
   S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
-  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); updateUse(); }
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); updateUse(); } else S.notes = [];
 }
-const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
+const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, _roomVocab: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
 async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
 async function selectProject(id) {
   await DB.put('kv', id, 'current'); await loadAll(); S.tab = 'erfassen'; S.curExport = null; S.listWeek = null; render(); Aufmass.check();
@@ -1072,7 +1090,7 @@ const Sync = {
     Aufmass.upload().catch(() => {});
   },
   async push(p) {
-    const entries = await DB.byProject(p.id);
+    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id);
     if (!p.templateHash) { p.templateHash = hashBuf(p.template); }
     if (p.lvPdf && !p.lvHash) p.lvHash = hashBuf(p.lvPdf);
     const { template, lvPdf, ...metaRaw } = stripIdx(p);
@@ -1080,7 +1098,7 @@ const Sync = {
     const metaHash = hashStr(metaJson);
     const post = async extra => {
       const r = await fetch(this.api('/api/sync'), { method: 'POST', headers: this.hdr({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ pid: p.id, name: p.name, entries, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
+        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
       if (r.status === 401) throw new Error('Token falsch');
       if (!r.ok) throw new Error('Server-Fehler ' + r.status);
       return r.json();
@@ -1109,7 +1127,8 @@ async function snapshotLocal(pid) {
   const entries = await DB.byProject(pid); const date = todayISO(); const key = pid + '|' + date;
   const prev = await DB.get('snapshots', key); const m = new Map((prev?.entries || []).map(e => [e.id, e]));
   for (const e of entries) m.set(e.id, e);
-  await DB.put('snapshots', { key, pid, date, saved: Date.now(), entries: [...m.values()] });
+  const nm = new Map((prev?.notes || []).map(n => [n.id, n])); for (const n of await DB.notesOf(pid)) nm.set(n.id, n);
+  await DB.put('snapshots', { key, pid, date, saved: Date.now(), entries: [...m.values()], notes: [...nm.values()] });
 }
 /** Änderung an Einträgen gemerkt -> lokale Tagessicherung + Server */
 const changed = () => { if (!S.p) return; updateUse(); Sync.dirty(S.p.id); Aufmass.soon(); };
@@ -1261,7 +1280,8 @@ function render() {
   renderSyncPill();
   for (const b of document.querySelectorAll('nav.tabs button')) b.classList.toggle('on', b.dataset.tab === S.tab);
   if (!p) return renderSetup();
-  ({ erfassen: renderErfassen, liste: renderListe, blaetter: renderBlaetter, export: renderExport })[S.tab]();
+  updateNoteDot();
+  ({ erfassen: renderErfassen, liste: renderListe, notizen: renderNotizen, blaetter: renderBlaetter, export: renderExport })[S.tab]();
 }
 
 /* ----- Einrichtung / neue Baustelle ----- */
@@ -1373,7 +1393,9 @@ function renderErfassen() {
     box.innerHTML = results.length ? results.map(r => resultHTML(r.x)).join('') : '<div class="empty">Nichts gefunden.</div>';
   };
   q.oninput = run; run();
-  $('#res').onclick = ev => { const tl = ev.target.closest('.tlink'); if (tl) { ev.stopPropagation(); openTitle(tl.dataset.key); return; } const r = ev.target.closest('.res'); if (r) openEntryForm({ pos: r.dataset.pos, qty: S.qQty, raum: S.qRaum }); };
+  $('#res').onclick = ev => { const tl = ev.target.closest('.tlink'); if (tl) { ev.stopPropagation(); openTitle(tl.dataset.key); return; } const r = ev.target.closest('.res'); if (r) { const nl = S.noteLink;
+    openEntryForm({ pos: r.dataset.pos, qty: nl ? nl.qty : S.qQty, raum: nl ? (nl.raum || undefined) : S.qRaum, date: nl?.date, noteText: nl ? 'Notiz: ' + nl.line : undefined,
+      onSaved: nl ? async rec => { const m = S.notes.find(z => z.id === nl.noteId); if (m) { m.handled = { ...(m.handled || {}), [nl.key]: rec.id }; await saveNote(m); } S.noteLink = null; S.q = ''; } : undefined }); } };
   $('#impBtn').onclick = openImport;
 }
 
@@ -1400,10 +1422,10 @@ function openSheet(html) {
 }
 function closeSheet() { $('#sheet').classList.remove('open'); $('#sheetBg').style.display = 'none'; }
 
-function openEntryForm({ pos, qty, raum, entry }) {
+function openEntryForm({ pos, qty, raum, entry, date, noteText, onSaved }) {
   const x = posMap().get(entry ? entry.pos : pos); if (!x) return;
   const t = posTitle(S.p, x.pos); const lr = lastRaum();
-  const e = entry || { id: null, pos: x.pos, qty: qty ?? '', expr: qty != null ? String(qty).replace('.', ',') : '', raum: raum || lr.raum, sk: raum ? '' : lr.sk, date: todayISO(), note: '' };
+  const e = entry || { id: null, pos: x.pos, qty: qty ?? '', expr: qty != null ? String(qty).replace('.', ',') : '', raum: raum || lr.raum, sk: raum ? '' : lr.sk, date: date || todayISO(), note: noteText || '' };
   const lvLong = S.p.lv?.pos?.[x.pos]?.long || S.p.lv?.pos?.[x.pos.replace(/[a-z]+$/i, '')]?.long || (x.fullText !== x.text ? x.fullText : '');
   const done = erfasst(x.pos) - (entry ? entry.qty : 0);
   openSheet(`
@@ -1468,7 +1490,7 @@ function openEntryForm({ pos, qty, raum, entry }) {
     await DB.put('entries', rec); changed();
     S.entries = S.entries.filter(o => o.id !== rec.id).concat(rec); S.lastEntryId = rec.id; S.exportRes = null;
     const pl = layout(S.p, weekEntries(weekOf(rec.date).key)).place[rec.id];
-    closeSheet(); if (!entry) { S.q = ''; } render();
+    closeSheet(); if (!entry && !onSaved) { S.q = ''; } if (onSaved) await onSaved(rec); render();
     toast(`<b>${fmt(v)} ${esc(x.unit)}</b> ${esc(x.text)}${pl ? `<br>→ ${esc(pl.name)}, Zeile ${pl.row}, Spalte ${pl.col}` : ''}`);
   };
 }
@@ -1532,14 +1554,131 @@ function openTitle(key, back) {
   };
 }
 
+
+/* ---------------- Notizen ----------------
+   Freie Notizen pro Baustelle. Zeilen, die nach Aufmaß aussehen (Material + Menge), bekommen einen
+   dezenten Vorschlag „→ Position · Menge · Raum · Eintragen“. Übernommen = ✓, unpassend = ×. */
+const lineKey = l => hashStr(norm(l));
+function noteSuggestions(note) {
+  const out = [];
+  const segs = [];
+  for (const raw of String(note.text || '').split('\n')) {
+    let l = raw.trim(); if (!l) continue;
+    let ctx = '';   // „UV 1.OG: …“ -> Raum gilt für die ganze Zeile
+    const pm = /^([^:]{2,40}):\s*(.+)$/.exec(l);
+    if (pm) { const rr = findRoom(S.p, pm[1]); if (rr || S.p.rooms.includes(pm[1].trim())) { ctx = rr ? rr.raum : pm[1].trim(); l = pm[2]; } }
+    for (const part of l.split(/,(?!\d)|;|\s(?:und|sowie)\s/i)) segs.push({ l: part.trim(), ctx });
+  }
+  for (const { l, ctx } of segs) {
+    if (l.length < 4) continue;
+    const k = lineKey(l);
+    if ((note.dismissed || []).includes(k)) continue;
+    const done = note.handled?.[k];
+    if (done) { out.push({ line: l, key: k, done }); continue; }
+    if (!/\d/.test(l)) continue;                 // ohne Zahl keine Menge -> kein Vorschlag
+    const r = parseImportLine(l, S.p.rooms, ctx);
+    if (!r.use || !r.cands.length) continue;     // nur eindeutige Treffer (alle Wörter passen + Menge erkannt)
+    out.push({ line: l, key: k, pos: r.cands[0], alt: r.cands.slice(1, 4), qty: r.qty, raum: r.raum });
+  }
+  return out;
+}
+const openSuggestCount = () => (S.notes || []).reduce((a, n) => a + noteSuggestions(n).filter(x => !x.done).length, 0);
+function updateNoteDot() { const d = $('#noteDot'); if (d) d.classList.toggle('hidden', !S.p || !openSuggestCount()); }
+async function saveNote(n) { n.updated = Date.now(); await DB.put('notes', n); S.notes = (S.notes || []).filter(x => x.id !== n.id).concat(n); changed(); updateNoteDot(); }
+function suggHTML(n) {
+  const sg = noteSuggestions(n); if (!sg.length) return '';
+  return `<div class="nsugg">${sg.map(x => {
+    if (x.done) { const e = S.entries.find(z => z.id === x.done); const pm = e && posMap().get(e.pos);
+      return `<div class="ns done">✓ ${e ? `${fmt(e.qty)} ${esc(pm?.unit || '')} ${esc(pm?.text || e.pos)} eingetragen` : 'eingetragen (Eintrag gelöscht)'}</div>`; }
+    const pm = posMap().get(x.pos); const t = posTitle(S.p, x.pos);
+    return `<div class="ns" data-note="${n.id}" data-key="${x.key}">
+      <div class="nsl1">→ <b>${fmt(x.qty)} ${esc(pm.unit)}</b> ${esc(pm.text)}</div>
+      <div class="nsl2"><span class="nst">${esc(x.pos)}${t.titel || t.bereich ? ' · ' + esc(t.titel || t.bereich) : ''}${x.raum ? ' · ' + esc(x.raum) : ''}</span>
+        <button class="nsb" data-act="take">Eintragen</button><button class="nsx" data-act="other" title="Andere Position suchen">andere</button><button class="nsx" data-act="no" title="Kein Aufmaß – ausblenden">✕</button></div></div>`; }).join('')}</div>`;
+}
+function wireSugg(root, after) {
+  root.querySelectorAll('.ns[data-note]').forEach(el => {
+    const n = () => S.notes.find(z => z.id === el.dataset.note), k = el.dataset.key;
+    el.querySelector('[data-act=take]').onclick = ev => { ev.stopPropagation(); const nn = n(); const x = noteSuggestions(nn).find(z => z.key === k); if (!x) return;
+      openEntryForm({ pos: x.pos, qty: x.qty, raum: x.raum || undefined, date: nn.date || todayISO(), noteText: 'Notiz: ' + x.line,
+        onSaved: async rec => { const m = n(); m.handled = { ...(m.handled || {}), [k]: rec.id }; await saveNote(m); if (after) after(); } }); };
+    el.querySelector('[data-act=other]').onclick = ev => { ev.stopPropagation(); const nn = n(); const x = noteSuggestions(nn).find(z => z.key === k); if (!x) return;
+      S.noteLink = { noteId: nn.id, key: k, date: nn.date, line: x.line, raum: x.raum, qty: x.qty };
+      S.q = x.line; closeSheet(); S.tab = 'erfassen'; render(); toast('Passende Position antippen – die Notiz-Zeile wird danach abgehakt.'); };
+    el.querySelector('[data-act=no]').onclick = async ev => { ev.stopPropagation(); const m = n(); m.dismissed = [...(m.dismissed || []), k]; await saveNote(m); if (after) after(); else render(); };
+  });
+}
+function renderNotizen() {
+  const m = $('#main'); const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
+  m.innerHTML = `<div class="card" style="padding:12px">
+      <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
+      <div class="row" style="margin-top:8px"><input class="i" id="nDate" type="date" value="${todayISO()}" style="width:52%"><button class="btn primary grow" id="nAdd">Speichern</button></div>
+      <div id="nLive"></div></div>
+    ${list.length ? '' : '<div class="empty">Noch keine Notizen. Schreib einfach los – erkennt die App Material und Menge, schlägt sie dir den Eintrag vor.</div>'}
+    ${list.map(n => `<div class="card note" data-id="${n.id}" style="padding:12px 14px">
+      <div class="row"><b class="grow small muted">${fmtDate(n.date || todayISO())}</b><span class="small muted">${new Date(n.updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span></div>
+      <div class="ntext">${esc(n.text)}</div>${suggHTML(n)}</div>`).join('')}`;
+  const ta = $('#nNew'); let tm;
+  const live = () => { const tmp = { id: '_', text: ta.value }; const h = noteSuggestions(tmp).filter(x => !x.done);
+    $('#nLive').innerHTML = h.length ? `<div class="small muted" style="margin-top:8px">${h.length} ${h.length === 1 ? 'Zeile sieht' : 'Zeilen sehen'} nach Aufmaß aus – nach dem Speichern kannst du ${h.length === 1 ? 'sie' : 'sie'} mit einem Tipp eintragen.</div>` : ''; };
+  ta.oninput = () => { clearTimeout(tm); tm = setTimeout(live, 300); };
+  $('#nAdd').onclick = async () => { const t = ta.value.trim(); if (!t) return;
+    await saveNote({ id: uid(), projectId: S.p.id, text: t, date: $('#nDate').value || todayISO(), created: Date.now() }); renderNotizen(); toast('Notiz gespeichert'); };
+  m.querySelectorAll('.note').forEach(el => el.querySelector('.ntext').onclick = () => openNote(el.dataset.id));
+  wireSugg(m, renderNotizen);
+}
+function openNote(id) {
+  const n = S.notes.find(z => z.id === id); if (!n) return;
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Notiz</div><button class="x" id="nox">×</button></div>
+    <textarea class="i" id="not" rows="9" style="margin-top:10px">${esc(n.text)}</textarea>
+    <div class="row" style="margin-top:8px"><input class="i" id="nod" type="date" value="${esc(n.date || todayISO())}" style="width:52%"><button class="btn primary grow" id="nos">Speichern</button></div>
+    <div id="nosg"></div>
+    <button class="btn danger block" id="nodel" style="margin-top:12px">Notiz löschen</button>`);
+  const paint = () => { const box = $('#nosg'); if (!box) return; const cur = S.notes.find(z => z.id === id); box.innerHTML = cur ? suggHTML(cur) : ''; wireSugg(box, () => { openNote(id); }); };
+  paint();
+  $('#nox').onclick = () => { closeSheet(); render(); };
+  $('#nos').onclick = async () => { n.text = $('#not').value.trim(); n.date = $('#nod').value || n.date; if (!n.text) return; await saveNote(n); paint(); toast('Gespeichert'); };
+  $('#nodel').onclick = async () => { if (!confirm('Notiz löschen? (Bleibt im Tagesstand der Sicherung erhalten.)')) return;
+    await DB.del('notes', id); S.notes = S.notes.filter(z => z.id !== id); changed(); closeSheet(); render(); };
+}
+
 /* ----- Text-Import (Bautagesbericht / iPhone Live Text) ----- */
+const STOP = new Set(('gesetzt gezogen verlegt montiert installiert angeschlossen eingebaut eingesetzt verbaut erledigt fertig gemacht '
+  + 'heute gestern morgen noch schon ca circa etwa insgesamt zusammen jeweils je neu alt dazu plus '
+  + 'im in am an auf bei der die das den dem des ein eine einen und oder mit von vom zum zur fuer für bis ab nach').split(' '));
 function parseImportLine(line, rooms, defRaum) {
   let rest = ' ' + line.trim() + ' ', qty = null;
-  const mq = /(\d+(?:[.,]\d+)?)\s*(m|mtr|meter|lfm|st|stk|stück|stck|psch|pauschal|h|std|stunden)?\.?\s*$/i.exec(rest.trim())
-          || /(?:^|\s)(\d+(?:[.,]\d+)?)\s*(m|mtr|meter|lfm|st|stk|stück|stck|psch|h|std)\b\.?/i.exec(rest);
+  const U = '(stück|stueck|stck|stk|st|meter|mtr|lfm|m|pauschal|psch|stunden|std|h)';
+  const notDim = (str, m) => m && !/[x×*\/\d.,-]$/i.test(str.slice(0, m.index).replace(/\s+$/, '')) ? m : null;   // „3x1,5“ ist keine Menge
+  const rt = rest.trim();
+  const mq = notDim(rt, new RegExp('(\\d+(?:[.,]\\d+)?)\\s*' + U + '?\\.?\\s*$', 'i').exec(rt))
+          || notDim(rest, new RegExp('(?:^|\\s)(\\d+(?:[.,]\\d+)?)\\s*' + U + '\\.?(?=\\s|$|[,;])', 'i').exec(rest))
+          || /^\s*(\d+(?:[.,]\d+)?)\s+(?=[a-zäöüß])/i.exec(rest);   // Zahl am Zeilenanfang: „4 Steckdosen …“
   if (mq) { qty = evalExpr(mq[1]); rest = rest.replace(mq[0], ' '); }
-  const r = searchPositions(S.p, rest, 6);
-  const raum = r.raum || findRoom(S.p, rest)?.raum || defRaum;
+  const rm0 = findRoom(S.p, rest);
+  let q = norm(rest); if (rm0) q = (' ' + q + ' ').replace(' ' + rm0.norm + ' ', ' ');
+  q = q.split(' ').filter(w => w && !STOP.has(w)).join(' ');
+  let r = searchPositions(S.p, q, 12), raumGuess = '';
+  if ((!r.results.length || r.partial)) {     // Raum-Wörter (z. B. „Flur EG“) aus der Suche nehmen und als Raum deuten
+    if (!S.p._roomVocab) { S.p._roomVocab = new Set(); for (const [, n] of (S.p._roomNorm || S.p.rooms.map(x => [x, norm(x)]))) for (const w of n.split(' ')) if (w.length >= 2 && !/^\d+$/.test(w)) S.p._roomVocab.add(w); }
+    const toks = q.split(' ').filter(Boolean), keepT = toks.filter(w => !S.p._roomVocab.has(w) || /\d/.test(w) && w.length <= 3), drop = toks.filter(w => !keepT.includes(w));
+    if (drop.length && keepT.length) {
+      const r2 = searchPositions(S.p, keepT.join(' '), 12);
+      if (r2.results.length && !r2.partial) {
+        r = r2; const cand = (S.p._roomNorm || S.p.rooms.map(x => [x, norm(x)])).filter(([, n]) => drop.every(w => (' ' + n + ' ').includes(' ' + w + ' '))).sort((a, b) => a[1].length - b[1].length);
+        raumGuess = cand[0]?.[0] || '';
+      }
+    }
+  }
+  if (qty == null && r.qty != null) qty = r.qty;
+  const raum = rm0?.raum || r.raum || raumGuess || defRaum;
+  // Raum/UV aus der Notiz bevorzugt passende Titel (z. B. „UV 1.OG“ -> Titel „Unterverteilung 1.OG“)
+  if (raum && r.results.length > 1) {
+    const rt = norm(raum).split(' ').filter(w => w.length >= 2);
+    const fit = o => { const t = posTitle(S.p, o.x.pos); const h = ' ' + norm(t.titel + ' ' + t.bereich + ' ' + synonyms(t.titel)) + ' '; return rt.filter(w => h.includes(' ' + w + ' ')).length; };
+    const best = Math.max(...r.results.map(fit));
+    if (best > 0) r = { ...r, results: r.results.slice().sort((a, b) => fit(b) - fit(a)) };
+  }
   return { line, qty, raum, cands: r.results.map(o => o.x.pos), use: !!(r.results.length && qty && !r.partial) };
 }
 function openImport() {
@@ -2023,6 +2162,7 @@ async function restoreFromServer(pid) {
     const existing = await DB.byProject(pid); const have = new Set(existing.map(e => e.id));
     await DB.put('projects', stripIdx(p));
     let n = 0; for (const e of (current.entries || [])) if (!have.has(e.id)) { await DB.put('entries', { ...e, projectId: pid }); n++; }
+    const haveN = new Set((await DB.notesOf(pid)).map(x => x.id)); for (const nt of (current.notes || [])) if (!haveN.has(nt.id)) await DB.put('notes', { ...nt, projectId: pid });
     await DB.put('kv', pid, 'current'); await loadAll(); closeSheet(); S.tab = 'erfassen'; render();
     (Sync.st[pid] ||= {}).ok = Date.now(); Sync.st[pid].pending = false; await Sync.saveState();
     toast(`„${esc(p.name)}“ wiederhergestellt – ${n} Einträge geladen`);
@@ -2046,7 +2186,7 @@ function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i =
 function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
 async function saveBackup() {
   const { template, lvPdf, ...rest } = S.p;
-  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries };
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [] };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
   const file = new File([blob], name, { type: 'application/json' });
@@ -2065,6 +2205,7 @@ function restoreBackup() {
       if (exists) for (const e of await DB.byProject(p.id)) await DB.del('entries', e.id);
       await saveProject(p);
       for (const e of data.entries) await DB.put('entries', { ...e, projectId: p.id });
+      for (const n of (data.notes || [])) await DB.put('notes', { ...n, projectId: p.id });
       Sync.dirty(p.id);
       await DB.put('kv', p.id, 'current'); await loadAll(); render(); toast(`Backup geladen: ${data.entries.length} Einträge`);
     } catch (err) { alert('Backup konnte nicht geladen werden: ' + (err.message || err)); }
@@ -2073,7 +2214,7 @@ function restoreBackup() {
 }
 
 /* ---------------- Start ---------------- */
-document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; window.scrollTo(0, 0); render(); });
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab !== 'erfassen') S.noteLink = null; S.tab = b.dataset.tab; window.scrollTo(0, 0); render(); });
 $('#projBtn').onclick = () => { if (S.p) openProjects(); };
 $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $('#syncCard')?.scrollIntoView({ behavior: 'smooth' }), 50); };
 (async () => {
@@ -2091,7 +2232,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
   } catch (err) { $('#main').innerHTML = `<div class="card"><b class="neg">Start fehlgeschlagen</b><p>${esc(err.message || err)}</p></div>`; }
 })();
 // für Tests
-window.__aufmass = { S, Sync, Aufmass, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { S, Sync, Aufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
