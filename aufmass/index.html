@@ -74,6 +74,15 @@ input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
 .tlink{cursor:pointer}
 .lvbtn{display:inline-block;margin-left:4px;padding:0 7px;border-radius:6px;background:var(--panel2);color:var(--accent);font-weight:700;font-size:12px}
 .pdfpages canvas{width:100%;height:auto;display:block;margin:0 0 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.anrow{border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:8px}
+.anrow .i{font-size:15px;padding:9px}
+.angrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px}
+.angrid.z{grid-template-columns:repeat(4,1fr)}
+.angrid label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);text-align:center;gap:2px}
+.angrid label span{line-height:1.15;min-height:26px}
+.angrid.z label span{min-height:40px;font-size:10px}
+.angrid .i{text-align:center;padding:8px 2px;font-size:15px}
+.anmat{margin-top:6px}.anmat .i{font-size:15px;padding:9px}
 .ntext{white-space:pre-wrap;margin-top:6px;cursor:pointer;word-break:break-word}
 .nsugg{margin-top:10px;border-top:1px dashed var(--line);padding-top:6px}
 .ns{font-size:13px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--line)}
@@ -352,7 +361,7 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('aufmass-app', 4);
+      const r = indexedDB.open('aufmass-app', 5);
       r.onupgradeneeded = () => {
         const d = r.result; const has = n => d.objectStoreNames.contains(n);
         if (!has('projects')) d.createObjectStore('projects', { keyPath: 'id' });
@@ -361,6 +370,7 @@ const DB = {
         if (!has('snapshots')) { const sn = d.createObjectStore('snapshots', { keyPath: 'key' }); sn.createIndex('pid', 'pid'); }
         if (!has('aufmasse')) { const a = d.createObjectStore('aufmasse', { keyPath: 'key' }); a.createIndex('pid', 'pid'); }
         if (!has('notes')) { const nt = d.createObjectStore('notes', { keyPath: 'id' }); nt.createIndex('projectId', 'projectId'); }
+        if (!has('nachweise')) { const an = d.createObjectStore('nachweise', { keyPath: 'id' }); an.createIndex('projectId', 'projectId'); }
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -380,7 +390,8 @@ const DB = {
   byProject(pid) { return this.tx('entries', 'readonly', s => s.index('projectId').getAll(pid)); },
   snapsOf(pid) { return this.tx('snapshots', 'readonly', s => s.index('pid').getAll(pid)); },
   aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); },
-  notesOf(pid) { return this.tx('notes', 'readonly', s => s.index('projectId').getAll(pid)); }
+  notesOf(pid) { return this.tx('notes', 'readonly', s => s.index('projectId').getAll(pid)); },
+  nachweiseOf(pid) { return this.tx('nachweise', 'readonly', s => s.index('projectId').getAll(pid)); }
 };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -1006,7 +1017,7 @@ async function loadAll() {
   S.projects = await DB.all('projects');
   const cur = await DB.get('kv', 'current');
   S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
-  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); updateUse(); } else S.notes = [];
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); updateUse(); } else { S.notes = []; S.nachweise = []; }
 }
 const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, _roomVocab: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
 async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
@@ -1090,7 +1101,7 @@ const Sync = {
     Aufmass.upload().catch(() => {});
   },
   async push(p) {
-    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id);
+    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id); const nachweise = (await DB.nachweiseOf(p.id)).map(({ pdf, ...r }) => r);
     if (!p.templateHash) { p.templateHash = hashBuf(p.template); }
     if (p.lvPdf && !p.lvHash) p.lvHash = hashBuf(p.lvPdf);
     const { template, lvPdf, ...metaRaw } = stripIdx(p);
@@ -1098,7 +1109,7 @@ const Sync = {
     const metaHash = hashStr(metaJson);
     const post = async extra => {
       const r = await fetch(this.api('/api/sync'), { method: 'POST', headers: this.hdr({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
+        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, nachweise, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
       if (r.status === 401) throw new Error('Token falsch');
       if (!r.ok) throw new Error('Server-Fehler ' + r.status);
       return r.json();
@@ -1222,8 +1233,9 @@ function mailText(p, w, kind) {
   return { subject: fill(m.subject || 'Aufmaß {kw} ({zeitraum}) – {baustelle}') + (kind === 'zwischen' ? ' – Zwischenstand' : ''),
     body: fill(m.body || 'Hallo,\n\nanbei das Aufmaß {kw} ({zeitraum}) für {baustelle}.\n\nViele Grüße') };
 }
+const typeOf = name => /\.pdf$/i.test(name) ? 'application/pdf' : XLSM_TYPE;
 async function shareFile(buf, name, subject, body) {
-  const file = new File([buf], name, { type: XLSM_TYPE });
+  const file = new File([buf], name, { type: typeOf(name) });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: subject, text: body }); return true; }
     catch (e) { if (e.name === 'AbortError') return false; }
@@ -1231,7 +1243,7 @@ async function shareFile(buf, name, subject, body) {
   downloadFile(buf, name); return true;
 }
 function downloadFile(buf, name) {
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: XLSM_TYPE })); a.download = name;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: typeOf(name) })); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 async function mailDirect(buf, name, subject, body) {
@@ -1460,7 +1472,7 @@ function openEntryForm({ pos, qty, raum, entry, date, noteText, onSaved }) {
     const mpu = minPerUnit(x);
     $('#fmin').innerHTML = mpu ? `Bauzeit: ${fmt(mpu)} Min je ${esc(x.unit)}${v ? ` → <b>${fmtMin(mpu * v)}</b>` : ''}` : '<span class="muted">Bauzeit: keine Zeit hinterlegt</span>';
     const r = fr.value.trim();
-    const inRb = !r || rooms.includes(r);
+    const inRb = !r || rooms.includes(r) || /^Arbeitsnachweis\s+\d+/i.test(r);
     $('#frh').className = 'hint' + (!inRb ? ' warn' : '');
     $('#frh').textContent = !r && !fs.value.trim() ? 'Raum oder Stromkreis wird benötigt.' : (!inRb ? 'Raum steht nicht im Raumbuch – Excel zeigt dann einen Hinweis. Besser einen Raum aus der Liste wählen.' : '');
     // Vorschau: wohin kommt der Eintrag?
@@ -1609,8 +1621,12 @@ function wireSugg(root, after) {
   });
 }
 function renderNotizen() {
-  const m = $('#main'); const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
-  m.innerHTML = `<div class="card" style="padding:12px">
+  const m = $('#main'); S.noteView ||= 'notes';
+  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Arbeitsnachweise</button></div>`;
+  const wireSeg = () => m.querySelectorAll('[data-nv]').forEach(b => b.onclick = () => { S.noteView = b.dataset.nv; renderNotizen(); });
+  if (S.noteView === 'an') { m.innerHTML = seg; wireSeg(); renderNachweisListe(m); return; }
+  const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
+  m.innerHTML = seg + `<div class="card" style="padding:12px">
       <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
       <div class="row" style="margin-top:8px"><input class="i" id="nDate" type="date" value="${todayISO()}" style="width:52%"><button class="btn primary grow" id="nAdd">Speichern</button></div>
       <div id="nLive"></div></div>
@@ -1624,6 +1640,7 @@ function renderNotizen() {
   ta.oninput = () => { clearTimeout(tm); tm = setTimeout(live, 300); };
   $('#nAdd').onclick = async () => { const t = ta.value.trim(); if (!t) return;
     await saveNote({ id: uid(), projectId: S.p.id, text: t, date: $('#nDate').value || todayISO(), created: Date.now() }); renderNotizen(); toast('Notiz gespeichert'); };
+  wireSeg();
   m.querySelectorAll('.note').forEach(el => el.querySelector('.ntext').onclick = () => openNote(el.dataset.id));
   wireSugg(m, renderNotizen);
 }
@@ -1640,6 +1657,362 @@ function openNote(id) {
   $('#nos').onclick = async () => { n.text = $('#not').value.trim(); n.date = $('#nod').value || n.date; if (!n.text) return; await saveNote(n); paint(); toast('Gespeichert'); };
   $('#nodel').onclick = async () => { if (!confirm('Notiz löschen? (Bleibt im Tagesstand der Sicherung erhalten.)')) return;
     await DB.del('notes', id); S.notes = S.notes.filter(z => z.id !== id); changed(); closeSheet(); render(); };
+}
+
+
+/* =====================================================================
+   Arbeitsnachweise – wie das Papierformular (2 Seiten A4), wochenweise.
+   Vorausfüllen aus Einträgen/Notizen/Bauzeit, Stunden ins Aufmaß übernehmen
+   (Obermonteur/Monteur/Helfer, Raum „Arbeitsnachweis NN“), PDF + Versand.
+   ===================================================================== */
+const PDFLIB_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const ZUSCHL = [['z25', '18:00-24:00 & Samstag +25%'], ['z40', 'Nachtzul. 00:00-6:00 +40%'], ['z50', 'Sonntag +50%'], ['z100', 'Feiertag +100%']];
+const ROLES = [['', '– keine –'], ['ober', 'Obermonteur'], ['mont', 'Monteur'], ['helf', 'Helfer']];
+const FIRMA_DEFAULT = {
+  name: 'e-tech1.1 Elektrotechnik mit Zukunft GmbH', kurz: 'etech1.1', slogan: 'ELEKTROTECHNIK MIT ZUKUNFT',
+  adresse: 'Langenhausen 20, 27442 Gnarrenburg', kontakt: 'Tel 04763-9375971, Fax 04763-9375972, www.etech1punkt1.de, info@etech1punkt1.de',
+  anfahrt: 'An- und Abfahrtskosten werden gesondert ausgewiesen. Eine Abrechnung erfolgt zum Leistungsnachweis.',
+  fuss: 'Die Arbeitszeit und der Materialverbrauch werden hiermit bestätigt. Die Höhe der Stundenlöhne sind Ihnen bekannt. Beanstandungen haben sofort nach Empfang der Ware bzw. Lieferung zu erfolgen. Die oben aufgeführten Leistungen wurden ordnungsgemäß und mängelfrei entsprechend der vertraglichen Vereinbarungen durchgeführt. Für bauseits geliefertes Material übernimmt der Auftragnehmer keine Garantie. Ansonsten gelten unsere Lieferungs- und Zahlungsbedingungen.',
+  logo: null
+};
+async function getFirma() { return { ...FIRMA_DEFAULT, ...((await DB.get('kv', 'firma')) || {}) }; }
+const numDe = v => { const n = evalExpr(v); return n == null ? 0 : n; };
+const fmtH = n => n ? String(round(n, 2)).replace('.', ',') : '';
+const anWeek = n => weekOf(n.week || todayISO());
+const anDayDates = n => { const w = anWeek(n); const d0 = new Date(w.from + 'T12:00:00'); return DAYS.map((_, i) => { const d = new Date(d0); d.setDate(d0.getDate() + i); return isoOf(d.getTime()); }); };
+const rowHours = r => DAYS.reduce((a, _, i) => a + numDe(r.h?.[i]), 0);
+function rolePos(role) {
+  const re = { ober: /obermonteur/i, mont: /^\s*monteur/i, helf: /helfer/i }[role]; if (!re) return null;
+  return S.p.positions.find(x => re.test(x.text) && /^h$/i.test(x.unit)) || null;
+}
+
+/* ---------- Vorausfüllen („schreibt sich selbst“) ---------- */
+function anSourceEntries(n) {
+  const dates = new Set(anDayDates(n));
+  return S.entries.filter(e => dates.has(e.date) && e.anId !== n.id && !/^h$/i.test(posMap().get(e.pos)?.unit || ''));
+}
+function genBeschreibung(n) {
+  const dd = anDayDates(n); const lines = [];
+  dd.forEach((d, i) => {
+    const es = anSourceEntries(n).filter(e => e.date === d);
+    const nl = [];
+    for (const note of (S.notes || []).filter(x => (x.date || '') === d))
+      for (const raw of String(note.text).split('\n')) { const l = raw.trim(); if (!l) continue; const isA = noteSuggestions({ ...note, text: l, handled: {}, dismissed: [] }).length; if (!isA) nl.push(l); }
+    if (!es.length && !nl.length) return;
+    const by = new Map();
+    for (const e of es) { const x = posMap().get(e.pos); const k = e.pos + '|' + (e.raum || ''); const o = by.get(k) || { x, raum: e.raum, q: 0 }; o.q += e.qty; by.set(k, o); }
+    const parts = [...by.values()].map(o => { const u = (o.x.unit || '').toLowerCase(); const verb = u === 'm' ? 'verlegt' : (u === 'psch' ? 'ausgeführt' : 'montiert');
+      return `${fmt(o.q)} ${o.x.unit} ${o.x.text}${o.raum ? ' (' + o.raum + ')' : ''} ${verb}`; });
+    lines.push(`${DAYS[i]} ${dm(d)}: ` + [...parts, ...nl].join('; ') + '.');
+  });
+  return lines.join('\n');
+}
+function genMaterial(n) {
+  const by = new Map();
+  for (const e of anSourceEntries(n)) { const x = posMap().get(e.pos); const o = by.get(e.pos) || { x, q: 0 }; o.q += e.qty; by.set(e.pos, o); }
+  return [...by.values()].sort((a, b) => a.x.row - b.x.row).map(o => ({ anzahl: `${fmt(o.q)} ${o.x.unit}`, text: o.x.text }));
+}
+function genStunden(n) {   // Vorschlag aus der Bauzeit der Einträge, auf Viertelstunden gerundet
+  const dd = anDayDates(n); const src = anSourceEntries(n);
+  return dd.map(d => { const m = sumMinutes(src.filter(e => e.date === d)); return m ? String(Math.round(m / 15) / 4).replace('.', ',') : ''; });
+}
+async function newNachweis() {
+  const prev = (S.nachweise || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0))[0];
+  const maxNr = Math.max(0, ...(S.nachweise || []).map(x => +x.nr || 0));
+  const n = { id: uid(), projectId: S.p.id, nr: String(maxNr ? maxNr + 1 : ''), week: todayISO(), created: Date.now(), updated: Date.now(),
+    kunde: prev?.kunde || '', bauvorhaben: prev?.bauvorhaben || S.p.name, adresse: prev?.adresse || '',
+    beschreibung: '', rows: [{ name: S.p.sign?.name || '', role: 'mont', h: Array(7).fill(''), z: {} }],
+    anfahrtStd: prev?.anfahrtStd || '', anfahrtAnteilig: !!prev?.anfahrtAnteilig, km: '', kmAnteilig: !!prev?.kmAnteilig,
+    material: [], beendet: '', sig: null, sent: [] };
+  n.beschreibung = genBeschreibung(n); n.material = genMaterial(n);
+  const st = genStunden(n); if (st.some(Boolean)) n.rows[0].h = st;
+  return n;
+}
+async function saveNachweis(n) {
+  n.updated = Date.now(); await DB.put('nachweise', n);
+  S.nachweise = (S.nachweise || []).filter(x => x.id !== n.id).concat(n); changed();
+}
+/** Stunden als Aufmaß-Einträge (Stundenlohn-Positionen), Raum „Arbeitsnachweis NN“ – ersetzt frühere Übernahme */
+async function anToAufmass(n) {
+  if (!n.nr) throw new Error('Bitte zuerst eine Nachweis-Nr. eintragen.');
+  const dd = anDayDates(n); const raum = 'Arbeitsnachweis ' + n.nr; const neu = [];
+  for (const r of n.rows) {
+    const pos = rolePos(r.role); if (!pos) continue;
+    dd.forEach((d, i) => { const h = numDe(r.h?.[i]); if (h > 0) neu.push({ id: uid(), projectId: S.p.id, pos: pos.pos, qty: h, expr: String(h).replace('.', ','), raum, sk: '', date: d,
+      note: `${raum}${r.name ? ' – ' + r.name : ''}`, status: 'offen', anId: n.id, created: Date.now() + neu.length, updated: Date.now() }); });
+  }
+  const old = S.entries.filter(e => e.anId === n.id);
+  for (const e of old) await DB.del('entries', e.id);
+  for (const e of neu) await DB.put('entries', e);
+  S.entries = S.entries.filter(e => e.anId !== n.id).concat(neu); changed();
+  n.aufmassAt = Date.now(); n.aufmassCount = neu.length; await saveNachweis(n);
+  return { neu: neu.length, alt: old.length, hours: neu.reduce((a, e) => a + e.qty, 0) };
+}
+
+/* ---------- Liste ---------- */
+function renderNachweisListe(m) {
+  const list = (S.nachweise || []).slice().sort((a, b) => (b.week || '').localeCompare(a.week || '') || (+b.nr || 0) - (+a.nr || 0));
+  m.insertAdjacentHTML('beforeend', `<button class="btn primary block" id="anNew" style="margin-bottom:12px">+ Neuer Arbeitsnachweis</button>
+    ${list.length ? list.map(n => { const w = anWeek(n); const h = n.rows.reduce((a, r) => a + rowHours(r), 0);
+      return `<div class="card entry" data-an="${n.id}" style="padding:12px 14px"><div class="grow"><b>Nr. ${esc(n.nr || '–')} · KW ${w.week}</b> <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span>
+        <div class="w">${esc(n.kunde || n.bauvorhaben || '')}${h ? ' · ' + fmtH(h) + ' Std' : ''}${n.sig ? ' · unterschrieben' : ''}${n.aufmassAt ? ' · im Aufmaß' : ''}${n.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
+      : '<div class="empty">Noch keine Arbeitsnachweise. „Neuer Arbeitsnachweis“ füllt Beschreibung, Material und Stunden aus deinen Einträgen und Notizen der Woche vor.</div>'}
+    <button class="btn block" id="anFirma" style="margin-top:6px">Firmenkopf &amp; Texte</button>`);
+  $('#anNew').onclick = async () => openNachweis(await newNachweis(), true);
+  m.querySelectorAll('[data-an]').forEach(el => el.onclick = () => openNachweis(S.nachweise.find(x => x.id === el.dataset.an)));
+  $('#anFirma').onclick = openFirma;
+}
+
+/* ---------- Editor ---------- */
+function openNachweis(n, isNew) {
+  n = JSON.parse(JSON.stringify(n)); n.rows ||= []; n.material ||= [];
+  const dd = anDayDates(n);
+  const rowHTML = (r, ri) => `<div class="anrow" data-ri="${ri}">
+      <div class="row"><input class="i an-name grow" value="${esc(r.name || '')}" placeholder="Name"><select class="i an-role" style="width:42%">${ROLES.map(([k, l]) => `<option value="${k}" ${r.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="nsx an-delrow" title="Zeile löschen">✕</button></div>
+      <div class="angrid">${DAYS.map((d, i) => `<label><span>${d}<br><small>${dm(dd[i])}</small></span><input class="i an-h" data-i="${i}" inputmode="decimal" value="${esc(r.h?.[i] || '')}"></label>`).join('')}</div>
+      <div class="angrid z">${ZUSCHL.map(([k, l]) => `<label><span>${esc(l.replace(/ \+/, '<br>+').replace('& Samstag', '&amp; Sa'))}</span><input class="i an-z" data-k="${k}" inputmode="decimal" value="${esc(r.z?.[k] || '')}"></label>`).join('')}</div></div>`;
+  const matHTML = (x, i) => `<div class="row anmat" data-mi="${i}"><input class="i an-ma" value="${esc(x.anzahl || '')}" placeholder="Anzahl" style="width:28%"><input class="i an-mt grow" value="${esc(x.text || '')}" placeholder="Material"><button class="nsx an-delmat">✕</button></div>`;
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">Arbeitsnachweis</div><div class="muted small">wird wie euer Papierformular als PDF erzeugt</div></div><button class="x" id="anx">×</button></div>
+    <div class="row"><div style="width:34%"><label class="f">Nr.</label><input class="i" id="anNr" inputmode="numeric" value="${esc(n.nr || '')}"></div>
+      <div class="grow"><label class="f">Woche (ein Tag reicht)</label><input class="i" id="anWk" type="date" value="${esc(n.week || todayISO())}"></div></div>
+    <div class="small muted" id="anWkL" style="margin-top:4px">KW ${anWeek(n).week} · ${dm(anWeek(n).from)}–${dm(anWeek(n).to)}${anWeek(n).to.slice(0, 4)}</div>
+    <label class="f">Kunde</label><input class="i" id="anKu" value="${esc(n.kunde || '')}">
+    <label class="f">Bauvorhaben</label><input class="i" id="anBv" value="${esc(n.bauvorhaben || '')}">
+    <label class="f">Objektadresse</label><input class="i" id="anAd" value="${esc(n.adresse || '')}">
+    <div class="row" style="margin-top:12px;align-items:flex-end"><label class="f grow" style="margin:0">Auftragsbeschreibung</label><button class="btn" id="anGenB" style="min-height:34px;padding:5px 10px;font-size:13px">✨ Vorschlag</button></div>
+    <textarea class="i" id="anBe" rows="7" style="margin-top:6px" placeholder="Was wurde gemacht?">${esc(n.beschreibung || '')}</textarea>
+    <div class="row" style="margin-top:14px;align-items:flex-end"><h3 class="grow" style="margin:0">Stundennachweis</h3><button class="btn" id="anGenH" style="min-height:34px;padding:5px 10px;font-size:13px">✨ aus Bauzeit</button></div>
+    <div id="anRows">${n.rows.map(rowHTML).join('')}</div>
+    <button class="btn block" id="anAddRow" style="margin-top:6px" ${n.rows.length >= 6 ? 'disabled' : ''}>+ Mitarbeiter</button>
+    <div class="hint" id="anSum"></div>
+    <h3>An- und Abfahrt</h3>
+    <div class="row"><div class="grow"><label class="f">Zeit je (Std)</label><input class="i" id="anFs" inputmode="decimal" value="${esc(n.anfahrtStd || '')}"></div><label class="row" style="gap:6px;margin-top:22px;width:46%"><input type="checkbox" id="anFsA" ${n.anfahrtAnteilig ? 'checked' : ''} style="width:20px;height:20px">anteilig</label></div>
+    <div class="row"><div class="grow"><label class="f">Fahrtkilometer gesamt</label><input class="i" id="anKm" inputmode="decimal" value="${esc(n.km || '')}"></div><label class="row" style="gap:6px;margin-top:22px;width:46%"><input type="checkbox" id="anKmA" ${n.kmAnteilig ? 'checked' : ''} style="width:20px;height:20px">anteilig</label></div>
+    <div class="row" style="margin-top:14px;align-items:flex-end"><h3 class="grow" style="margin:0">Materialnachweis</h3><button class="btn" id="anGenM" style="min-height:34px;padding:5px 10px;font-size:13px">✨ aus Einträgen</button></div>
+    <div id="anMat">${n.material.map(matHTML).join('')}</div>
+    <button class="btn block" id="anAddMat" style="margin-top:6px">+ Material</button>
+    <label class="f">Arbeiten beendet</label>
+    <div class="seg" style="margin:0"><button data-b="ja" class="${n.beendet === 'ja' ? 'on' : ''}">Ja</button><button data-b="nein" class="${n.beendet === 'nein' ? 'on' : ''}">Nein</button><button data-b="" class="${!n.beendet ? 'on' : ''}">offen lassen</button></div>
+    <h3>Unterschrift Kunde</h3>
+    <div id="anSig">${n.sig ? `<img src="${n.sig.img}" style="max-height:60px;max-width:220px;background:#fff;border-radius:6px;padding:3px 8px"><div class="small muted">${fmtDateShort(n.sig.date)}${n.sig.name ? ' · ' + esc(n.sig.name) : ''}</div>` : '<div class="small muted">noch nicht unterschrieben</div>'}</div>
+    <div class="row" style="margin-top:8px"><button class="btn grow" id="anSign">${n.sig ? 'Neu unterschreiben' : 'Kunde unterschreiben lassen'}</button>${n.sig ? '<button class="btn danger" id="anUnsign">Entfernen</button>' : ''}</div>
+    <div class="target" id="anAufm" style="margin-top:16px"></div>
+    <div class="row" style="margin-top:14px"><button class="btn primary grow" id="anSave">Speichern</button></div>
+    <button class="btn block" id="anPdf" style="margin-top:8px">PDF erzeugen</button>
+    <div id="anOut"></div>
+    ${!isNew ? '<button class="btn danger block" id="anDel" style="margin-top:14px">Arbeitsnachweis löschen</button>' : ''}`);
+
+  const read = () => {
+    n.nr = $('#anNr').value.trim(); n.week = $('#anWk').value || n.week; n.kunde = $('#anKu').value.trim(); n.bauvorhaben = $('#anBv').value.trim(); n.adresse = $('#anAd').value.trim();
+    n.beschreibung = $('#anBe').value; n.anfahrtStd = $('#anFs').value.trim(); n.anfahrtAnteilig = $('#anFsA').checked; n.km = $('#anKm').value.trim(); n.kmAnteilig = $('#anKmA').checked;
+    n.rows = Array.from(document.querySelectorAll('#anRows .anrow')).map(el => ({ name: el.querySelector('.an-name').value.trim(), role: el.querySelector('.an-role').value,
+      h: Array.from(el.querySelectorAll('.an-h')).map(i => i.value.trim()), z: Object.fromEntries(Array.from(el.querySelectorAll('.an-z')).map(i => [i.dataset.k, i.value.trim()])) }));
+    n.material = Array.from(document.querySelectorAll('#anMat .anmat')).map(el => ({ anzahl: el.querySelector('.an-ma').value.trim(), text: el.querySelector('.an-mt').value.trim() })).filter(x => x.anzahl || x.text);
+    return n;
+  };
+  const sums = () => { read(); const tot = n.rows.reduce((a, r) => a + rowHours(r), 0);
+    $('#anSum').textContent = tot ? `Summe: ${fmtH(tot)} Std` + (n.rows.length > 1 ? ' (' + n.rows.map(r => (r.name || '?') + ' ' + fmtH(rowHours(r))).join(', ') + ')' : '') : '';
+    const per = {}; for (const r of n.rows) { const p = rolePos(r.role); if (p && rowHours(r)) per[p.pos] = (per[p.pos] || { p, h: 0 }), per[p.pos].h += rowHours(r); }
+    const pl = Object.values(per);
+    $('#anAufm').innerHTML = `<b>Ins Aufmaß übernehmen</b><div class="small muted" style="margin:4px 0 8px">${pl.length ? pl.map(o => `${fmtH(o.h)} h → ${esc(o.p.pos)} ${esc(o.p.text.slice(0, 40))}`).join('<br>') + `<br>Raum: „Arbeitsnachweis ${esc(n.nr || '?')}“, je Tag ein Eintrag` : 'Bei den Mitarbeitern eine Rolle (Obermonteur/Monteur/Helfer) wählen, dann landen die Stunden auf den Stundenlohn-Positionen.'}
+      ${n.aufmassAt ? `<br><span style="color:var(--ok)">Übernommen am ${new Date(n.aufmassAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (${n.aufmassCount} Einträge) – nochmal übernehmen ersetzt sie.</span>` : ''}</div>
+      <button class="btn block" id="anToA" ${pl.length ? '' : 'disabled'}>${n.aufmassAt ? 'Stunden im Aufmaß aktualisieren' : 'Stunden ins Aufmaß übernehmen'}</button>`;
+    if ($('#anToA')) $('#anToA').onclick = async () => { read(); try { const r = await anToAufmass(n); toast(`${fmtH(r.hours)} Std ins Aufmaß übernommen (${r.neu} Einträge${r.alt ? ', ' + r.alt + ' alte ersetzt' : ''})`); sums(); } catch (e) { toast(esc(e.message)); } };
+  };
+  const wire = () => {
+    document.querySelectorAll('#anRows input, #anRows select').forEach(el => el.oninput = el.onchange = sums);
+    document.querySelectorAll('.an-delrow').forEach(b => b.onclick = () => { b.closest('.anrow').remove(); sums(); $('#anAddRow').disabled = document.querySelectorAll('#anRows .anrow').length >= 6; });
+    document.querySelectorAll('.an-delmat').forEach(b => b.onclick = () => b.closest('.anmat').remove());
+  };
+  wire(); sums();
+  $('#anx').onclick = () => { closeSheet(); render(); };
+  $('#anWk').onchange = () => { read(); const w = anWeek(n); $('#anWkL').textContent = `KW ${w.week} · ${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`;
+    const d2 = anDayDates(n); document.querySelectorAll('.angrid:not(.z) small').forEach((el, i) => el.textContent = dm(d2[i % 7])); sums(); };
+  $('#anGenB').onclick = () => { read(); const t = genBeschreibung(n); if (!t) { toast('In dieser Woche gibt es noch keine Einträge oder Notizen.'); return; }
+    if (n.beschreibung.trim() && !confirm('Vorhandene Beschreibung durch den Vorschlag ersetzen?')) return; $('#anBe').value = t; };
+  $('#anGenH').onclick = () => { read(); const st = genStunden(n); if (!st.some(Boolean)) { toast('Keine Bauzeit in dieser Woche – Stunden bitte selbst eintragen.'); return; }
+    const first = document.querySelector('#anRows .anrow'); if (!first) return; first.querySelectorAll('.an-h').forEach((el, i) => el.value = st[i]); sums(); toast('Erste Zeile aus der Bauzeit vorgeschlagen – bitte prüfen.'); };
+  $('#anGenM').onclick = () => { read(); const mm = genMaterial(n); if (!mm.length) { toast('Keine Einträge in dieser Woche.'); return; }
+    if (n.material.length && !confirm('Materialliste durch die Einträge der Woche ersetzen?')) return; $('#anMat').innerHTML = mm.map(matHTML).join(''); wire(); };
+  $('#anAddRow').onclick = () => { $('#anRows').insertAdjacentHTML('beforeend', rowHTML({ name: '', role: 'mont', h: Array(7).fill(''), z: {} }, document.querySelectorAll('#anRows .anrow').length)); wire(); $('#anAddRow').disabled = document.querySelectorAll('#anRows .anrow').length >= 6; };
+  $('#anAddMat').onclick = () => { $('#anMat').insertAdjacentHTML('beforeend', matHTML({}, 0)); wire(); };
+  document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { n.beendet = b.dataset.b; document.querySelectorAll('[data-b]').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#anSign').onclick = () => { read(); openSignPad('Unterschrift Kunde', `Arbeitsnachweis Nr. ${n.nr || ''}`, async img => {
+    const nm = prompt('Name des Kunden (optional):', n.sig?.name || '') || ''; n.sig = { img, date: todayISO(), name: nm.trim() }; await saveNachweis(n); openNachweis(n); toast('Unterschrift übernommen'); }); };
+  if ($('#anUnsign')) $('#anUnsign').onclick = async () => { read(); n.sig = null; await saveNachweis(n); openNachweis(n); };
+  $('#anSave').onclick = async () => { read(); await saveNachweis(n); toast('Arbeitsnachweis gespeichert'); };
+  if ($('#anDel')) $('#anDel').onclick = async () => {
+    const linked = S.entries.filter(e => e.anId === n.id);
+    if (!confirm(`Arbeitsnachweis Nr. ${n.nr} löschen?${linked.length ? `\n${linked.length} übernommene Aufmaß-Einträge werden ebenfalls gelöscht.` : ''}`)) return;
+    for (const e of linked) await DB.del('entries', e.id); S.entries = S.entries.filter(e => e.anId !== n.id);
+    await DB.del('nachweise', n.id); S.nachweise = S.nachweise.filter(x => x.id !== n.id); changed(); closeSheet(); render(); toast('Gelöscht');
+  };
+  $('#anPdf').onclick = async () => {
+    read(); await saveNachweis(n); $('#anPdf').disabled = true; $('#anPdf').textContent = 'Erzeuge PDF …';
+    try {
+      const buf = await buildNachweisPdf(n, await getFirma()); const w = anWeek(n);
+      const name = `Arbeitsnachweis_${n.nr || 'ohne-Nr'}_${safeName(S.p.name)}_KW${String(w.week).padStart(2, '0')}_${w.year}.pdf`;
+      n.pdfName = name; n.pdf = buf; await saveNachweis(n); uploadNachweis(n).catch(() => {});
+      $('#anOut').innerHTML = `<p class="hint ok">Fertig: ${esc(name)} · ${Math.round(buf.byteLength / 1024)} KB</p>` + sendButtons('an');
+      $('#anOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSendAn(b.dataset.act, n));
+    } catch (e) { console.error(e); $('#anOut').innerHTML = `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`; }
+    $('#anPdf').disabled = false; $('#anPdf').textContent = 'PDF erzeugen';
+  };
+}
+async function onSendAn(act, n) {
+  const w = anWeek(n); const subject = `Arbeitsnachweis Nr. ${n.nr} – KW ${w.week}/${w.year} – ${S.p.name}`;
+  const body = `Hallo,\n\nanbei der Arbeitsnachweis Nr. ${n.nr} (KW ${w.week}, ${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}) für ${S.p.name}.\n\nViele Grüße`;
+  const mark = async via => { n.sent = [...(n.sent || []), { at: Date.now(), via }]; await saveNachweis(n); };
+  if (act === 'dl') return downloadFile(n.pdf, n.pdfName);
+  if (act === 'share' || !Sync.mailOk) { if (act === 'mail') toast('Direktversand ist auf dem Pi nicht eingerichtet – Teilen-Menü, dort „Mail“ wählen.', 4000); if (await shareFile(n.pdf, n.pdfName, subject, body)) await mark('Teilen'); return; }
+  if (!confirm(`„${n.pdfName}“ jetzt an ${S.p.mail?.to || '?'} senden?`)) return;
+  try { await mailDirect(n.pdf, n.pdfName, subject, body); await mark('E-Mail an ' + S.p.mail.to); toast('E-Mail verschickt ✓'); } catch (e) { toast('Nicht verschickt: ' + esc(e.message || e), 5000); }
+}
+async function uploadNachweis(n) {
+  if (!Sync.configured() || !n.pdf) return;
+  await fetch(Sync.api(`/api/aufmass/${S.p.id}/${encodeURIComponent(n.pdfName)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': 'application/pdf' }), body: n.pdf });
+}
+
+/* ---------- Firmenkopf ---------- */
+async function openFirma() {
+  const f = await getFirma();
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Firmenkopf &amp; Texte</div><button class="x" id="fix">×</button></div>
+    <p class="small muted">Erscheint auf jedem Arbeitsnachweis. Gilt für alle Baustellen.</p>
+    <label class="f">Logo (Bild, oben rechts)</label>
+    <div class="row">${f.logo ? `<img src="${f.logo}" style="max-height:44px;max-width:160px;background:#fff;border-radius:6px;padding:3px">` : '<span class="small muted grow">kein Logo – dann steht der Kurzname dort</span>'}
+      <button class="btn" id="fiLogo">Bild wählen</button>${f.logo ? '<button class="btn danger" id="fiLogoDel">✕</button>' : ''}</div>
+    <input type="file" id="fiLogoF" accept="image/*" style="display:none">
+    <label class="f">Kurzname (ohne Logo)</label><input class="i" id="fiK" value="${esc(f.kurz)}">
+    <label class="f">Zusatz unter dem Kurznamen</label><input class="i" id="fiS" value="${esc(f.slogan)}">
+    <label class="f">Firmenname (Fußzeile)</label><input class="i" id="fiN" value="${esc(f.name)}">
+    <label class="f">Adresse</label><input class="i" id="fiA" value="${esc(f.adresse)}">
+    <label class="f">Kontakt</label><input class="i" id="fiC" value="${esc(f.kontakt)}">
+    <label class="f">Text An- und Abfahrtskosten</label><textarea class="i" id="fiF" rows="2">${esc(f.anfahrt)}</textarea>
+    <label class="f">Bestätigungstext über der Fußzeile</label><textarea class="i" id="fiT" rows="5">${esc(f.fuss)}</textarea>
+    <button class="btn primary block" id="fiSave" style="margin-top:12px">Speichern</button>`);
+  $('#fix').onclick = closeSheet;
+  const save = async extra => { const v = { kurz: $('#fiK').value, slogan: $('#fiS').value, name: $('#fiN').value, adresse: $('#fiA').value, kontakt: $('#fiC').value, anfahrt: $('#fiF').value, fuss: $('#fiT').value, logo: f.logo, ...extra };
+    await DB.put('kv', v, 'firma'); };
+  $('#fiSave').onclick = async () => { await save(); closeSheet(); toast('Firmenkopf gespeichert'); };
+  $('#fiLogo').onclick = () => $('#fiLogoF').click();
+  $('#fiLogoF').onchange = async () => { const file = $('#fiLogoF').files[0]; if (!file) return;
+    const img = await loadPhoto(file); const sc = Math.min(1, 600 / img.width); const c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); await save({ logo: c.toDataURL('image/png') }); openFirma(); };
+  if ($('#fiLogoDel')) $('#fiLogoDel').onclick = async () => { await save({ logo: null }); openFirma(); };
+}
+
+/* ---------- PDF (pdf-lib) ---------- */
+let PDFLib = null;
+function loadPdfLib() {
+  if (PDFLib || window.PDFLib) return Promise.resolve(PDFLib = window.PDFLib);
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = PDFLIB_URL; s.onload = () => res(PDFLib = window.PDFLib); s.onerror = () => rej(new Error('PDF-Bibliothek konnte nicht geladen werden (Internet?)')); document.head.appendChild(s); });
+}
+const WINANSI_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+const pdfSafe = s => String(s ?? '').replace(/→/g, '->').replace(/[✓✔]/g, 'v').replace(/[   ]/g, ' ')
+  .split('').map(ch => (ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) <= 255) || WINANSI_EXTRA.includes(ch) ? ch : (ch === '\n' ? '\n' : '?')).join('');
+async function buildNachweisPdf(n, firma) {
+  const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
+  const doc = await PDFDocument.create();
+  doc.setTitle(`Arbeitsnachweis ${n.nr || ''}`); doc.setCreator('Aufmaß-App');
+  const F = await doc.embedFont(StandardFonts.Helvetica), FB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const MM = 2.8346, H = 841.89;
+  const ink = rgb(0.12, 0.12, 0.14), grey = rgb(0.35, 0.35, 0.38), blue = rgb(0.05, 0.12, 0.35);
+  const logo = firma.logo ? await doc.embedPng(firma.logo) : null;
+  const sig = n.sig ? await doc.embedPng(n.sig.img) : null;
+  const pg = () => doc.addPage([595.28, H]);
+  const T = (p, s, x, y, o = {}) => { const f = o.bold ? FB : F, size = o.size || 10; let t = pdfSafe(s);
+    let xx = x * MM; const w = f.widthOfTextAtSize(t, size); if (o.align === 'center') xx -= w / 2; if (o.align === 'right') xx -= w;
+    p.drawText(t, { x: xx, y: H - y * MM, size, font: f, color: o.color || ink });
+    if (o.underline) p.drawLine({ start: { x: xx, y: H - y * MM - 1.6 }, end: { x: xx + w, y: H - y * MM - 1.6 }, thickness: 0.7, color: o.color || ink });
+    return w / MM; };
+  const L = (p, x1, y1, x2, y2, t = 0.6) => p.drawLine({ start: { x: x1 * MM, y: H - y1 * MM }, end: { x: x2 * MM, y: H - y2 * MM }, thickness: t, color: ink });
+  const R = (p, x, y, w, h, t = 0.8) => p.drawRectangle({ x: x * MM, y: H - (y + h) * MM, width: w * MM, height: h * MM, borderColor: ink, borderWidth: t });
+  const box = (p, x, y, on) => { R(p, x, y, 3.4, 3.4, 0.7); if (on) { L(p, x + 0.6, y + 0.6, x + 2.8, y + 2.8, 0.9); L(p, x + 2.8, y + 0.6, x + 0.6, y + 2.8, 0.9); } };
+  const wrap = (s, f, size, maxMm) => { const out = []; for (const para of pdfSafe(s).split('\n')) { let line = '';
+      for (const word of para.split(/\s+/)) { const tryL = line ? line + ' ' + word : word; if (f.widthOfTextAtSize(tryL, size) / MM <= maxMm) line = tryL; else { if (line) out.push(line); line = word; while (f.widthOfTextAtSize(line, size) / MM > maxMm) { let k = line.length; while (k > 1 && f.widthOfTextAtSize(line.slice(0, k), size) / MM > maxMm) k--; out.push(line.slice(0, k)); line = line.slice(k); } } }
+      out.push(line); } while (out.length && !out[out.length - 1]) out.pop(); return out; };
+  const fit = (s, f, size, maxMm) => { let t = pdfSafe(s); while (t && f.widthOfTextAtSize(t, size) / MM > maxMm) t = t.slice(0, -1); return t; };
+  const header = p => {
+    if (logo) { const d = logo.scaleToFit(56 * MM, 17 * MM); p.drawImage(logo, { x: 186 * MM - d.width, y: H - 12 * MM - d.height, width: d.width, height: d.height }); }
+    else { T(p, firma.kurz, 186, 21, { bold: true, size: 20, align: 'right', color: rgb(0.62, 0.08, 0.2) }); T(p, firma.slogan, 186, 25.5, { bold: true, size: 6.5, align: 'right', color: rgb(0.62, 0.08, 0.2) }); }
+  };
+  const footer = p => { T(p, firma.name, 105, 281, { size: 9.5, align: 'center', color: grey }); T(p, fit([firma.adresse, firma.kontakt].filter(Boolean).join(', '), F, 7, 170), 105, 285, { size: 7, align: 'center', color: grey }); };
+  const X0 = 25, X1 = 186;
+
+  /* ----- Seite 1 ----- */
+  const p1 = pg(); header(p1);
+  T(p1, 'Arbeitsnachweis', 105, 36, { bold: true, size: 19, align: 'center' });
+  if (n.nr) T(p1, 'Nr. ' + n.nr, X1, 36, { size: 10, align: 'right', color: grey });
+  L(p1, X0 + 3, 39.5, X1 - 3, 39.5, 0.8);
+  const field = (label, val, y, w, h = 9) => { T(p1, label, X0, y, { bold: true, size: 10.5, underline: true }); R(p1, X0, y + 3, w, h); T(p1, fit(val, F, 10, w - 4), X0 + 2, y + 3 + h / 2 + 1.5, { size: 10 }); };
+  field('Kunde:', n.kunde, 48, 78); field('Bauvorhaben:', n.bauvorhaben, 66, 78); field('Objektadresse:', n.adresse, 84, X1 - X0, 10);
+  // Auftragsbeschreibung
+  T(p1, 'Auftragsbeschreibung:', X0, 104, { bold: true, size: 10.5, underline: true });
+  const bY = 107, bH = 79; let bSize = 9.5, bLines = wrap(n.beschreibung || '', F, bSize, X1 - X0 - 4), cap = 17, step = bH / cap;
+  if (bLines.length > 17) { bSize = 8; bLines = wrap(n.beschreibung || '', F, bSize, X1 - X0 - 4); cap = 22; step = bH / cap; }
+  const bRest = bLines.slice(cap); bLines = bLines.slice(0, cap); if (bRest.length) bLines[cap - 1] = fit(bLines[cap - 1], F, bSize, X1 - X0 - 30) + ' … (Forts. S. 3)';
+  R(p1, X0, bY, X1 - X0, bH); for (let i = 1; i < cap; i++) L(p1, X0, bY + i * step, X1, bY + i * step, 0.4);
+  bLines.forEach((l, i) => T(p1, l, X0 + 2, bY + (i + 1) * step - step * 0.28, { size: bSize }));
+  // Stundennachweis
+  T(p1, 'Stundennachweis:', X0, 194, { bold: true, size: 10.5, underline: true });
+  const tY = 197, hR = 7, bR = 6, nameW = 38, dayW = 9.3, zW = (X1 - X0 - nameW - 7 * dayW) / 4, rows = 6, tH = 2 * hR + rows * bR;
+  const dd = anDayDates(n);
+  L(p1, X0, tY, X1, tY, 1.1); L(p1, X0, tY + tH, X1, tY + tH, 1.1);
+  for (let r = 1; r <= rows + 1; r++) L(p1, X0, tY + hR + (r === 1 ? hR : hR + (r - 1) * bR), X1, tY + hR + (r === 1 ? hR : hR + (r - 1) * bR), 0.5);
+  L(p1, X0, tY + hR, X0 + nameW + 7 * dayW, tY + hR, 0.5);
+  let cx = X0 + nameW; L(p1, cx, tY, cx, tY + tH, 0.7);
+  T(p1, 'Datum:', X0 + 1.5, tY + 5, { size: 9.5 }); T(p1, 'Tag:', X0 + 1.5, tY + hR + 5, { size: 9.5 });
+  for (let i = 0; i < 7; i++) { T(p1, dm(dd[i]).slice(0, 6), cx + dayW / 2, tY + 4.6, { size: 6.5, align: 'center', color: grey }); T(p1, DAYS[i], cx + dayW / 2, tY + hR + 5, { size: 9.5, align: 'center' }); cx += dayW; L(p1, cx, tY, cx, tY + tH, 0.7); }
+  ZUSCHL.forEach(([, lab], i) => { const parts = lab.replace('18:00-24:00 & Samstag', '18:00-|24:00 &|Samstag').replace('Nachtzul. 00:00-6:00', 'Nachtzul.|00:00-|6:00').split(/\|| (?=\+)/);
+    parts.forEach((t, j) => T(p1, t, cx + zW / 2, tY + 3 + j * 2.9 + (4 - parts.length) * 1.3, { size: 6.3, bold: true, align: 'center' })); cx += zW; if (i < 3) L(p1, cx, tY, cx, tY + tH, 0.7); });
+  (n.rows || []).slice(0, rows).forEach((r, ri) => {
+    const y = tY + 2 * hR + ri * bR + bR - 1.8; const rl = ROLES.find(x => x[0] === r.role)?.[1];
+    T(p1, fit((r.name || '') + (rl && r.role ? ' (' + rl + ')' : ''), F, 8, nameW - 2), X0 + 1.2, y, { size: 8 });
+    let x = X0 + nameW; for (let i = 0; i < 7; i++) { const v = fmtH(numDe(r.h?.[i])); if (v) T(p1, v, x + dayW / 2, y, { size: 8.5, align: 'center', color: blue }); x += dayW; }
+    ZUSCHL.forEach(([k]) => { const v = fmtH(numDe(r.z?.[k])); if (v) T(p1, v, x + zW / 2, y, { size: 8.5, align: 'center', color: blue }); x += zW; });
+  });
+  const tot = (n.rows || []).reduce((a, r) => a + rowHours(r), 0);
+  if (tot) T(p1, 'Summe: ' + fmtH(tot) + ' Std', X1, tY + tH + 4.5, { size: 8.5, align: 'right', color: grey });
+  footer(p1);
+
+  /* ----- Seite 2 ----- */
+  const p2 = pg(); header(p2);
+  T(p2, 'An- und Abfahrtskosten:', X0, 42, { bold: true, size: 10.5, underline: true });
+  wrap(firma.anfahrt, F, 10, X1 - X0 - 10).forEach((l, i) => T(p2, l, X0, 50 + i * 5, { size: 10 }));
+  const blank = (y, label, val, unit, ant) => { const w = T(p2, label, X0, y, { size: 10 }); const x = X0 + w + 1; L(p2, x, y + 0.6, x + 20, y + 0.6, 0.5);
+    if (val) T(p2, String(val).replace('.', ','), x + 10, y - 0.4, { size: 10, align: 'center', color: blue }); T(p2, unit, x + 21, y, { size: 10 });
+    const aw = T(p2, 'Anteilig (auf geleistete Arbeitszeit umgerechnet)', 97, y, { size: 9 }); box(p2, 97 + aw + 1.5, y - 3, ant); };
+  blank(64, 'An -und Abfahrtszeit: je', n.anfahrtStd, 'Std.', n.anfahrtAnteilig);
+  blank(72, 'Fahrtkilometer gesamt:', n.km, 'km.', n.kmAnteilig);
+  T(p2, 'Materialnachweis:', X0, 86, { bold: true, size: 10.5, underline: true });
+  const mat = (n.material || []).filter(x => x.anzahl || x.text);
+  const drawMat = (p, y0, items, rowsN) => { const rh = 4.6, aw = 38; L(p, X0, y0 - 1.5, X1, y0 - 1.5, 1); L(p, X0, y0, X1, y0, 1);
+    T(p, 'Anzahl', X0 + 2, y0 + 3.6, { size: 9.5 }); T(p, 'Material', X0 + aw + 2, y0 + 3.6, { size: 9.5 });
+    for (let i = 0; i <= rowsN; i++) L(p, X0, y0 + 5 + i * rh, X1, y0 + 5 + i * rh, i === rowsN ? 1 : 0.45);
+    L(p, X0 + aw, y0, X0 + aw, y0 + 5 + rowsN * rh, 0.7);
+    items.forEach((x, i) => { const y = y0 + 5 + (i + 1) * rh - 1.2; T(p, fit(x.anzahl, F, 8.5, aw - 3), X0 + 2, y, { size: 8.5, color: blue }); T(p, fit(x.text, F, 8.5, X1 - X0 - aw - 4), X0 + aw + 2, y, { size: 8.5, color: blue }); }); };
+  const MROWS = 21; drawMat(p2, 89, mat.slice(0, MROWS), MROWS);
+  if (mat.length > MROWS) T(p2, `Weitere ${mat.length - MROWS} Positionen auf Seite 3`, X1, 89 + 5 + MROWS * 4.6 + 4, { size: 8, align: 'right', color: grey });
+  const bw = T(p2, 'Arbeiten beendet:', X0, 205, { size: 10.5 });
+  box(p2, X0 + bw + 3, 202, n.beendet === 'ja'); T(p2, 'Ja', X0 + bw + 8, 205, { size: 10.5 });
+  box(p2, X0 + bw + 26, 202, n.beendet === 'nein'); T(p2, 'Nein', X0 + bw + 31, 205, { size: 10.5 });
+  const sw = T(p2, 'Unterschrift Kunde:', 64, 240, { bold: true, size: 11 }); const sx = 64 + sw + 1.5; L(p2, sx, 240.8, sx + 62, 240.8, 0.7);
+  if (sig) { const d = sig.scaleToFit(60 * MM, 16 * MM); p2.drawImage(sig, { x: (sx + 31) * MM - d.width / 2, y: H - 239.5 * MM, width: d.width, height: d.height }); }
+  if (n.sig) T(p2, [fmtDateShort(n.sig.date), n.sig.name].filter(Boolean).join(' · '), sx + 31, 244.5, { size: 7.5, align: 'center', color: grey });
+  wrap(firma.fuss, F, 8, X1 - X0 - 4).forEach((l, i) => T(p2, l, X0 + 1, 253 + i * 3.6, { size: 8 }));
+  footer(p2);
+
+  /* ----- Fortsetzung, falls nötig ----- */
+  if (bRest.length || mat.length > MROWS) {
+    const p3 = pg(); header(p3); let y = 42;
+    if (bRest.length) { T(p3, 'Auftragsbeschreibung (Fortsetzung):', X0, y, { bold: true, size: 10.5, underline: true }); y += 7;
+      for (const l of bRest) { T(p3, l, X0 + 2, y, { size: bSize }); y += 4.4; } y += 6; }
+    if (mat.length > MROWS) { T(p3, 'Materialnachweis (Fortsetzung):', X0, y, { bold: true, size: 10.5, underline: true }); const rest = mat.slice(MROWS, MROWS + 40); drawMat(p3, y + 3, rest, Math.max(rest.length, 5)); }
+    footer(p3);
+  }
+  return (await doc.save()).buffer;
 }
 
 /* ----- Text-Import (Bautagesbericht / iPhone Live Text) ----- */
@@ -2163,6 +2536,7 @@ async function restoreFromServer(pid) {
     await DB.put('projects', stripIdx(p));
     let n = 0; for (const e of (current.entries || [])) if (!have.has(e.id)) { await DB.put('entries', { ...e, projectId: pid }); n++; }
     const haveN = new Set((await DB.notesOf(pid)).map(x => x.id)); for (const nt of (current.notes || [])) if (!haveN.has(nt.id)) await DB.put('notes', { ...nt, projectId: pid });
+    const haveA = new Set((await DB.nachweiseOf(pid)).map(x => x.id)); for (const an of (current.nachweise || [])) if (!haveA.has(an.id)) await DB.put('nachweise', { ...an, projectId: pid });
     await DB.put('kv', pid, 'current'); await loadAll(); closeSheet(); S.tab = 'erfassen'; render();
     (Sync.st[pid] ||= {}).ok = Date.now(); Sync.st[pid].pending = false; await Sync.saveState();
     toast(`„${esc(p.name)}“ wiederhergestellt – ${n} Einträge geladen`);
@@ -2186,7 +2560,7 @@ function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i =
 function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
 async function saveBackup() {
   const { template, lvPdf, ...rest } = S.p;
-  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [] };
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), firma: await DB.get('kv', 'firma') };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
   const file = new File([blob], name, { type: 'application/json' });
@@ -2206,6 +2580,8 @@ function restoreBackup() {
       await saveProject(p);
       for (const e of data.entries) await DB.put('entries', { ...e, projectId: p.id });
       for (const n of (data.notes || [])) await DB.put('notes', { ...n, projectId: p.id });
+      for (const n of (data.nachweise || [])) await DB.put('nachweise', { ...n, projectId: p.id });
+      if (data.firma && !(await DB.get('kv', 'firma'))) await DB.put('kv', data.firma, 'firma');
       Sync.dirty(p.id);
       await DB.put('kv', p.id, 'current'); await loadAll(); render(); toast(`Backup geladen: ${data.entries.length} Einträge`);
     } catch (err) { alert('Backup konnte nicht geladen werden: ' + (err.message || err)); }
@@ -2232,7 +2608,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
   } catch (err) { $('#main').innerHTML = `<div class="card"><b class="neg">Start fehlgeschlagen</b><p>${esc(err.message || err)}</p></div>`; }
 })();
 // für Tests
-window.__aufmass = { S, Sync, Aufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { S, Sync, Aufmass, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
