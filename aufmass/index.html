@@ -363,7 +363,7 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('aufmass-app', 6);
+      const r = indexedDB.open('aufmass-app', 7);
       r.onupgradeneeded = () => {
         const d = r.result; const has = n => d.objectStoreNames.contains(n);
         if (!has('projects')) d.createObjectStore('projects', { keyPath: 'id' });
@@ -374,6 +374,7 @@ const DB = {
         if (!has('notes')) { const nt = d.createObjectStore('notes', { keyPath: 'id' }); nt.createIndex('projectId', 'projectId'); }
         if (!has('nachweise')) { const an = d.createObjectStore('nachweise', { keyPath: 'id' }); an.createIndex('projectId', 'projectId'); }
         if (!has('bestellungen')) { const be = d.createObjectStore('bestellungen', { keyPath: 'id' }); be.createIndex('projectId', 'projectId'); }
+        if (!has('berichte')) { const bt = d.createObjectStore('berichte', { keyPath: 'id' }); bt.createIndex('projectId', 'projectId'); }
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -395,7 +396,8 @@ const DB = {
   aufmasseOf(pid) { return this.tx('aufmasse', 'readonly', s => s.index('pid').getAll(pid)); },
   notesOf(pid) { return this.tx('notes', 'readonly', s => s.index('projectId').getAll(pid)); },
   nachweiseOf(pid) { return this.tx('nachweise', 'readonly', s => s.index('projectId').getAll(pid)); },
-  bestellungenOf(pid) { return this.tx('bestellungen', 'readonly', s => s.index('projectId').getAll(pid)); }
+  bestellungenOf(pid) { return this.tx('bestellungen', 'readonly', s => s.index('projectId').getAll(pid)); },
+  berichteOf(pid) { return this.tx('berichte', 'readonly', s => s.index('projectId').getAll(pid)); }
 };
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -1021,7 +1023,7 @@ async function loadAll() {
   S.projects = await DB.all('projects');
   const cur = await DB.get('kv', 'current');
   S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
-  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); S.bestellungen = await DB.bestellungenOf(S.p.id); updateUse(); } else { S.notes = []; S.nachweise = []; S.bestellungen = []; }
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); S.bestellungen = await DB.bestellungenOf(S.p.id); S.berichte = await DB.berichteOf(S.p.id); updateUse(); } else { S.notes = []; S.nachweise = []; S.bestellungen = []; S.berichte = []; }
 }
 const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, _roomVocab: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
 async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
@@ -1105,7 +1107,7 @@ const Sync = {
     Aufmass.upload().catch(() => {});
   },
   async push(p) {
-    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id); const nachweise = (await DB.nachweiseOf(p.id)).map(({ pdf, ...r }) => r); const bestellungen = (await DB.bestellungenOf(p.id)).map(({ pdf, ...r }) => r);
+    const entries = await DB.byProject(p.id); const notes = await DB.notesOf(p.id); const nachweise = (await DB.nachweiseOf(p.id)).map(({ pdf, ...r }) => r); const bestellungen = (await DB.bestellungenOf(p.id)).map(({ pdf, ...r }) => r); const berichte = await DB.berichteOf(p.id);
     if (!p.templateHash) { p.templateHash = hashBuf(p.template); }
     if (p.lvPdf && !p.lvHash) p.lvHash = hashBuf(p.lvPdf);
     const { template, lvPdf, ...metaRaw } = stripIdx(p);
@@ -1113,7 +1115,7 @@ const Sync = {
     const metaHash = hashStr(metaJson);
     const post = async extra => {
       const r = await fetch(this.api('/api/sync'), { method: 'POST', headers: this.hdr({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, nachweise, bestellungen, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
+        body: JSON.stringify({ pid: p.id, name: p.name, entries, notes, nachweise, bestellungen, berichte, metaHash, templateHash: p.templateHash, lvHash: p.lvHash || '', device: navigator.userAgent.slice(0, 120), ...extra }) });
       if (r.status === 401) throw new Error('Token falsch');
       if (!r.ok) throw new Error('Server-Fehler ' + r.status);
       return r.json();
@@ -1237,7 +1239,7 @@ function mailText(p, w, kind) {
   return { subject: fill(m.subject || 'Aufmaß {kw} ({zeitraum}) – {baustelle}') + (kind === 'zwischen' ? ' – Zwischenstand' : ''),
     body: fill(m.body || 'Hallo,\n\nanbei das Aufmaß {kw} ({zeitraum}) für {baustelle}.\n\nViele Grüße') };
 }
-const typeOf = name => /\.pdf$/i.test(name) ? 'application/pdf' : XLSM_TYPE;
+const typeOf = name => /\.pdf$/i.test(name) ? 'application/pdf' : /\.docx$/i.test(name) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : /\.xlsx$/i.test(name) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : XLSM_TYPE;
 async function shareFile(buf, name, subject, body) {
   const file = new File([buf], name, { type: typeOf(name) });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1627,10 +1629,11 @@ function wireSugg(root, after) {
 }
 function renderNotizen() {
   const m = $('#main'); S.noteView ||= 'notes';
-  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Arbeitsnachw.</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellungen</button></div>`;
+  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="bt" class="${S.noteView === 'bt' ? 'on' : ''}">Berichte</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Nachweise</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellung</button></div>`;
   const wireSeg = () => m.querySelectorAll('[data-nv]').forEach(b => b.onclick = () => { S.noteView = b.dataset.nv; renderNotizen(); });
   if (S.noteView === 'an') { m.innerHTML = seg; wireSeg(); renderNachweisListe(m); return; }
   if (S.noteView === 'be') { m.innerHTML = seg; wireSeg(); renderBestellListe(m); return; }
+  if (S.noteView === 'bt') { m.innerHTML = seg; wireSeg(); renderBerichtListe(m); return; }
   const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
   m.innerHTML = seg + `<div class="card" style="padding:12px">
       <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
@@ -1735,9 +1738,9 @@ function roleFor(name) {
 }
 async function newNachweis() {
   const prev = (S.nachweise || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0))[0];
-  const maxNr = Math.max(0, ...(S.nachweise || []).map(x => +x.nr || 0));
+  const maxNr = Math.max(0, ...(S.nachweise || []).map(x => +x.nr || 0)); const tplI = (await getVorlage('an'))?.info || {};
   const n = { id: uid(), projectId: S.p.id, nr: String(maxNr ? maxNr + 1 : ''), week: todayISO(), created: Date.now(), updated: Date.now(),
-    kunde: prev?.kunde || '', bauvorhaben: prev?.bauvorhaben || S.p.name, adresse: prev?.adresse || '',
+    kunde: prev?.kunde || tplI.kunde || '', bauvorhaben: prev?.bauvorhaben || tplI.bauvorhaben || S.p.name, adresse: prev?.adresse || tplI.adresse || '',
     beschreibung: '', rows: [{ name: S.p.sign?.name || '', role: 'mont', h: Array(7).fill(''), z: {} }],
     anfahrtStd: prev?.anfahrtStd || '', anfahrtAnteilig: !!prev?.anfahrtAnteilig, km: '', kmAnteilig: !!prev?.kmAnteilig,
     material: [], beendet: '', sig: null, sent: [] };
@@ -1817,7 +1820,7 @@ async function noteToNachweis(noteId) {
 /* ---------- Liste ---------- */
 function renderNachweisListe(m) {
   const list = (S.nachweise || []).slice().sort((a, b) => (b.week || '').localeCompare(a.week || '') || (+b.nr || 0) - (+a.nr || 0));
-  m.insertAdjacentHTML('beforeend', `<button class="btn primary block" id="anNew" style="margin-bottom:12px">+ Neuer Arbeitsnachweis</button>
+  m.insertAdjacentHTML('beforeend', vorlagenCard('an') + `<button class="btn primary block" id="anNew" style="margin-bottom:12px">+ Neuer Arbeitsnachweis</button>
     ${list.length ? list.map(n => { const w = anWeek(n); const h = n.rows.reduce((a, r) => a + rowHours(r), 0);
       return `<div class="card entry" data-an="${n.id}" style="padding:12px 14px"><div class="grow"><b>Nr. ${esc(n.nr || '–')} · KW ${w.week}</b> <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span>
         <div class="w">${esc(n.kunde || n.bauvorhaben || '')}${h ? ' · ' + fmtH(h) + ' Std' : ''}${n.sig ? ' · unterschrieben' : ''}${n.aufmassAt ? ' · im Aufmaß' : ''}${n.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
@@ -1826,6 +1829,7 @@ function renderNachweisListe(m) {
   $('#anNew').onclick = async () => openNachweis(await newNachweis(), true);
   m.querySelectorAll('[data-an]').forEach(el => el.onclick = () => openNachweis(S.nachweise.find(x => x.id === el.dataset.an)));
   $('#anFirma').onclick = openFirma;
+  wireVorlagenCard('an', renderNotizen);
 }
 
 /* ---------- Editor ---------- */
@@ -1864,6 +1868,7 @@ function openNachweis(n, isNew) {
     <div class="row" style="margin-top:8px"><button class="btn grow" id="anSign">${n.sig ? 'Neu unterschreiben' : 'Kunde unterschreiben lassen'}</button>${n.sig ? '<button class="btn danger" id="anUnsign">Entfernen</button>' : ''}</div>
     <div class="target" id="anAufm" style="margin-top:16px"></div>
     <div class="row" style="margin-top:14px"><button class="btn primary grow" id="anSave">Speichern</button></div>
+    <button class="btn block" id="anDoc" style="margin-top:8px">Word-Datei erzeugen (eure Vorlage)</button>
     <button class="btn block" id="anPdf" style="margin-top:8px">PDF erzeugen</button>
     <div id="anOut"></div>
     ${!isNew ? '<button class="btn danger block" id="anDel" style="margin-top:14px">Arbeitsnachweis löschen</button>' : ''}`);
@@ -1909,6 +1914,19 @@ function openNachweis(n, isNew) {
     for (const nt of S.notes.filter(z => z.anId === n.id)) { delete nt.anId; await saveNote(nt); }
     changed(); closeSheet(); render(); toast('Gelöscht');
   };
+  $('#anDoc').onclick = async () => {
+    read(); await saveNachweis(n); const tpl = await getVorlage('an');
+    if (!tpl) { $('#anOut').innerHTML = '<p class="hint warn">Noch keine Word-Vorlage für den Arbeitsnachweis. <button class="btn" id="anVl" style="margin-top:6px">Vorlage hochladen</button></p>'; $('#anVl').onclick = () => openVorlagen(() => openNachweis(n)); return; }
+    $('#anDoc').disabled = true; $('#anDoc').textContent = 'Erzeuge Word-Datei …';
+    try {
+      const buf = await buildNachweisDocx(n, tpl.buf); const w = anWeek(n);
+      const name = `Arbeitsnachweis_${n.nr || 'ohne-Nr'}_${safeName(S.p.name)}_KW${String(w.week).padStart(2, '0')}_${w.year}.docx`;
+      n.pdfName = name; n.pdf = buf; await saveNachweis(n); uploadNachweis(n).catch(() => {});
+      $('#anOut').innerHTML = `<p class="hint ok">Fertig: ${esc(name)} · ${Math.round(buf.byteLength / 1024)} KB</p>` + sendButtons('an');
+      $('#anOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSendAn(b.dataset.act, n));
+    } catch (e) { console.error(e); $('#anOut').innerHTML = `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`; }
+    $('#anDoc').disabled = false; $('#anDoc').textContent = 'Word-Datei erzeugen (eure Vorlage)';
+  };
   $('#anPdf').onclick = async () => {
     read(); await saveNachweis(n); $('#anPdf').disabled = true; $('#anPdf').textContent = 'Erzeuge PDF …';
     try {
@@ -1932,7 +1950,7 @@ async function onSendAn(act, n) {
 }
 async function uploadNachweis(n) {
   if (!Sync.configured() || !n.pdf) return;
-  await fetch(Sync.api(`/api/aufmass/${S.p.id}/${encodeURIComponent(n.pdfName)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': 'application/pdf' }), body: n.pdf });
+  await fetch(Sync.api(`/api/aufmass/${S.p.id}/${encodeURIComponent(n.pdfName)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': typeOf(n.pdfName) }), body: n.pdf });
 }
 
 /* ---------- Firmenkopf ---------- */
@@ -2086,13 +2104,13 @@ async function newBestellung() {
   const prev = (S.bestellungen || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0))[0];
   const firma = await getFirma();
   return { id: uid(), projectId: S.p.id, datum: todayISO(), created: Date.now(), updated: Date.now(),
-    bauvorhaben: prev?.bauvorhaben || S.p.name, lieferanschrift: prev?.lieferanschrift || '', angebot: '', liefertermin: '',
+    bauvorhaben: prev?.bauvorhaben || (await getVorlage('be'))?.info?.bauvorhaben || S.p.name, lieferanschrift: prev?.lieferanschrift || '', angebot: '', liefertermin: '',
     monteur: prev?.monteur || S.p.sign?.name || '', mailTo: prev?.mailTo || '', rows: [{}, {}, {}], sent: [], titel: firma.bestellTitel };
 }
 async function saveBestellung(b) { b.updated = Date.now(); await DB.put('bestellungen', b); S.bestellungen = (S.bestellungen || []).filter(x => x.id !== b.id).concat(b); changed(); }
 function renderBestellListe(m) {
   const list = (S.bestellungen || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
-  m.insertAdjacentHTML('beforeend', `<button class="btn primary block" id="beNew" style="margin-bottom:12px">+ Neuer Bestellschein</button>
+  m.insertAdjacentHTML('beforeend', vorlagenCard('be') + `<button class="btn primary block" id="beNew" style="margin-bottom:12px">+ Neuer Bestellschein</button>
     ${list.length ? list.map(b => { const n = (b.rows || []).filter(r => r.menge || r.text).length;
       return `<div class="card entry" data-be="${b.id}" style="padding:12px 14px"><div class="grow"><b>${fmtDateShort(b.datum)}</b> <span class="muted small">${esc(b.bauvorhaben || '')}</span>
         <div class="w">${n} ${n === 1 ? 'Artikel' : 'Artikel'}${b.liefertermin ? ' · Liefertermin ' + fmtDateShort(b.liefertermin) : ''}${b.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
@@ -2100,6 +2118,7 @@ function renderBestellListe(m) {
     <button class="btn block" id="beBlank" style="margin-top:6px">Leeren Bestellschein als PDF</button>`);
   $('#beNew').onclick = async () => openBestellung(await newBestellung(), true);
   m.querySelectorAll('[data-be]').forEach(el => el.onclick = () => openBestellung(S.bestellungen.find(x => x.id === el.dataset.be)));
+  wireVorlagenCard('be', renderNotizen);
   $('#beBlank').onclick = async () => { const f = await getFirma(); const buf = await buildBestellPdf({ rows: [], titel: f.bestellTitel }, f, true); await shareFile(buf, 'Bestellschein_leer.pdf', 'Bestellschein', ''); };
 }
 function openPosPicker(onPick, start) {
@@ -2127,6 +2146,7 @@ function openBestellung(b, isNew) {
     <button class="btn block" id="beAdd" style="margin-top:6px">+ Artikel</button>
     <label class="f">Bestellung per E-Mail an (z. B. Großhandel / Einkauf)</label><input class="i" id="beTo" type="email" inputmode="email" autocapitalize="off" value="${esc(b.mailTo || '')}" placeholder="leer = Büro-Adresse">
     <div class="row" style="margin-top:14px"><button class="btn primary grow" id="beSave">Speichern</button></div>
+    <button class="btn block" id="beDoc" style="margin-top:8px">Word-Datei erzeugen (eure Vorlage)</button>
     <button class="btn block" id="bePdf" style="margin-top:8px">PDF erzeugen</button><div id="beOut"></div>
     ${!isNew ? '<button class="btn danger block" id="beDel" style="margin-top:14px">Bestellschein löschen</button>' : ''}`);
   const read = () => {
@@ -2148,6 +2168,20 @@ function openBestellung(b, isNew) {
   $('#beAdd').onclick = () => { $('#beRows').insertAdjacentHTML('beforeend', rowHTML({}, document.querySelectorAll('#beRows .berow').length)); wire(); };
   $('#beSave').onclick = async () => { read(); await saveBestellung(b); toast('Bestellschein gespeichert'); };
   if ($('#beDel')) $('#beDel').onclick = async () => { if (!confirm('Bestellschein löschen?')) return; await DB.del('bestellungen', b.id); S.bestellungen = S.bestellungen.filter(x => x.id !== b.id); changed(); closeSheet(); render(); };
+  const beDone = (buf, name) => {
+    $('#beOut').innerHTML = `<p class="hint ok">Fertig: ${esc(name)}</p>
+      <div class="row" style="margin-top:10px"><button class="btn primary grow" data-act="mail">✉ Per E-Mail senden</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn grow" data-act="share">Teilen …</button><button class="btn grow" data-act="dl">Herunterladen</button></div>`;
+    $('#beOut').querySelectorAll('[data-act]').forEach(x => x.onclick = () => onSendBe(x.dataset.act, b)); };
+  $('#beDoc').onclick = async () => {
+    read(); await saveBestellung(b); const tpl = await getVorlage('be');
+    if (!tpl) { $('#beOut').innerHTML = '<p class="hint warn">Noch keine Word-Vorlage für den Bestellschein. <button class="btn" id="beVl" style="margin-top:6px">Vorlage hochladen</button></p>'; $('#beVl').onclick = () => openVorlagen(() => openBestellung(b, isNew)); return; }
+    $('#beDoc').disabled = true;
+    try { const buf = await buildBestellDocx(b, tpl.buf); const name = `Bestellschein_${safeName(b.bauvorhaben || S.p.name)}_${b.datum}.docx`;
+      b.pdfName = name; b.pdf = buf; await saveBestellung(b); uploadDoc(buf, name).catch(() => {}); beDone(buf, name);
+    } catch (e) { console.error(e); $('#beOut').innerHTML = `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`; }
+    $('#beDoc').disabled = false;
+  };
   $('#bePdf').onclick = async () => {
     read(); await saveBestellung(b); $('#bePdf').disabled = true; $('#bePdf').textContent = 'Erzeuge PDF …';
     try {
@@ -2362,6 +2396,557 @@ function posSummary(list) {
     return `<tr><td><span class="muted small">${esc(pos)}</span><br>${esc(x.text)}</td><td><b>${fmt(q)}</b> ${esc(x.unit)}</td><td>${minPerUnit(x) ? fmtMin(mn) : '–'}</td></tr>`; }).join('');
   return `<table class="tbl"><tr><th>Position</th><th>Menge</th><th>Bauzeit</th></tr>${rows}<tr><td><b>Summe</b></td><td></td><td><b>${fmtMin(tot)}</b></td></tr></table>`;
 }
+
+/* =====================================================================
+   Eigene Vorlagen der Firma: Arbeitsnachweis (.docx), Bestellschein (.docx),
+   Bautagesbericht (.xlsx). Die App füllt die Originaldateien aus – Logo,
+   Schrift, Rahmen und Kopf/Fuß bleiben genau wie im Büro angelegt.
+   ===================================================================== */
+const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const VKIND = { an: 'Arbeitsnachweis', be: 'Bestellschein', btb: 'Bautagesbericht' };
+const WOCHENTAG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+
+/* ---------- Vorlagen speichern (je Baustelle, sonst die zuletzt hochgeladene) ---------- */
+async function getVorlagen(pid = S.p?.id) { return (await DB.get('kv', 'vorlagen:' + pid)) || {}; }
+async function getVorlage(kind) {
+  const own = (await getVorlagen())[kind]; if (own) return { ...own, own: true };
+  const last = ((await DB.get('kv', 'vorlagen:last')) || {})[kind]; return last ? { ...last, own: false } : null;
+}
+async function detectVorlage(buf, fileName) {
+  const zip = await JSZip.loadAsync(buf);
+  if (zip.file('word/document.xml')) {
+    const x = await zip.file('word/document.xml').async('string'); const t = x.replace(/<[^>]+>/g, '');
+    if (/Arbeitsnachweis/i.test(t) || /Stundennachweis/i.test(t)) return 'an';
+    if (/Bestellschein|Artikelbezeichnung/i.test(t)) return 'be';
+  }
+  if (zip.file('xl/workbook.xml')) {
+    const ss = zip.file('xl/sharedStrings.xml') ? await zip.file('xl/sharedStrings.xml').async('string') : '';
+    if (/Bautagesbericht|Gesamtstunden/i.test(ss) || /bautages/i.test(fileName)) return 'btb';
+  }
+  if (/arbeitsnachweis/i.test(fileName)) return 'an';
+  if (/bestell/i.test(fileName)) return 'be';
+  if (/bautages|tagesbericht/i.test(fileName)) return 'btb';
+  return null;
+}
+async function addVorlagen(files) {
+  const own = await getVorlagen(); const last = (await DB.get('kv', 'vorlagen:last')) || {}; const done = [], bad = [];
+  for (const f of files) {
+    try {
+      const buf = await f.arrayBuffer(); const kind = await detectVorlage(buf, f.name);
+      if (!kind) { bad.push(f.name); continue; }
+      const info = await readVorlageInfo(kind, buf);   // prüft gleich, ob sie sich lesen lässt
+      own[kind] = last[kind] = { name: f.name, buf, at: Date.now(), info, from: S.p.name };
+      done.push(VKIND[kind]);
+    } catch (e) { console.error(e); bad.push(f.name); }
+  }
+  await DB.put('kv', own, 'vorlagen:' + S.p.id); await DB.put('kv', last, 'vorlagen:last');
+  return { done, bad };
+}
+/** Werte, die schon in der Vorlage stehen (Kunde, Baustelle, Mitarbeiter …) – als Vorschlag für neue Formulare */
+async function readVorlageInfo(kind, buf) {
+  if (kind === 'btb') { const L = await btbOpen(buf); return { names: L.names.filter(Boolean), baustelle: L.vals.baustelle || '', leiter: L.vals.leiter || '' }; }
+  const zip = await JSZip.loadAsync(buf); const doc = parseXml(await zip.file('word/document.xml').async('string'));
+  if (kind === 'an') { const tb = docxTextboxes(doc); const v = k => { const x = (tb[k] || [])[0]; return x ? x.ps.map(pText).join(' ').replace(/[\s,]+$/, '').replace(/\s+,/g, ',').trim() : ''; };
+    return { kunde: v('kunde'), bauvorhaben: v('bauvorhaben'), adresse: v('adresse') }; }
+  if (kind === 'be') { const p = wAll(doc, 'p').find(x => /Bauvorhaben\s*:/.test(pText(x))); const m = p && /Bauvorhaben\s*:\s*(.*)$/.exec(pText(p)); const v = m ? m[1].trim() : '';
+    return { bauvorhaben: /^_+$/.test(v) ? '' : v }; }
+  return {};
+}
+function vorlagenCard(kind) {
+  return `<div class="card" id="vlCard" style="padding:10px 14px;margin-bottom:12px"><div class="row"><div class="grow small" id="vlTxt">Vorlage wird geprüft …</div><button class="btn" id="vlBtn" style="min-height:36px;padding:5px 10px;font-size:13px">Vorlagen</button></div></div>`;
+}
+async function wireVorlagenCard(kind, rerender) {
+  const v = await getVorlage(kind); const el = $('#vlTxt'); if (!el) return;
+  el.innerHTML = v ? `<b>Eure Vorlage:</b> ${esc(v.name)}${v.own ? '' : `<br><span class="muted">von Baustelle „${esc(v.from || '?')}“ übernommen</span>`}`
+    : `<b>Noch keine ${VKIND[kind]}-Vorlage.</b><br><span class="muted">Ladet eure ${kind === 'btb' ? 'Excel' : 'Word'}-Datei hoch – dann füllt die App genau dieses Formular aus.</span>`;
+  $('#vlBtn').onclick = () => openVorlagen(rerender);
+}
+async function openVorlagen(after) {
+  const own = await getVorlagen(); const rows = [];
+  for (const k of ['an', 'be', 'btb']) { const v = await getVorlage(k);
+    rows.push(`<div class="card" style="padding:10px 12px"><div class="row"><div class="grow"><b>${VKIND[k]}</b> <span class="small muted">${k === 'btb' ? '.xlsx' : '.docx'}</span>
+      <div class="small ${v ? '' : 'muted'}">${v ? esc(v.name) + (v.own ? '' : ' (von „' + esc(v.from || '?') + '“)') : 'keine – dann gibt’s ' + (k === 'btb' ? 'nichts zum Ausfüllen' : 'das nachgebaute PDF')}</div>
+      ${k === 'btb' && v?.info?.names?.length ? `<div class="small muted">Mitarbeiter: ${esc(v.info.names.join(', '))}</div>` : ''}</div>
+      ${own[k] ? `<button class="nsx" data-vdel="${k}" title="entfernen">✕</button>` : ''}</div></div>`); }
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Eure Vorlagen</div><button class="x" id="vlx">×</button></div>
+    <p class="small muted">Die Original-Dateien aus dem Büro (Word/Excel). Die App trägt eure Angaben genau dort ein, wo ihr es auf Papier tun würdet. Gilt für diese Baustelle – neue Baustellen übernehmen automatisch die zuletzt hochgeladenen.</p>
+    ${rows.join('')}
+    <button class="btn primary block" id="vlUp" style="margin-top:10px">Dateien wählen (.docx / .xlsx)</button>
+    <input type="file" id="vlF" accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple style="display:none">
+    <p class="small muted" style="margin-top:8px">Man kann alle drei auf einmal auswählen – die App erkennt selbst, welche welche ist.</p>`);
+  $('#vlx').onclick = () => { closeSheet(); if (after) after(); else render(); };
+  $('#vlUp').onclick = () => $('#vlF').click();
+  $('#vlF').onchange = async () => { const r = await addVorlagen(Array.from($('#vlF').files));
+    toast((r.done.length ? 'Übernommen: ' + r.done.join(', ') : '') + (r.bad.length ? (r.done.length ? ' · ' : '') + 'Nicht erkannt: ' + esc(r.bad.join(', ')) : ''), 4500); openVorlagen(after); };
+  document.querySelectorAll('[data-vdel]').forEach(b => b.onclick = async () => { if (!confirm(`${VKIND[b.dataset.vdel]}-Vorlage für diese Baustelle entfernen?`)) return;
+    const o = await getVorlagen(); delete o[b.dataset.vdel]; await DB.put('kv', o, 'vorlagen:' + S.p.id); openVorlagen(after); });
+}
+
+/* ---------- Word (docx) Bausteine ---------- */
+const wAll = (el, n) => Array.from(el.getElementsByTagNameNS(NS_W, n));
+const wKids = (el, n) => Array.from(el.childNodes).filter(x => x.nodeType === 1 && x.namespaceURI === NS_W && x.localName === n);
+function ownP(node) { let x = node.parentNode; while (x && !(x.namespaceURI === NS_W && x.localName === 'p')) x = x.parentNode; return x; }
+const pTexts = p => wAll(p, 't').filter(t => ownP(t) === p);
+const pText = p => pTexts(p).map(t => t.textContent).join('');
+const keepSpace = t => t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+/** Text zwischen Zeichen a und b eines Absatzes ersetzen – Formatierung der Läufe bleibt */
+function pReplace(p, a, b, val) {
+  let off = 0, done = false;
+  for (const t of pTexts(p)) {
+    const s = t.textContent, st = off, en = off + s.length; off = en;
+    if (!done && a >= st && a <= en) { t.textContent = s.slice(0, a - st) + val + s.slice(Math.min(b, en) - st); keepSpace(t); done = true; }
+    else if (Math.max(a, st) < Math.min(b, en)) { t.textContent = s.slice(0, Math.max(a, st) - st) + s.slice(Math.min(b, en) - st); keepSpace(t); }
+  }
+}
+/** Feld hinter einer Beschriftung füllen: „____“ ersetzen, sonst den Rest der Zeile */
+function fillAfterLabel(p, labelRe, value) {
+  if (value == null || value === '') return false;
+  const text = pText(p); const m = labelRe.exec(text); if (!m) return false;
+  const from = m.index + m[0].length; const u = /_{3,}/.exec(text.slice(from));
+  if (u) { pReplace(p, from + u.index, from + u.index + u[0].length, value); return true; }
+  const ws = /^\s*/.exec(text.slice(from))[0].length; pReplace(p, from + ws, text.length, value); return true;
+}
+function runProps(p) {
+  const r = wAll(p, 'r').find(x => ownP(x) === p && wKids(x, 'rPr').length); if (r) return wKids(r, 'rPr')[0].cloneNode(true);
+  const ppr = wKids(p, 'pPr')[0]; const rp = ppr && wKids(ppr, 'rPr')[0]; return rp ? rp.cloneNode(true) : null;
+}
+function setRunSize(doc, rPr, halfPts) {
+  for (const n of ['sz', 'szCs']) { wKids(rPr, n).forEach(x => rPr.removeChild(x)); const e = doc.createElementNS(NS_W, 'w:' + n); e.setAttributeNS(NS_W, 'w:val', String(halfPts)); rPr.appendChild(e); }
+}
+/** ganzen Absatz-Text setzen (Zeilenumbrüche als <w:br/>), Schrift vom bisherigen Text */
+function setParaText(p, text, opt = {}) {
+  const doc = p.ownerDocument; let rPr = runProps(p);
+  for (const ch of Array.from(p.childNodes)) if (!(ch.nodeType === 1 && ch.namespaceURI === NS_W && ch.localName === 'pPr')) p.removeChild(ch);
+  if (text == null || text === '') return;
+  if (opt.size) { rPr ||= doc.createElementNS(NS_W, 'w:rPr'); setRunSize(doc, rPr, opt.size); }
+  if (rPr) wKids(rPr, 'vanish').forEach(x => rPr.removeChild(x));
+  const r = doc.createElementNS(NS_W, 'w:r'); if (rPr) r.appendChild(rPr);
+  String(text).split('\n').forEach((line, i) => { if (i) r.appendChild(doc.createElementNS(NS_W, 'w:br')); const t = doc.createElementNS(NS_W, 'w:t'); keepSpace(t); t.textContent = line; r.appendChild(t); });
+  p.appendChild(r);
+}
+function setCellText(tc, text, opt) {
+  const ps = wKids(tc, 'p'); if (!ps.length) return;
+  ps.slice(1).forEach(x => tc.removeChild(x)); setParaText(ps[0], text, opt);
+}
+const cellText = tc => wKids(tc, 'p').map(pText).join('\n');
+const tRows = tbl => wKids(tbl, 'tr');
+const tCells = tr => wKids(tr, 'tc');
+/** Tabellenzeile n sicherstellen (bei Bedarf letzte Zeile leer kopieren) */
+function tblRow(tbl, n) {
+  let rows = tRows(tbl);
+  while (rows.length <= n) { const c = rows[rows.length - 1].cloneNode(true); tCells(c).forEach(tc => setCellText(tc, '')); tbl.appendChild(c); rows = tRows(tbl); }
+  return rows[n];
+}
+function setChecks(p, values) {
+  const boxes = wAll(p, 'checkBox').filter(x => ownP(x) === p);
+  boxes.forEach((cb, i) => { if (values[i] == null) return; wKids(cb, 'checked').forEach(x => cb.removeChild(x));
+    if (values[i]) { const e = p.ownerDocument.createElementNS(NS_W, 'w:checked'); cb.appendChild(e); } });
+}
+/** Textfelder (Kunde/Bauvorhaben/Objektadresse) – Word speichert jedes doppelt (neu + Ersatzdarstellung) */
+function docxTextboxes(doc) {
+  const body = wAll(doc, 'body')[0]; const res = {}; let label = null;
+  const lab = t => /^\s*Kunde\s*:/i.test(t) ? 'kunde' : /^\s*Bauvorhaben\s*:/i.test(t) ? 'bauvorhaben' : /^\s*(Objekt)?adresse\s*:/i.test(t) ? 'adresse' : null;
+  for (const p of wKids(body, 'p')) {
+    const l = lab(pText(p)); if (l) label = l;
+    for (const box of wAll(p, 'txbxContent')) if (label) (res[label] ||= []).push({ box, ps: wKids(box, 'p') });
+  }
+  return res;
+}
+function wrapText(text, width) {
+  const out = [];
+  for (const para of String(text || '').split('\n')) {
+    let line = '';
+    for (const w of para.split(/\s+/).filter(Boolean)) {
+      if (!line) line = w; else if ((line + ' ' + w).length <= width) line += ' ' + w; else { out.push(line); line = w; }
+      while (line.length > width) { out.push(line.slice(0, width)); line = line.slice(width); }
+    }
+    out.push(line);
+  }
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out;
+}
+async function pngInfo(dataUrl) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+  return { buf: b64ToBuf(dataUrl.split(',')[1]), w: img.naturalWidth || img.width, h: img.naturalHeight || img.height };
+}
+/** Bild (Unterschrift) als Lauf in einen Absatz einfügen */
+async function docxAddImage(zip, doc, relDoc, ct, dataUrl, maxW, maxH) {
+  const im = await pngInfo(dataUrl); const EMU = 360000;
+  let cy = Math.round(maxH * EMU), cx = Math.round(cy * im.w / im.h); if (cx > maxW * EMU) { cx = Math.round(maxW * EMU); cy = Math.round(cx * im.h / im.w); }
+  let n = 1; while (zip.file(`word/media/unterschrift${n}.png`)) n++;
+  const target = `media/unterschrift${n}.png`; zip.file('word/' + target, im.buf);
+  const ids = Array.from(relDoc.getElementsByTagName('Relationship')).map(r => +(r.getAttribute('Id') || '').replace(/\D/g, '') || 0);
+  const rid = 'rId' + (Math.max(0, ...ids) + 1);
+  const rel = relDoc.createElementNS(NS_PKG, 'Relationship'); rel.setAttribute('Id', rid); rel.setAttribute('Type', REL_IMAGE); rel.setAttribute('Target', target); relDoc.documentElement.appendChild(rel);
+  if (!Array.from(ct.getElementsByTagName('Default')).some(d => (d.getAttribute('Extension') || '').toLowerCase() === 'png')) {
+    const d = ct.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Default'); d.setAttribute('Extension', 'png'); d.setAttribute('ContentType', 'image/png'); ct.documentElement.insertBefore(d, ct.documentElement.firstChild); }
+  const id = Math.max(0, ...Array.from(doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing', 'docPr')).map(x => +x.getAttribute('id') || 0)) + 1;
+  const xml = `<w:r xmlns:w="${NS_W}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="${NS_A}" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="${NS_R}"><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${id}" name="Unterschrift ${id}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="unterschrift${n}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+  return doc.importNode(parseXml(xml).documentElement, true);
+}
+async function docxOpen(buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const doc = parseXml(await zip.file('word/document.xml').async('string'));
+  const relDoc = parseXml(await zip.file('word/_rels/document.xml.rels').async('string'));
+  const ct = parseXml(await zip.file('[Content_Types].xml').async('string'));
+  return { zip, doc, relDoc, ct };
+}
+async function docxSave(d) {
+  d.zip.file('word/document.xml', serXml(d.doc)); d.zip.file('word/_rels/document.xml.rels', serXml(d.relDoc)); d.zip.file('[Content_Types].xml', serXml(d.ct));
+  for (const k of Object.keys(d.zip.files)) if (d.zip.files[k].dir) delete d.zip.files[k];
+  return await d.zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: DOCX_TYPE });
+}
+const findTable = (doc, test) => wAll(doc, 'tbl').find(t => { const r = tRows(t)[0]; return r && test(tCells(r).map(cellText), t); });
+
+/* ---------- Arbeitsnachweis in eure Word-Vorlage ---------- */
+async function buildNachweisDocx(n, tplBuf) {
+  const d = await docxOpen(tplBuf); const { doc } = d; const body = wAll(doc, 'body')[0];
+  const w = anWeek(n); const dd = anDayDates(n);
+  // Überschrift: Nr. dazu (damit das Büro sie dem Aufmaß zuordnen kann)
+  const title = wKids(body, 'p').find(p => /^\s*Arbeitsnachweis\s*$/.test(pText(p)));
+  if (title && n.nr) { const t = pText(title); pReplace(title, t.length, t.length, ' Nr. ' + n.nr); }
+  // Kunde / Bauvorhaben / Objektadresse (Textfelder)
+  const tb = docxTextboxes(doc);
+  for (const [k, v] of [['kunde', n.kunde], ['bauvorhaben', n.bauvorhaben], ['adresse', n.adresse]])
+    for (const x of (tb[k] || [])) { x.ps.slice(1).forEach(p => x.box.removeChild(p)); if (x.ps[0]) setParaText(x.ps[0], v || ''); }
+  // Auftragsbeschreibung: einspaltige Linien-Tabelle
+  const descT = wAll(doc, 'tbl').find(t => tRows(t).length > 3 && tRows(t).every(r => tCells(r).length === 1));
+  if (descT) { const lines = wrapText(n.beschreibung, 84); lines.forEach((l, i) => setCellText(tCells(tblRow(descT, i))[0], l)); }
+  // Stundennachweis
+  const hT = findTable(doc, c => /^Datum/i.test(c[0] || ''));
+  if (hT) {
+    const r0 = tCells(tRows(hT)[0]); setCellText(r0[0], `Datum: KW ${w.week}/${w.year}`);
+    for (let i = 0; i < 7 && i + 1 < r0.length; i++) setCellText(r0[i + 1], dm(dd[i]), { size: 16 });
+    const rows = (n.rows || []).filter(r => r.name || rowHours(r));
+    rows.forEach((r, i) => { const c = tCells(tblRow(hT, i + 2));
+      const role = { ober: 'Obermonteur', mont: 'Monteur', helf: 'Helfer' }[r.role];
+      setCellText(c[0], r.name || role || ''); DAYS.forEach((_, k) => c[k + 1] && setCellText(c[k + 1], fmtH(numDe(r.h?.[k]))));
+      ZUSCHL.forEach(([z], k) => c[8 + k] && setCellText(c[8 + k], fmtH(numDe(r.z?.[z])))); });
+  }
+  // An-/Abfahrt
+  for (const p of wKids(body, 'p')) {
+    const t = pText(p);
+    if (/Abfahrtszeit/i.test(t)) { fillAfterLabel(p, /Abfahrtszeit\s*:\s*je\s*/i, n.anfahrtStd ? ` ${n.anfahrtStd} ` : ''); setChecks(p, [!!n.anfahrtAnteilig]); }
+    else if (/Fahrtkilometer/i.test(t)) { fillAfterLabel(p, /Fahrtkilometer gesamt\s*:\s*/i, n.km ? ` ${n.km} ` : ''); setChecks(p, [!!n.kmAnteilig]); }
+    else if (/Arbeiten beendet/i.test(t)) setChecks(p, [n.beendet === 'ja', n.beendet === 'nein']);
+  }
+  // Material
+  const mT = findTable(doc, c => /^Anzahl/i.test(c[0] || '') && /Material/i.test(c[1] || ''));
+  if (mT) (n.material || []).forEach((x, i) => { const c = tCells(tblRow(mT, i + 1)); setCellText(c[0], x.anzahl || ''); if (c[1]) setCellText(c[1], x.text || ''); });
+  // Unterschrift Kunde
+  const sp = wKids(body, 'p').find(p => /Unterschrift Kunde/i.test(pText(p)));
+  if (sp && n.sig?.img) {
+    const t = pText(sp); const u = /_{3,}/.exec(t); if (u) pReplace(sp, u.index, u.index + u[0].length, '');
+    sp.appendChild(await docxAddImage(d.zip, doc, d.relDoc, d.ct, n.sig.img, 6.5, 1.3));
+    // Platz ausgleichen: Leerzeilen davor nutzen, damit nichts auf eine neue Seite rutscht
+    const isEmpty = p => p && p.namespaceURI === NS_W && p.localName === 'p' && !pText(p).trim() && !wAll(p, 'drawing').length;
+    for (let k = 0; k < 2; k++) { const prev = sp.previousSibling; if (isEmpty(prev) && isEmpty(prev.previousSibling)) prev.parentNode.removeChild(prev); }
+    let np = sp.nextSibling;
+    if (!isEmpty(np)) { np = sp.cloneNode(false); const ppr = wKids(sp, 'pPr')[0]; if (ppr) np.appendChild(ppr.cloneNode(true)); sp.parentNode.insertBefore(np, sp.nextSibling); }
+    const ppr = wKids(sp, 'pPr')[0]; if (ppr && !wKids(np, 'pPr').length) np.insertBefore(ppr.cloneNode(true), np.firstChild);
+    const jc = wKids(sp, 'pPr')[0] && wKids(wKids(sp, 'pPr')[0], 'jc')[0]; const npp = wKids(np, 'pPr')[0]; if (jc && npp && !wKids(npp, 'jc').length) npp.appendChild(jc.cloneNode(true));
+    setParaText(np, [n.sig.name, fmtDateShort(n.sig.date)].filter(Boolean).join(', '), { size: 16 });
+    wAll(np, 'b').concat(wAll(np, 'bCs')).forEach(x => x.parentNode.removeChild(x));
+  }
+  return await docxSave(d);
+}
+
+/* ---------- Bestellschein in eure Word-Vorlage ---------- */
+async function buildBestellDocx(b, tplBuf) {
+  const d = await docxOpen(tplBuf); const { doc } = d; const body = wAll(doc, 'body')[0];
+  const F = [[/^\s*Datum\s*:\s*/i, fmtDateShort(b.datum)], [/Bauvorhaben\s*:\s*/i, b.bauvorhaben], [/Lieferanschrift\s*:\s*/i, b.lieferanschrift],
+    [/Angebot\s*Nr\.?\s*:\s*/i, b.angebot], [/Liefertermin\s*:\s*/i, fmtDateShort(b.liefertermin)], [/Monteur[^:]*:\s*/i, b.monteur]];
+  for (const p of wKids(body, 'p')) { const t = pText(p); for (const [re, v] of F) if (re.test(t)) { fillAfterLabel(p, re, v); break; } }
+  const T = findTable(doc, c => /^Menge/i.test(c[0] || ''));
+  if (T) (b.rows || []).filter(r => r.menge || r.text || r.pos).forEach((r, i) => { const c = tCells(tblRow(T, i + 1));
+    [r.menge, r.text, r.pos, r.ek, r.lief].forEach((v, k) => c[k] && setCellText(c[k], v || '')); });
+  return await docxSave(d);
+}
+
+/* =====================================================================
+   Bautagesbericht (Excel-Vorlage) – je Tag ein Bericht, Leistungen mit
+   „noch nicht beendet / beendet“, Stunden je Mitarbeiter, Gesamtstunden.
+   ===================================================================== */
+async function btbOpen(buf) {
+  const wb = await openWorkbook(buf); const sh = wb.sheets[0];
+  const xml = await wb.zip.file(sh.path).async('string'); const doc = parseXml(xml);
+  const L = btbLayout(doc, wb.ss); return { wb, sh, xml, ...L };
+}
+function btbLayout(doc, ss) {
+  const cells = Array.from(doc.getElementsByTagName('c')).map(c => { const [col, r] = splitRef(c.getAttribute('r')); return { c, col, cn: colNum(col), r, v: cellVal(c, ss) }; });
+  const txt = x => typeof x.v === 'string' ? x.v.trim() : '';
+  const find = re => cells.find(x => re.test(txt(x)));
+  const right = x => x ? colLetter(x.cn + 1) + x.r : null;
+  const lf = find(/^Baustellenleiter/i);
+  const L = { leiterLabel: lf ? lf.c.getAttribute('r') : null, leiterLabelText: lf ? txt(lf) : '', datum: right(find(/^Datum\s*:?$/i)) || 'B2', tag: right(find(/^Wochentag/i)) || 'B3', leiter: right(find(/^Baustellenleiter/i)) || 'B5',
+    anfahrt: find(/^Anfahrt/i)?.c.getAttribute('r') || 'D5', baustelle: right(find(/^Baustelle\s*:/i)) || 'B6' };
+  const head = find(/^Welche Leistungen/i), tot = find(/^Gesamtstunden/i), offen = find(/^noch nicht/i), fertig = cells.find(x => /^beendet$/i.test(txt(x)));
+  L.first = head ? head.r + 1 : 8; L.totalRow = tot ? tot.r : 20; L.last = L.totalRow - 1;
+  L.colOffen = offen?.col || 'E'; L.colFertig = fertig?.col || 'F'; L.colText = 'A';
+  const startCn = colNum(L.colFertig) + 1;
+  const endCn = Math.max(startCn, ...cells.filter(x => x.r === L.first || x.r === L.totalRow).map(x => x.cn));
+  L.nameRow = head ? Math.min(...cells.filter(x => x.cn >= startCn && txt(x)).map(x => x.r).concat([1])) : 1;
+  L.workerCols = []; for (let k = startCn; k <= endCn; k++) L.workerCols.push(colLetter(k));
+  const at = ref => cells.find(x => x.col + x.r === ref);
+  L.names = L.workerCols.map(col => txt(at(col + L.nameRow) || { v: '' }));
+  L.vals = { baustelle: txt(at(L.baustelle) || { v: '' }), leiter: txt(at(L.leiter) || { v: '' }) };
+  L.anfahrtLabel = txt(at(L.anfahrt) || { v: 'Anfahrtzeit:' }) || 'Anfahrtzeit:';
+  return L;
+}
+const btbNames = async () => (await getVorlage('btb'))?.info?.names || [];
+/** Mitarbeiter-Name aus der Notiz einem Namen aus der Vorlage zuordnen („Merlin“ → „Merlin Lux“) */
+function matchWorker(name, names) {
+  const n = norm(name); if (!n) return null;
+  return names.find(x => norm(x) === n) || names.find(x => norm(x).split(' ')[0] === n.split(' ')[0]) || names.find(x => norm(x).split(' ').slice(-1)[0] === n.split(' ').slice(-1)[0]) || null;
+}
+/** Seiten: Leistungen auf die 12 Zeilen verteilen, lange Texte umbrechen, bei Bedarf 2. Blatt */
+function btbPages(b, L) {
+  const cap = L.last - L.first + 1; const lines = [];
+  for (const r of (b.rows || [])) {
+    if (!r.text && !Object.values(r.h || {}).some(v => numDe(v))) continue;
+    const parts = wrapText(r.text || '', 68); if (!parts.length) parts.push('');
+    parts.forEach((t, i) => lines.push(i ? { text: t } : { text: t, st: r.st, h: r.h || {} }));
+  }
+  const pages = []; for (let i = 0; i < Math.max(1, lines.length); i += cap) pages.push(lines.slice(i, i + cap));
+  return pages;
+}
+async function buildBerichtXlsx(berichte, tplBuf) {
+  const T = await btbOpen(tplBuf); const { wb } = T; const zip = wb.zip;
+  const ct = parseXml(await zip.file('[Content_Types].xml').async('string'));
+  const stDoc = parseXml(await zip.file('xl/styles.xml').async('string'));
+  const xfs = stDoc.getElementsByTagName('cellXfs')[0]; const styleCache = new Map();
+  const styleWith = (s, al) => { const k = s + '|' + JSON.stringify(al); if (styleCache.has(k)) return styleCache.get(k);
+    const base = kids(xfs, 'xf')[+s || 0]; const x = base.cloneNode(true); let a = kid(x, 'alignment');
+    if (!a) { a = stDoc.createElementNS(NS, 'alignment'); x.insertBefore(a, x.firstChild); }
+    for (const [kk, vv] of Object.entries(al)) a.setAttribute(kk, vv); x.setAttribute('applyAlignment', '1');
+    xfs.appendChild(x); const id = kids(xfs, 'xf').length - 1; xfs.setAttribute('count', String(id + 1)); styleCache.set(k, String(id)); return String(id); };
+  const fonts = stDoc.getElementsByTagName('fonts')[0];
+  const styleFont = (s, sz) => { const k = s + '|sz' + sz; if (styleCache.has(k)) return styleCache.get(k);
+    const x = kids(xfs, 'xf')[+s || 0].cloneNode(true); const f = kids(fonts, 'font')[+x.getAttribute('fontId') || 0].cloneNode(true);
+    let se = kid(f, 'sz'); if (!se) { se = stDoc.createElementNS(NS, 'sz'); f.insertBefore(se, f.firstChild); } se.setAttribute('val', String(sz));
+    fonts.appendChild(f); const fid = kids(fonts, 'font').length - 1; fonts.setAttribute('count', String(fid + 1));
+    x.setAttribute('fontId', String(fid)); x.setAttribute('applyFont', '1'); xfs.appendChild(x); const id = kids(xfs, 'xf').length - 1; xfs.setAttribute('count', String(id + 1)); styleCache.set(k, String(id)); return String(id); };
+  const restyle = (c, al) => c.setAttribute('s', styleWith(c.getAttribute('s') || '0', al));
+  const sheetsEl = wb.wbDoc.getElementsByTagName('sheets')[0]; const relsRoot = wb.relDoc.documentElement;
+  const first = Array.from(sheetsEl.getElementsByTagName('sheet'))[0];
+  let maxSheetFile = 0; zip.forEach(pth => { const m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(pth); if (m) maxSheetFile = Math.max(maxSheetFile, +m[1]); });
+  let maxSheetId = Math.max(...wb.sheets.map(s => s.sheetId)); let maxRid = Math.max(...Object.keys(wb.rels).map(k => +k.replace(/\D/g, '') || 0));
+  const used = new Set(); const sheetName = s => { let n = s.replace(/[\[\]:*?\/\\]/g, '-').slice(0, 31), k = 2; while (used.has(n.toLowerCase())) n = (s.slice(0, 27) + ' (' + k++ + ')'); used.add(n.toLowerCase()); return n; };
+  const jobs = []; for (const b of berichte.slice().sort((x, y) => (x.datum || '').localeCompare(y.datum || ''))) btbPages(b, T).forEach((lines, pi, all) => jobs.push({ b, lines, pi, n: all.length }));
+  const names = [];
+  for (let j = 0; j < jobs.length; j++) {
+    const { b, lines, pi, n } = jobs[j]; const doc = parseXml(T.xml); const sd = doc.getElementsByTagName('sheetData')[0];
+    const cell = ref => getCell(doc, sd, ref);
+    const dt = new Date((b.datum || todayISO()) + 'T12:00:00');
+    setStr(doc, cell(T.datum), fmtDateShort(b.datum || todayISO()) + (n > 1 ? `  (Blatt ${pi + 1}/${n})` : ''));
+    setStr(doc, cell(T.tag), WOCHENTAG[dt.getDay()]);
+    if (b.leiter) {   // Beschriftung + Name in eine Zelle, sonst schneidet Excel „Baustellenleiter:“ ab
+      if (T.leiterLabel) { const t = T.leiterLabelText.replace(/\s+$/, '') + ' ' + b.leiter; const c = cell(T.leiterLabel); setStr(doc, c, t); clearCell(cell(T.leiter));
+        if (t.length > 24) c.setAttribute('s', styleFont(c.getAttribute('s') || '0', t.length > 32 ? 9 : 10)); }
+      else setStr(doc, cell(T.leiter), b.leiter); }
+    if (b.anfahrt) setStr(doc, cell(T.anfahrt), T.anfahrtLabel.replace(/\s+$/, '') + ' ' + b.anfahrt + (/^\s*[\d.,]+\s*$/.test(b.anfahrt) ? ' h' : ''));
+    if (b.baustelle) setStr(doc, cell(T.baustelle), b.baustelle);
+    // Mitarbeiter: Spalten aus der Vorlage, weitere Namen in freie Spalten
+    const colOf = {}; const free = T.workerCols.filter((c, i) => !T.names[i]);
+    for (const p of (b.people || [])) { const i = T.names.findIndex(x => x && x.toLowerCase() === p.toLowerCase());
+      if (i >= 0) colOf[p] = T.workerCols[i]; else if (free.length) { const c = free.shift(); colOf[p] = c; setStr(doc, cell(c + T.nameRow), p); } }
+    const sums = {};
+    lines.forEach((ln, i) => { const r = T.first + i;
+      const tc = cell(T.colText + r); setStr(doc, tc, ln.text); restyle(tc, { horizontal: 'left', vertical: 'center' });
+      if (ln.st === 'offen' || ln.st === 'fertig') { const c = cell((ln.st === 'offen' ? T.colOffen : T.colFertig) + r); setStr(doc, c, 'X'); restyle(c, { horizontal: 'center', vertical: 'center' }); }
+      for (const [p, v] of Object.entries(ln.h || {})) { const h = numDe(v); const col = colOf[p]; if (!h || !col) continue;
+        const c = cell(col + r); setNum(doc, c, h); restyle(c, { horizontal: 'center', vertical: 'center' }); sums[col] = (sums[col] || 0) + h; } });
+    for (const [col, s] of Object.entries(sums)) { const c = cell(col + T.totalRow); setFormula(doc, c, `SUM(${col}${T.first}:${col}${T.last})`, s); restyle(c, { horizontal: 'center', vertical: 'center' }); }
+    for (const sv of doc.getElementsByTagName('sheetView')) { if (j === 0) sv.setAttribute('tabSelected', '1'); else sv.removeAttribute('tabSelected'); }
+    const nm = sheetName(`${WOCHENTAG[dt.getDay()].slice(0, 2)} ${fmtDateShort(b.datum || todayISO())}${n > 1 ? ' (' + (pi + 1) + ')' : ''}`); names.push(nm);
+    if (j === 0) { zip.file(T.sh.path, serXml(doc)); first.setAttribute('name', nm); continue; }
+    for (const ps of Array.from(doc.getElementsByTagName('pageSetup'))) { ps.removeAttributeNS(NS_R, 'id'); ps.removeAttribute('r:id'); }
+    const path = `xl/worksheets/sheet${++maxSheetFile}.xml`; zip.file(path, serXml(doc));
+    const rid = 'rId' + (++maxRid); const rel = wb.relDoc.createElementNS(NS_PKG, 'Relationship');
+    rel.setAttribute('Id', rid); rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet'); rel.setAttribute('Target', path.replace(/^xl\//, '')); relsRoot.appendChild(rel);
+    const sh = wb.wbDoc.createElementNS(NS, 'sheet'); sh.setAttribute('name', nm); sh.setAttribute('sheetId', ++maxSheetId); sh.setAttributeNS(NS_R, 'r:id', rid); sheetsEl.appendChild(sh);
+    const ov = ct.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override'); ov.setAttribute('PartName', '/' + path); ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml'); ct.documentElement.appendChild(ov);
+  }
+  for (const bv of wb.wbDoc.getElementsByTagName('workbookView')) { bv.setAttribute('activeTab', '0'); bv.removeAttribute('firstSheet'); }
+  let calc = wb.wbDoc.getElementsByTagName('calcPr')[0]; if (calc) calc.setAttribute('fullCalcOnLoad', '1');
+  for (const dn of Array.from(wb.wbDoc.getElementsByTagName('definedName'))) if (/_xlnm\._FilterDatabase/.test(dn.getAttribute('name') || '')) dn.parentNode.removeChild(dn);
+  if (zip.file('docProps/app.xml')) { const ad = parseXml(await zip.file('docProps/app.xml').async('string'));
+    for (const nmE of ['HeadingPairs', 'TitlesOfParts']) for (const e of Array.from(ad.getElementsByTagNameNS('*', nmE))) e.parentNode.removeChild(e);
+    zip.file('docProps/app.xml', serXml(ad)); }
+  if (zip.file('xl/calcChain.xml')) { zip.remove('xl/calcChain.xml');
+    for (const r of Array.from(relsRoot.getElementsByTagName('Relationship'))) if ((r.getAttribute('Type') || '').endsWith('/calcChain')) relsRoot.removeChild(r);
+    for (const o of Array.from(ct.getElementsByTagName('Override'))) if (o.getAttribute('PartName') === '/xl/calcChain.xml') o.parentNode.removeChild(o); }
+  zip.file('xl/styles.xml', serXml(stDoc)); zip.file('xl/workbook.xml', serXml(wb.wbDoc)); zip.file('xl/_rels/workbook.xml.rels', serXml(wb.relDoc)); zip.file('[Content_Types].xml', serXml(ct));
+  for (const k of Object.keys(zip.files)) if (zip.files[k].dir) delete zip.files[k];
+  return { buf: await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: XLSX_TYPE }), sheets: names };
+}
+
+/* ---------- Bautagesberichte: Daten ---------- */
+async function newBericht(datum) {
+  const prev = (S.berichte || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created)[0];
+  const v = await getVorlage('btb');
+  return { id: uid(), projectId: S.p.id, datum: datum || todayISO(), created: Date.now(), updated: Date.now(),
+    leiter: prev?.leiter || v?.info?.leiter || '', anfahrt: prev?.anfahrt || '', baustelle: prev?.baustelle || v?.info?.baustelle || S.p.name,
+    people: prev?.people?.slice() || [], rows: [{ text: '', st: '', h: {} }], sent: [] };
+}
+async function saveBericht(b) { b.updated = Date.now(); await DB.put('berichte', b); S.berichte = (S.berichte || []).filter(x => x.id !== b.id).concat(b); changed(); }
+const berichtHours = b => (b.rows || []).reduce((a, r) => a + Object.values(r.h || {}).reduce((x, v) => x + numDe(v), 0), 0);
+const personHours = (b, p) => (b.rows || []).reduce((a, r) => a + numDe(r.h?.[p]), 0);
+function berichtFileName(list) {
+  const base = safeName(S.p.name);
+  if (list.length === 1) return `Bautagesbericht_${base}_${list[0].datum}.xlsx`;
+  const w = weekOf(list[0].datum); return `Bautagesberichte_${base}_KW${String(w.week).padStart(2, '0')}_${w.year}.xlsx`;
+}
+/** Notiz → Leistungszeilen; „Merlin 8h“ landet als Stunden in der Zeile, Namen werden den Spalten zugeordnet */
+function noteToRows(note, names, people) {
+  const rows = []; let anfahrt = '';
+  for (const raw of String(note.text || '').split('\n')) {
+    const l = raw.trim(); if (!l) continue;
+    const r = parseNoteHours({ text: l, date: note.date }); if (r.anfahrt) anfahrt = r.anfahrt;
+    const h = {};
+    let back = '';
+    for (const x of r.rows) { const v = rowHours(x); if (!v) continue;
+      let nm = matchWorker(x.name, names); const w = x.name.split(/\s+/);
+      if (!nm && w.length > 1) { const last = matchWorker(w[w.length - 1], names); if (last) { nm = last; back += ' ' + w.slice(0, -1).join(' '); } else { nm = w[w.length - 1]; back += ' ' + w.slice(0, -1).join(' '); } }
+      nm ||= x.name; h[nm] = fmtH(numDe(h[nm]) + v); if (!people.includes(nm)) people.push(nm); }
+    const text = (r.beschreibung.replace(/^(Mo|Di|Mi|Do|Fr|Sa|So): /, '') + back).replace(/\s{2,}/g, ' ').trim();
+    const st = /nicht\s+(ganz\s+)?(fertig|beendet|erledigt)|noch offen|angefangen|begonnen/i.test(text) ? 'offen' : /\b(fertig|erledigt|abgeschlossen|beendet)\b/i.test(text) ? 'fertig' : '';
+    if (text || Object.keys(h).length) rows.push({ text, st, h });
+  }
+  return { rows, anfahrt };
+}
+function entriesToRows(datum) {
+  const es = S.entries.filter(e => e.date === datum && !e.anId && !/^h$/i.test(posMap().get(e.pos)?.unit || ''));
+  const by = new Map();
+  for (const e of es) { const x = posMap().get(e.pos); if (!x) continue; const k = (e.raum || '') + '|' + e.pos; const o = by.get(k) || { x, raum: e.raum, q: 0 }; o.q += e.qty; by.set(k, o); }
+  const perRaum = new Map();
+  for (const o of by.values()) { const k = o.raum || ''; const u = (o.x.unit || '').toLowerCase(); const verb = u === 'm' ? 'verlegt' : (u === 'psch' ? 'ausgeführt' : 'montiert');
+    (perRaum.get(k) || perRaum.set(k, []).get(k)).push(`${fmt(o.q)} ${o.x.unit} ${o.x.text.split('\n')[0].split(/[,;(]/)[0].trim()} ${verb}`); }
+  return [...perRaum.entries()].map(([raum, parts]) => ({ text: (raum ? raum + ': ' : '') + parts.join(', '), st: '', h: {} }));
+}
+
+/* ---------- Bautagesberichte: Liste ---------- */
+function renderBerichtListe(m) {
+  const list = (S.berichte || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
+  const weeks = new Map(); for (const b of list) { const w = weekOf(b.datum); (weeks.get(w.key) || weeks.set(w.key, { w, items: [] }).get(w.key)).items.push(b); }
+  const today = list.find(b => b.datum === todayISO());
+  m.insertAdjacentHTML('beforeend', vorlagenCard('btb') + `<button class="btn primary block" id="btNew" style="margin-bottom:12px">${today ? 'Bericht von heute öffnen' : '+ Bautagesbericht für heute'}</button>
+    ${list.length ? [...weeks.values()].map(({ w, items }) => `<div class="row" style="margin:14px 2px 6px"><b class="grow">KW ${w.week} <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span></b>
+        <button class="btn" data-btw="${w.key}" style="min-height:34px;padding:4px 10px;font-size:13px">Woche als Excel</button></div>
+      ${items.map(b => { const h = berichtHours(b); const n = (b.rows || []).filter(r => r.text).length;
+        return `<div class="card entry" data-bt="${b.id}" style="padding:12px 14px"><div class="grow"><b>${WOCHENTAG[new Date(b.datum + 'T12:00:00').getDay()]}, ${fmtDateShort(b.datum)}</b>
+          <div class="w">${n} ${n === 1 ? 'Leistung' : 'Leistungen'}${h ? ' · ' + fmtH(h) + ' Std' : ''}${(b.people || []).length ? ' · ' + b.people.length + ' Pers.' : ''}${b.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')}`).join('')
+      : '<div class="empty">Noch keine Bautagesberichte. Einer pro Tag – Leistungen, beendet ja/nein und die Stunden je Mitarbeiter.</div>'}
+    <div id="btWOut"></div>`);
+  wireVorlagenCard('btb', renderNotizen);
+  $('#btNew').onclick = async () => openBericht(today || await newBericht(), !today);
+  m.querySelectorAll('[data-bt]').forEach(el => el.onclick = () => openBericht(S.berichte.find(x => x.id === el.dataset.bt)));
+  m.querySelectorAll('[data-btw]').forEach(btn => btn.onclick = async () => {
+    const items = weeks.get(btn.dataset.btw).items; const tpl = await getVorlage('btb');
+    if (!tpl) { toast('Erst die Bautagesbericht-Vorlage (Excel) hochladen – Knopf „Vorlagen“.', 4000); return; }
+    btn.disabled = true; try { const r = await buildBerichtXlsx(items, tpl.buf); const name = berichtFileName(items); uploadDoc(r.buf, name).catch(() => {});
+      const w = weeks.get(btn.dataset.btw).w;
+      $('#btWOut').innerHTML = `<div class="card" style="padding:12px 14px"><p class="hint ok" style="margin:0">Fertig: ${esc(name)} · ${r.sheets.length} ${r.sheets.length === 1 ? 'Blatt' : 'Blätter'} (${esc(r.sheets.join(', '))})</p>${sendButtons('btw')}</div>`;
+      $('#btWOut').querySelectorAll('[data-act]').forEach(x => x.onclick = () => sendDoc(x.dataset.act, { buf: r.buf, name }, `Bautagesberichte KW ${w.week}/${w.year} – ${S.p.name}`,
+        `Hallo,\n\nanbei die Bautagesberichte KW ${w.week} (${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}) für ${S.p.name}.\n\nViele Grüße`, async via => { for (const b of items) { b.sent = [...(b.sent || []), { at: Date.now(), via }]; await saveBericht(b); } }));
+      $('#btWOut').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) { console.error(e); toast('Fehler: ' + esc(e.message || e), 5000); } btn.disabled = false; });
+}
+
+/* ---------- Bautagesbericht: Editor ---------- */
+async function openBericht(b, isNew) {
+  b = JSON.parse(JSON.stringify(b)); b.rows ||= []; b.people ||= [];
+  const tplNames = await btbNames();
+  const short = p => { const t = p.split(/\s+/); return t[0] + (t.length > 1 ? ' ' + t[t.length - 1][0] + '.' : ''); };
+  openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">Bautagesbericht</div><div class="muted small">${tplNames.length ? 'wird in eure Excel-Vorlage eingetragen' : 'Excel-Vorlage fehlt noch – unter „Vorlagen“ hochladen'}</div></div><button class="x" id="btx">×</button></div>
+    <div class="row"><div class="grow"><label class="f">Datum</label><input class="i" id="btD" type="date" value="${esc(b.datum)}"></div><div style="width:40%"><label class="f">Anfahrtzeit</label><input class="i" id="btAn" value="${esc(b.anfahrt || '')}" placeholder="z. B. 0,5"></div></div>
+    <label class="f">Baustellenleiter</label><input class="i" id="btL" value="${esc(b.leiter || '')}">
+    <label class="f">Baustelle</label><input class="i" id="btB" value="${esc(b.baustelle || '')}">
+    <h3>Wer war da?</h3><div id="btPeople"></div>
+    <div class="row" style="margin-top:6px"><input class="i grow" id="btPn" placeholder="weiterer Name"><button class="btn" id="btPadd">+</button></div>
+    <h3>Leistungen / Bemerkungen</h3>
+    <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn grow" id="btFromNote" style="font-size:13px">Notiz übernehmen</button><button class="btn grow" id="btFromAuf" style="font-size:13px">Aufmaß des Tages</button></div>
+    <div id="btRows"></div>
+    <button class="btn block" id="btAdd" style="margin-top:6px">+ Leistung</button>
+    <div class="hint" id="btSum"></div>
+    <div class="row" style="margin-top:14px"><button class="btn primary grow" id="btSave">Speichern</button></div>
+    <button class="btn block" id="btX" style="margin-top:8px">Excel erzeugen</button><div id="btOut"></div>
+    ${!isNew ? '<button class="btn danger block" id="btDel" style="margin-top:14px">Bericht löschen</button>' : ''}`);
+  const allNames = () => [...new Set([...tplNames, ...b.people])];
+  const read = () => {
+    b.datum = $('#btD').value || b.datum; b.anfahrt = $('#btAn').value.trim(); b.leiter = $('#btL').value.trim(); b.baustelle = $('#btB').value.trim();
+    b.rows = Array.from(document.querySelectorAll('#btRows .btrow')).map(el => ({ text: el.querySelector('.bt-t').value.trim(), st: el.dataset.st || '',
+      h: Object.fromEntries(Array.from(el.querySelectorAll('.bt-h')).map(i => [i.dataset.p, i.value.trim()]).filter(x => x[1])) }));
+    return b;
+  };
+  const paint = () => {
+    $('#btPeople').innerHTML = `<div class="chips" style="flex-wrap:wrap">${allNames().map(p => `<button class="chip ${b.people.includes(p) ? 'on' : ''}" data-pp="${esc(p)}">${esc(p)}</button>`).join('')}</div>` + (allNames().length ? '' : '<div class="small muted">Namen kommen aus der Vorlage – oder unten eintragen.</div>');
+    $('#btRows').innerHTML = b.rows.map((r, i) => `<div class="card btrow" data-st="${esc(r.st || '')}" style="padding:10px 12px">
+        <div class="row"><textarea class="i bt-t grow" rows="2" placeholder="Was wurde wo gemacht?">${esc(r.text || '')}</textarea><button class="nsx bt-del" title="löschen">✕</button></div>
+        <div class="seg" style="margin:6px 0 4px"><button data-s="offen" class="${r.st === 'offen' ? 'on' : ''}">noch nicht beendet</button><button data-s="fertig" class="${r.st === 'fertig' ? 'on' : ''}">beendet</button><button data-s="" class="${!r.st ? 'on' : ''}">–</button></div>
+        ${b.people.length ? `<div class="angrid">${b.people.map(p => `<label><span>${esc(short(p))}</span><input class="i bt-h" data-p="${esc(p)}" inputmode="decimal" value="${esc(r.h?.[p] || '')}" placeholder="Std"></label>`).join('')}</div>` : '<div class="small muted">Stunden: oben antippen, wer da war.</div>'}</div>`).join('');
+    wire(); sums();
+  };
+  const sums = () => { read(); const t = berichtHours(b);
+    $('#btSum').textContent = t ? `Gesamt ${fmtH(t)} Std · ` + b.people.map(p => short(p) + ' ' + (fmtH(personHours(b, p)) || '0')).join(', ') : '';
+    const L = b.rows.reduce((a, r) => a + Math.max(1, wrapText(r.text, 68).length), 0);
+    if (L > 12) $('#btSum').textContent += ` · ${L} Zeilen – passt nicht auf ein Blatt, es wird ein 2. Blatt angelegt.`; };
+  const wire = () => {
+    document.querySelectorAll('[data-pp]').forEach(c => c.onclick = () => { read(); const p = c.dataset.pp; b.people = b.people.includes(p) ? b.people.filter(x => x !== p) : [...b.people, p];
+      b.people.sort((x, y) => { const ix = allNames().indexOf(x), iy = allNames().indexOf(y); return ix - iy; }); paint(); });
+    document.querySelectorAll('#btRows .btrow').forEach(el => {
+      el.querySelectorAll('[data-s]').forEach(x => x.onclick = () => { el.dataset.st = x.dataset.s; el.querySelectorAll('[data-s]').forEach(y => y.classList.toggle('on', y === x)); });
+      el.querySelector('.bt-del').onclick = () => { el.remove(); sums(); };
+      el.querySelectorAll('input,textarea').forEach(i => i.oninput = sums);
+    });
+  };
+  paint();
+  $('#btx').onclick = () => { closeSheet(); render(); };
+  $('#btPadd').onclick = () => { read(); const v = $('#btPn').value.trim(); if (!v) return; if (!b.people.includes(v)) b.people.push(v); paint(); $('#btPn').value = ''; };
+  $('#btAdd').onclick = () => { read(); b.rows.push({ text: '', st: '', h: {} }); paint(); };
+  $('#btFromAuf').onclick = () => { read(); const r = entriesToRows(b.datum); if (!r.length) { toast('Am ' + fmtDateShort(b.datum) + ' gibt es keine Aufmaß-Einträge.'); return; }
+    b.rows = b.rows.filter(x => x.text || Object.keys(x.h || {}).length).concat(r); paint(); toast(`${r.length} ${r.length === 1 ? 'Zeile' : 'Zeilen'} aus dem Aufmaß übernommen – bitte anpassen`); };
+  $('#btFromNote').onclick = () => { read(); const ns = (S.notes || []).slice().sort((x, y) => (x.date === b.datum ? -1 : 0) - (y.date === b.datum ? -1 : 0) || y.updated - x.updated).slice(0, 30);
+    if (!ns.length) { toast('Noch keine Notizen.'); return; }
+    const snap = JSON.parse(JSON.stringify(b));
+    openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Notiz übernehmen</div><button class="x" id="bnx">×</button></div>
+      <p class="small muted">Jede Zeile wird eine Leistung. „Merlin 8h“ wird als Stunden bei Merlin eingetragen.</p>
+      ${ns.map(n => `<div class="card note" data-nid="${n.id}" style="padding:10px 12px"><b class="small ${n.date === b.datum ? '' : 'muted'}">${fmtDate(n.date || todayISO())}</b><div class="ntext">${esc(n.text)}</div></div>`).join('')}`);
+    $('#bnx').onclick = () => openBericht(snap, isNew);
+    document.querySelectorAll('[data-nid]').forEach(el => el.onclick = () => { const n = S.notes.find(x => x.id === el.dataset.nid); const r = noteToRows(n, tplNames, snap.people);
+      snap.rows = snap.rows.filter(x => x.text || Object.keys(x.h || {}).length).concat(r.rows); if (r.anfahrt && !snap.anfahrt) snap.anfahrt = r.anfahrt;
+      openBericht(snap, isNew); toast(`${r.rows.length} ${r.rows.length === 1 ? 'Zeile' : 'Zeilen'} übernommen – bitte prüfen`); }); };
+  $('#btSave').onclick = async () => { read(); await saveBericht(b); toast('Bautagesbericht gespeichert'); };
+  if ($('#btDel')) $('#btDel').onclick = async () => { if (!confirm('Bautagesbericht löschen?')) return; await DB.del('berichte', b.id); S.berichte = S.berichte.filter(x => x.id !== b.id); changed(); closeSheet(); render(); };
+  $('#btX').onclick = async () => {
+    read(); await saveBericht(b); const tpl = await getVorlage('btb');
+    if (!tpl) { $('#btOut').innerHTML = '<p class="hint warn">Erst eure Bautagesbericht-Excel hochladen (Notizen → Berichte → „Vorlagen“).</p>'; return; }
+    $('#btX').disabled = true; $('#btX').textContent = 'Erzeuge Excel …';
+    try { const r = await buildBerichtXlsx([b], tpl.buf); const name = berichtFileName([b]); b.fileName = name; uploadDoc(r.buf, name).catch(() => {});
+      $('#btOut').innerHTML = `<p class="hint ok">Fertig: ${esc(name)}${r.sheets.length > 1 ? ' · ' + r.sheets.length + ' Blätter' : ''}</p>` + sendButtons('bt');
+      $('#btOut').querySelectorAll('[data-act]').forEach(x => x.onclick = () => sendDoc(x.dataset.act, { buf: r.buf, name }, `Bautagesbericht ${fmtDateShort(b.datum)} – ${S.p.name}`,
+        `Hallo,\n\nanbei der Bautagesbericht vom ${WOCHENTAG[new Date(b.datum + 'T12:00:00').getDay()]}, ${fmtDateShort(b.datum)} für ${S.p.name}.\n\nViele Grüße`, async via => { b.sent = [...(b.sent || []), { at: Date.now(), via }]; await saveBericht(b); }));
+    } catch (e) { console.error(e); $('#btOut').innerHTML = `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`; }
+    $('#btX').disabled = false; $('#btX').textContent = 'Excel erzeugen';
+  };
+}
+
+/* ---------- Versand / Sicherung beliebiger Dateien ---------- */
+async function sendDoc(act, file, subject, body, mark, to, cc) {
+  if (act === 'dl') return downloadFile(file.buf, file.name);
+  if (act === 'share' || !Sync.mailOk) { if (act === 'mail') toast('Direktversand ist auf dem Pi nicht eingerichtet – Teilen-Menü, dort „Mail“ wählen.', 4000); if (await shareFile(file.buf, file.name, subject, body)) await mark?.('Teilen'); return; }
+  const rcpt = to || S.p.mail?.to; if (!rcpt) { toast('Bitte unter Export → „E-Mail ans Büro“ eine Adresse eintragen.'); return; }
+  if (!confirm(`„${file.name}“ jetzt an ${rcpt} senden?`)) return;
+  try { await mailDirect(file.buf, file.name, subject, body, to, cc); await mark?.('E-Mail an ' + rcpt); toast('E-Mail verschickt ✓'); } catch (e) { toast('Nicht verschickt: ' + esc(e.message || e), 5000); }
+}
+async function uploadDoc(buf, name) {
+  if (!Sync.configured() || !buf) return;
+  await fetch(Sync.api(`/api/aufmass/${S.p.id}/${encodeURIComponent(name)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': typeOf(name) }), body: buf });
+}
+
+
 async function renderExport() {
   const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
   const recs = (await DB.aufmasseOf(p.id)).sort((a, b) => b.week.localeCompare(a.week));
@@ -2734,6 +3319,7 @@ async function restoreFromServer(pid) {
     const haveN = new Set((await DB.notesOf(pid)).map(x => x.id)); for (const nt of (current.notes || [])) if (!haveN.has(nt.id)) await DB.put('notes', { ...nt, projectId: pid });
     const haveA = new Set((await DB.nachweiseOf(pid)).map(x => x.id)); for (const an of (current.nachweise || [])) if (!haveA.has(an.id)) await DB.put('nachweise', { ...an, projectId: pid });
     const haveB = new Set((await DB.bestellungenOf(pid)).map(x => x.id)); for (const be of (current.bestellungen || [])) if (!haveB.has(be.id)) await DB.put('bestellungen', { ...be, projectId: pid });
+    const haveT = new Set((await DB.berichteOf(pid)).map(x => x.id)); for (const bt of (current.berichte || [])) if (!haveT.has(bt.id)) await DB.put('berichte', { ...bt, projectId: pid });
     await DB.put('kv', pid, 'current'); await loadAll(); closeSheet(); S.tab = 'erfassen'; render();
     (Sync.st[pid] ||= {}).ok = Date.now(); Sync.st[pid].pending = false; await Sync.saveState();
     toast(`„${esc(p.name)}“ wiederhergestellt – ${n} Einträge geladen`);
@@ -2757,7 +3343,8 @@ function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i =
 function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
 async function saveBackup() {
   const { template, lvPdf, ...rest } = S.p;
-  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), bestellungen: (S.bestellungen || []).map(({ pdf, ...r }) => r), firma: await DB.get('kv', 'firma') };
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), bestellungen: (S.bestellungen || []).map(({ pdf, ...r }) => r), berichte: S.berichte || [], firma: await DB.get('kv', 'firma'),
+    vorlagen: Object.fromEntries(Object.entries(await getVorlagen()).map(([k, v]) => [k, { ...v, buf: bufToB64(v.buf) }])) };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
   const file = new File([blob], name, { type: 'application/json' });
@@ -2779,6 +3366,8 @@ function restoreBackup() {
       for (const n of (data.notes || [])) await DB.put('notes', { ...n, projectId: p.id });
       for (const n of (data.nachweise || [])) await DB.put('nachweise', { ...n, projectId: p.id });
       for (const n of (data.bestellungen || [])) await DB.put('bestellungen', { ...n, projectId: p.id });
+      for (const n of (data.berichte || [])) await DB.put('berichte', { ...n, projectId: p.id });
+      if (data.vorlagen && Object.keys(data.vorlagen).length) await DB.put('kv', Object.fromEntries(Object.entries(data.vorlagen).map(([k, v]) => [k, { ...v, buf: b64ToBuf(v.buf) }])), 'vorlagen:' + p.id);
       if (data.firma && !(await DB.get('kv', 'firma'))) await DB.put('kv', data.firma, 'firma');
       Sync.dirty(p.id);
       await DB.put('kv', p.id, 'current'); await loadAll(); render(); toast(`Backup geladen: ${data.entries.length} Einträge`);
@@ -2807,7 +3396,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
