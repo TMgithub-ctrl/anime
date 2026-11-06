@@ -83,6 +83,7 @@ input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
 .angrid.z label span{min-height:40px;font-size:10px}
 .angrid .i{text-align:center;padding:8px 2px;font-size:15px}
 .anmat{margin-top:6px}.anmat .i{font-size:15px;padding:9px}
+.nact{margin-top:6px;text-align:right}.nact .nsx{border:1px solid var(--line);border-radius:8px}
 .ntext{white-space:pre-wrap;margin-top:6px;cursor:pointer;word-break:break-word}
 .nsugg{margin-top:10px;border-top:1px dashed var(--line);padding-top:6px}
 .ns{font-size:13px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--line)}
@@ -1573,6 +1574,7 @@ function openTitle(key, back) {
 const lineKey = l => hashStr(norm(l));
 function noteSuggestions(note) {
   const out = [];
+  if (note.anId) return out;                 // Zusatzarbeit (Arbeitsnachweis) -> keine Aufmaß-Vorschläge
   const segs = [];
   for (const raw of String(note.text || '').split('\n')) {
     let l = raw.trim(); if (!l) continue;
@@ -1633,7 +1635,8 @@ function renderNotizen() {
     ${list.length ? '' : '<div class="empty">Noch keine Notizen. Schreib einfach los – erkennt die App Material und Menge, schlägt sie dir den Eintrag vor.</div>'}
     ${list.map(n => `<div class="card note" data-id="${n.id}" style="padding:12px 14px">
       <div class="row"><b class="grow small muted">${fmtDate(n.date || todayISO())}</b><span class="small muted">${new Date(n.updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span></div>
-      <div class="ntext">${esc(n.text)}</div>${suggHTML(n)}</div>`).join('')}`;
+      <div class="ntext">${esc(n.text)}</div>${suggHTML(n)}
+      <div class="nact">${n.anId && S.nachweise.find(x => x.id === n.anId) ? `<button class="nsb" data-an-open="${n.id}">→ Arbeitsnachweis Nr. ${esc(S.nachweise.find(x => x.id === n.anId).nr || '–')}</button>` : `<button class="nsx" data-an-make="${n.id}">Als Arbeitsnachweis</button>`}</div></div>`).join('')}`;
   const ta = $('#nNew'); let tm;
   const live = () => { const tmp = { id: '_', text: ta.value }; const h = noteSuggestions(tmp).filter(x => !x.done);
     $('#nLive').innerHTML = h.length ? `<div class="small muted" style="margin-top:8px">${h.length} ${h.length === 1 ? 'Zeile sieht' : 'Zeilen sehen'} nach Aufmaß aus – nach dem Speichern kannst du ${h.length === 1 ? 'sie' : 'sie'} mit einem Tipp eintragen.</div>` : ''; };
@@ -1642,6 +1645,7 @@ function renderNotizen() {
     await saveNote({ id: uid(), projectId: S.p.id, text: t, date: $('#nDate').value || todayISO(), created: Date.now() }); renderNotizen(); toast('Notiz gespeichert'); };
   wireSeg();
   m.querySelectorAll('.note').forEach(el => el.querySelector('.ntext').onclick = () => openNote(el.dataset.id));
+  m.querySelectorAll('[data-an-make],[data-an-open]').forEach(b => b.onclick = () => noteToNachweis(b.dataset.anMake || b.dataset.anOpen));
   wireSugg(m, renderNotizen);
 }
 function openNote(id) {
@@ -1650,7 +1654,9 @@ function openNote(id) {
     <textarea class="i" id="not" rows="9" style="margin-top:10px">${esc(n.text)}</textarea>
     <div class="row" style="margin-top:8px"><input class="i" id="nod" type="date" value="${esc(n.date || todayISO())}" style="width:52%"><button class="btn primary grow" id="nos">Speichern</button></div>
     <div id="nosg"></div>
-    <button class="btn danger block" id="nodel" style="margin-top:12px">Notiz löschen</button>`);
+    <button class="btn block" id="noan" style="margin-top:12px">${n.anId && S.nachweise.find(x => x.id === n.anId) ? 'Arbeitsnachweis öffnen' : 'Als Arbeitsnachweis übernehmen'}</button>
+    <button class="btn danger block" id="nodel" style="margin-top:8px">Notiz löschen</button>`);
+  $('#noan').onclick = async () => { n.text = $('#not').value.trim() || n.text; n.date = $('#nod').value || n.date; await saveNote(n); noteToNachweis(id); };
   const paint = () => { const box = $('#nosg'); if (!box) return; const cur = S.notes.find(z => z.id === id); box.innerHTML = cur ? suggHTML(cur) : ''; wireSugg(box, () => { openNote(id); }); };
   paint();
   $('#nox').onclick = () => { closeSheet(); render(); };
@@ -1717,6 +1723,11 @@ function genStunden(n) {   // Vorschlag aus der Bauzeit der Einträge, auf Viert
   const dd = anDayDates(n); const src = anSourceEntries(n);
   return dd.map(d => { const m = sumMinutes(src.filter(e => e.date === d)); return m ? String(Math.round(m / 15) / 4).replace('.', ',') : ''; });
 }
+function roleFor(name) {
+  for (const a of (S.nachweise || []).slice().sort((x, y) => (y.updated || 0) - (x.updated || 0)))
+    for (const r of (a.rows || [])) if (r.name && name && r.name.toLowerCase() === name.toLowerCase() && r.role) return r.role;
+  return 'mont';
+}
 async function newNachweis() {
   const prev = (S.nachweise || []).slice().sort((a, b) => (b.created || 0) - (a.created || 0))[0];
   const maxNr = Math.max(0, ...(S.nachweise || []).map(x => +x.nr || 0));
@@ -1725,8 +1736,6 @@ async function newNachweis() {
     beschreibung: '', rows: [{ name: S.p.sign?.name || '', role: 'mont', h: Array(7).fill(''), z: {} }],
     anfahrtStd: prev?.anfahrtStd || '', anfahrtAnteilig: !!prev?.anfahrtAnteilig, km: '', kmAnteilig: !!prev?.kmAnteilig,
     material: [], beendet: '', sig: null, sent: [] };
-  n.beschreibung = genBeschreibung(n); n.material = genMaterial(n);
-  const st = genStunden(n); if (st.some(Boolean)) n.rows[0].h = st;
   return n;
 }
 async function saveNachweis(n) {
@@ -1750,6 +1759,56 @@ async function anToAufmass(n) {
   return { neu: neu.length, alt: old.length, hours: neu.reduce((a, e) => a + e.qty, 0) };
 }
 
+
+/* ---------- Notiz -> Arbeitsnachweis (Zusatzarbeiten) ----------
+   Notiztext = Auftragsbeschreibung. „Name 8h“ / „Name: 6,5 Std“ -> Stundenzeile für diesen Namen
+   am Tag der Notiz (oder am vorangestellten Wochentag „Di: …“). „Anfahrt 0,5h“ und „84 km“ in die Felder. */
+const HOURS_RE = /([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\-]*(?:\s+(?!und\b|mit\b)[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-]*)?)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:h|std\.?|stunden?)(?![a-zäöüß])/gi;
+const NOT_NAME = /^(je|ca|circa|etwa|insgesamt|gesamt|zusammen|plus|und|mit|von|bis|noch|heute|gestern|um|für|fuer|arbeitszeit|zeit|dauer|summe)$/i;
+const ROLE_WORD = /\b(obermonteur|monteur|helfer)(in)?\b/i;
+function parseNoteHours(note) {
+  const dayIdx = d => DAYS.findIndex(x => x.toLowerCase() === d.slice(0, 2).toLowerCase());
+  const baseDate = note.date || todayISO(); const w = weekOf(baseDate);
+  const baseIdx = Math.round((new Date(baseDate + 'T12:00:00') - new Date(w.from + 'T12:00:00')) / 86400000);
+  const people = new Map(); let anfahrt = '', km = ''; const desc = [];
+  for (const raw of String(note.text || '').split('\n')) {
+    let line = raw.trim(); if (!line) continue;
+    let di = baseIdx;
+    const dm_ = /^(mo|di|mi|do|fr|sa|so)[a-z]*\.?\s*[:,-]?\s+/i.exec(line);
+    if (dm_ && dayIdx(dm_[1]) >= 0) { di = dayIdx(dm_[1]); line = line.slice(dm_[0].length); }
+    const kmM = /(\d+(?:[.,]\d+)?)\s*km\b/i.exec(line); if (kmM) { km = kmM[1]; line = line.replace(kmM[0], ' '); }
+    let rest = line;
+    for (const m of [...line.matchAll(HOURS_RE)]) {
+      let name = m[1].trim().replace(/[.:,-]+$/, ''); const h = m[2];
+      if (/^(an-?\s*(und\s*)?ab)?fahrt|anfahrt|fahrzeit|wegezeit/i.test(name)) { anfahrt = h; rest = rest.replace(m[0], ' '); continue; }
+      const words = name.split(/\s+/).filter(x => !NOT_NAME.test(x)); if (!words.length) continue;
+      let role = null; const rw = words.findIndex(x => ROLE_WORD.test(x));
+      if (rw >= 0) { role = { obermonteur: 'ober', monteur: 'mont', helfer: 'helf' }[ROLE_WORD.exec(words[rw])[1].toLowerCase()]; words.splice(rw, 1); }
+      name = words.join(' ') || (role ? ROLES.find(x => x[0] === role)[1] : '');
+      const key = name.toLowerCase(); const pr = people.get(key) || { name, role: role || roleFor(name), h: Array(7).fill(0) };
+      if (role) pr.role = role; pr.h[di] += parseFloat(h.replace(',', '.')); people.set(key, pr);
+      rest = rest.replace(m[0], ' ');
+      // Rolle direkt hinter den Stunden: „Max 6h Helfer“ / „Max 6h (Helfer)“
+      const ra = /^\s*\(?(obermonteur|monteur|helfer)(in)?\)?/i.exec(line.slice(m.index + m[0].length));
+      if (ra) { pr.role = { obermonteur: 'ober', monteur: 'mont', helfer: 'helf' }[ra[1].toLowerCase()]; rest = rest.replace(ra[0].trim(), ' '); }
+    }
+    rest = rest.replace(/\s{2,}/g, ' ').replace(/^[\s,;:.-]+|[\s,;:-]+$/g, '').replace(/\s+([,;.])/g, '$1').replace(/([,;])\s*([,;])+/g, '$1');
+    if (rest && !/^(obermonteur|monteur|helfer)(in)?$/i.test(rest)) desc.push((dm_ ? DAYS[di] + ': ' : '') + rest);
+  }
+  return { rows: [...people.values()].map(p => ({ name: p.name, role: p.role, h: p.h.map(v => v ? String(round(v, 2)).replace('.', ',') : ''), z: {} })), anfahrt, km, beschreibung: desc.join('\n') };
+}
+async function noteToNachweis(noteId) {
+  const note = S.notes.find(z => z.id === noteId); if (!note) return;
+  if (note.anId) { const ex = S.nachweise.find(x => x.id === note.anId); if (ex) { openNachweis(ex); return; } }
+  const n = await newNachweis(); n.week = note.date || todayISO(); n.fromNote = note.id;
+  const r = parseNoteHours(note);
+  n.beschreibung = r.beschreibung; if (r.rows.length) n.rows = r.rows.slice(0, 6); if (r.anfahrt) n.anfahrtStd = r.anfahrt; if (r.km) n.km = r.km;
+  await saveNachweis(n);
+  note.anId = n.id; await saveNote(note);
+  openNachweis(n);
+  toast(r.rows.length ? `Übernommen: ${r.rows.map(x => esc(x.name) + ' ' + fmtH(rowHours(x)) + ' h').join(', ')} – bitte prüfen` : 'Notiz übernommen – keine Stunden gefunden, bitte eintragen', 4500);
+}
+
 /* ---------- Liste ---------- */
 function renderNachweisListe(m) {
   const list = (S.nachweise || []).slice().sort((a, b) => (b.week || '').localeCompare(a.week || '') || (+b.nr || 0) - (+a.nr || 0));
@@ -1757,7 +1816,7 @@ function renderNachweisListe(m) {
     ${list.length ? list.map(n => { const w = anWeek(n); const h = n.rows.reduce((a, r) => a + rowHours(r), 0);
       return `<div class="card entry" data-an="${n.id}" style="padding:12px 14px"><div class="grow"><b>Nr. ${esc(n.nr || '–')} · KW ${w.week}</b> <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span>
         <div class="w">${esc(n.kunde || n.bauvorhaben || '')}${h ? ' · ' + fmtH(h) + ' Std' : ''}${n.sig ? ' · unterschrieben' : ''}${n.aufmassAt ? ' · im Aufmaß' : ''}${n.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
-      : '<div class="empty">Noch keine Arbeitsnachweise. „Neuer Arbeitsnachweis“ füllt Beschreibung, Material und Stunden aus deinen Einträgen und Notizen der Woche vor.</div>'}
+      : '<div class="empty">Noch keine Arbeitsnachweise. Lege einen neuen an – oder öffne eine Notiz und tippe auf „Als Arbeitsnachweis“.</div>'}
     <button class="btn block" id="anFirma" style="margin-top:6px">Firmenkopf &amp; Texte</button>`);
   $('#anNew').onclick = async () => openNachweis(await newNachweis(), true);
   m.querySelectorAll('[data-an]').forEach(el => el.onclick = () => openNachweis(S.nachweise.find(x => x.id === el.dataset.an)));
@@ -1781,16 +1840,16 @@ function openNachweis(n, isNew) {
     <label class="f">Kunde</label><input class="i" id="anKu" value="${esc(n.kunde || '')}">
     <label class="f">Bauvorhaben</label><input class="i" id="anBv" value="${esc(n.bauvorhaben || '')}">
     <label class="f">Objektadresse</label><input class="i" id="anAd" value="${esc(n.adresse || '')}">
-    <div class="row" style="margin-top:12px;align-items:flex-end"><label class="f grow" style="margin:0">Auftragsbeschreibung</label><button class="btn" id="anGenB" style="min-height:34px;padding:5px 10px;font-size:13px">✨ Vorschlag</button></div>
-    <textarea class="i" id="anBe" rows="7" style="margin-top:6px" placeholder="Was wurde gemacht?">${esc(n.beschreibung || '')}</textarea>
-    <div class="row" style="margin-top:14px;align-items:flex-end"><h3 class="grow" style="margin:0">Stundennachweis</h3><button class="btn" id="anGenH" style="min-height:34px;padding:5px 10px;font-size:13px">✨ aus Bauzeit</button></div>
+    <label class="f">Auftragsbeschreibung</label>
+    <textarea class="i" id="anBe" rows="7" placeholder="Was wurde gemacht?">${esc(n.beschreibung || '')}</textarea>
+    <h3>Stundennachweis</h3>
     <div id="anRows">${n.rows.map(rowHTML).join('')}</div>
     <button class="btn block" id="anAddRow" style="margin-top:6px" ${n.rows.length >= 6 ? 'disabled' : ''}>+ Mitarbeiter</button>
     <div class="hint" id="anSum"></div>
     <h3>An- und Abfahrt</h3>
     <div class="row"><div class="grow"><label class="f">Zeit je (Std)</label><input class="i" id="anFs" inputmode="decimal" value="${esc(n.anfahrtStd || '')}"></div><label class="row" style="gap:6px;margin-top:22px;width:46%"><input type="checkbox" id="anFsA" ${n.anfahrtAnteilig ? 'checked' : ''} style="width:20px;height:20px">anteilig</label></div>
     <div class="row"><div class="grow"><label class="f">Fahrtkilometer gesamt</label><input class="i" id="anKm" inputmode="decimal" value="${esc(n.km || '')}"></div><label class="row" style="gap:6px;margin-top:22px;width:46%"><input type="checkbox" id="anKmA" ${n.kmAnteilig ? 'checked' : ''} style="width:20px;height:20px">anteilig</label></div>
-    <div class="row" style="margin-top:14px;align-items:flex-end"><h3 class="grow" style="margin:0">Materialnachweis</h3><button class="btn" id="anGenM" style="min-height:34px;padding:5px 10px;font-size:13px">✨ aus Einträgen</button></div>
+    <h3>Materialnachweis</h3>
     <div id="anMat">${n.material.map(matHTML).join('')}</div>
     <button class="btn block" id="anAddMat" style="margin-top:6px">+ Material</button>
     <label class="f">Arbeiten beendet</label>
@@ -1830,12 +1889,6 @@ function openNachweis(n, isNew) {
   $('#anx').onclick = () => { closeSheet(); render(); };
   $('#anWk').onchange = () => { read(); const w = anWeek(n); $('#anWkL').textContent = `KW ${w.week} · ${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`;
     const d2 = anDayDates(n); document.querySelectorAll('.angrid:not(.z) small').forEach((el, i) => el.textContent = dm(d2[i % 7])); sums(); };
-  $('#anGenB').onclick = () => { read(); const t = genBeschreibung(n); if (!t) { toast('In dieser Woche gibt es noch keine Einträge oder Notizen.'); return; }
-    if (n.beschreibung.trim() && !confirm('Vorhandene Beschreibung durch den Vorschlag ersetzen?')) return; $('#anBe').value = t; };
-  $('#anGenH').onclick = () => { read(); const st = genStunden(n); if (!st.some(Boolean)) { toast('Keine Bauzeit in dieser Woche – Stunden bitte selbst eintragen.'); return; }
-    const first = document.querySelector('#anRows .anrow'); if (!first) return; first.querySelectorAll('.an-h').forEach((el, i) => el.value = st[i]); sums(); toast('Erste Zeile aus der Bauzeit vorgeschlagen – bitte prüfen.'); };
-  $('#anGenM').onclick = () => { read(); const mm = genMaterial(n); if (!mm.length) { toast('Keine Einträge in dieser Woche.'); return; }
-    if (n.material.length && !confirm('Materialliste durch die Einträge der Woche ersetzen?')) return; $('#anMat').innerHTML = mm.map(matHTML).join(''); wire(); };
   $('#anAddRow').onclick = () => { $('#anRows').insertAdjacentHTML('beforeend', rowHTML({ name: '', role: 'mont', h: Array(7).fill(''), z: {} }, document.querySelectorAll('#anRows .anrow').length)); wire(); $('#anAddRow').disabled = document.querySelectorAll('#anRows .anrow').length >= 6; };
   $('#anAddMat').onclick = () => { $('#anMat').insertAdjacentHTML('beforeend', matHTML({}, 0)); wire(); };
   document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { n.beendet = b.dataset.b; document.querySelectorAll('[data-b]').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1847,7 +1900,9 @@ function openNachweis(n, isNew) {
     const linked = S.entries.filter(e => e.anId === n.id);
     if (!confirm(`Arbeitsnachweis Nr. ${n.nr} löschen?${linked.length ? `\n${linked.length} übernommene Aufmaß-Einträge werden ebenfalls gelöscht.` : ''}`)) return;
     for (const e of linked) await DB.del('entries', e.id); S.entries = S.entries.filter(e => e.anId !== n.id);
-    await DB.del('nachweise', n.id); S.nachweise = S.nachweise.filter(x => x.id !== n.id); changed(); closeSheet(); render(); toast('Gelöscht');
+    await DB.del('nachweise', n.id); S.nachweise = S.nachweise.filter(x => x.id !== n.id);
+    for (const nt of S.notes.filter(z => z.anId === n.id)) { delete nt.anId; await saveNote(nt); }
+    changed(); closeSheet(); render(); toast('Gelöscht');
   };
   $('#anPdf').onclick = async () => {
     read(); await saveNachweis(n); $('#anPdf').disabled = true; $('#anPdf').textContent = 'Erzeuge PDF …';
@@ -2608,7 +2663,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
   } catch (err) { $('#main').innerHTML = `<div class="card"><b class="neg">Start fehlgeschlagen</b><p>${esc(err.message || err)}</p></div>`; }
 })();
 // für Tests
-window.__aufmass = { S, Sync, Aufmass, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { S, Sync, Aufmass, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
