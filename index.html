@@ -365,7 +365,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 00:30 · MAL direkt über das Script';
+const APP_VERSION = '2026-11-08 00:45 · Alle verbundenen Scripts probieren';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -527,6 +527,8 @@ const BK = {
 };
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
+const gsDeps = () => { const a = [gsDep(), /^gs:[A-Za-z0-9_-]+~/.test(db.reg || '') ? db.reg.slice(3).split('~')[0] : null].filter(Boolean); return [...new Set(a)]; };
+const depTail = d => '…' + String(d).slice(-6);
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
 const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0&&u.indexOf('https://www.omdbapi.com/')!==0&&u.indexOf('https://myanimelist.net/')!==0)return out_('{}');try{return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}catch(x){return out_(JSON.stringify({scriptError:String(x)}));}}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
@@ -945,8 +947,8 @@ async function imdbEps(aid) {
   return { sc, id: t.imdbID, name: t.Title };
 }
 async function textVia(u) {
-  const dep = gsDep(), routes = [], errs = [];
-  if (dep) routes.push(['Google-Script', GS(dep) + '?u=' + encodeURIComponent(u), 40000]);
+  const routes = [], errs = [];
+  for (const d of gsDeps()) routes.push(['Google-Script ' + depTail(d), GS(d) + '?u=' + encodeURIComponent(u), 40000]);
   routes.push(['Proxy 1', 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u), 25000], ['Proxy 2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u), 25000]);
   for (const [n, f, ms] of routes) {
     const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
@@ -1792,16 +1794,16 @@ $('out').addEventListener('click', e => {
     const T0 = [['AniList', 'https://graphql.anilist.co/?query=%7BPage%7BpageInfo%7Btotal%7D%7D%7D'], ['Jikan (MAL)', 'https://api.jikan.moe/v4/anime/1'], ['OMDb (IMDb)', 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb || 'x') + '&s=frieren&type=series'], ['Proxy codetabs', 'https://api.codetabs.com/v1/proxy/?quest=https://api.jikan.moe/v4/anime/1']];
     const lines = [];
     (async () => {
-    const dep = gsDep();
-    if (dep) {
-      for (const [n, u] of [['Script → MAL-Seite', 'https://myanimelist.net/anime/1/_/episode'], ['Script → Jikan', 'https://api.jikan.moe/v4/anime/1'], ['Script → OMDb', 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb || 'x') + '&s=frieren&type=series']]) {
+    for (const dep of gsDeps()) {
+      for (const [n0, u] of [['Script → MAL-Seite', 'https://myanimelist.net/anime/1/_/episode'], ['Script → Jikan', 'https://api.jikan.moe/v4/anime/1'], ['Script → OMDb', 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb || 'x') + '&s=frieren&type=series']]) {
         const t0 = Date.now(); let res;
         try { const c = new AbortController(); setTimeout(() => c.abort(), 45000); const r = await fetch(GS(dep) + '?u=' + encodeURIComponent(u), { signal: c.signal }); const tx = await r.text();
-          res = `HTTP ${r.status}, ${Date.now() - t0} ms, Antwort: ${tx.replace(/\s+/g, ' ').slice(0, 200) || '(leer)'}`; }
+          res = `HTTP ${r.status}, ${Date.now() - t0} ms, Antwort: ${tx.includes('js-watch-episode-list') ? 'MAL-Folgenliste gefunden ✓' : tx.trim() === '{}' ? '{} – diese Script-Version kennt die Adresse nicht (alter Code bereitgestellt)' : tx.replace(/\s+/g, ' ').slice(0, 200) || '(leer)'}`; }
         catch (e) { res = /abort/i.test(e.message) ? 'Zeitüberschreitung (über 45 s)' : 'keine Antwort lesbar – meist ein Script-Absturz, z. B. fehlende Berechtigung (' + e.message + ')'; }
-        lines.push(n + ': ' + res); put(lines.join('\n'));
+        lines.push(n0 + ' (' + depTail(dep) + '): ' + res); put(lines.join('\n'));
       }
-    } else { lines.push('Google-Script: nicht verbunden'); put(lines.join('\n')); }
+    }
+    if (!gsDeps().length) { lines.push('Google-Script: nicht verbunden'); put(lines.join('\n')); }
     for (const [n, u] of T0) {
       const t0 = Date.now(); let res;
       try { const c = new AbortController(); setTimeout(() => c.abort(), 12000); const r = await fetch(u, { signal: c.signal }); res = `OK (HTTP ${r.status}, ${Date.now() - t0} ms)`; }
