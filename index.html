@@ -125,6 +125,10 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 .sform input{font:inherit;font-size:.9rem;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);width:100%;box-sizing:border-box}
 .side .sform button{justify-content:center;text-align:center;padding:9px 14px}
 .side .sform p{overflow-wrap:anywhere}
+.lnname{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:4px 0 8px;font-size:.82rem;color:var(--muted)}
+.lnname input{font:inherit;width:min(18em,60vw);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin-left:6px}
+.lnname button{font:inherit;font-size:.82rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
+.lnname small{width:100%}
 .mylinkp{margin:4px 0 6px}
 .mylink{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 8px;font-size:.85rem;color:var(--muted)}
 .mylink input{font:inherit;width:min(26em,70vw);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin-left:6px}
@@ -380,7 +384,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 02:00 · Folgen-Link mit Staffel und Episode';
+const APP_VERSION = '2026-11-08 02:15 · Link-Name pro Anime (synchronisiert)';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -912,6 +916,8 @@ const slugName = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').r
 const myUrl = t => { const tpl = String(db.lnk || '').trim(); if (!/^https?:\/\//i.test(tpl)) return ''; const sl = slugName(t); return tpl.includes('{name}') ? tpl.replace(/\{name\}/g, sl) : tpl.replace(/\/*$/, '/') + sl; };
 const stripSeason = t => String(t || '').replace(/\s*[:\-–]?\s*(\d+(st|nd|rd|th)\s+season|season\s*\d+|staffel\s*\d+|part\s*\d+|cour\s*\d+|s\d+)\s*$/i, '').trim();
 function seriesName(aid, t) {
+  { const L = cur(), own = L.items[aid]; if (own && own.ln) return own.ln;
+    const sib = seasonsInList(L, aid).find(x => x.ln); if (sib) return sib.ln; }
   const g = GRP[aid]; if (g && g.r !== aid) { const L = cur(), r = L.items[g.r]; if (r && !r.d) return r.t; }
   return g && g.d > 0 ? stripSeason(t) : t;
 }
@@ -1256,7 +1262,7 @@ function render() {
 }
 let lastIn = 0, dragging = false, rt = null;
 function safeRender() {
-  if ((screen || (document.activeElement && /^(omdbKey|lnkTpl)$/.test(document.activeElement.id))) && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
+  if ((screen || (document.activeElement && /^(omdbKey|lnkTpl|lnName)$/.test(document.activeElement.id))) && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
   if (dragging || now() - lastIn < 2500) { clearTimeout(rt); rt = setTimeout(safeRender, 800); return; }
   render();
 }
@@ -1396,6 +1402,8 @@ function renderDetail(L, aid) {
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
       <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${aliId(aid) ? `<p class="nexts"><button data-act="nextseason" data-sid="${esc(aid)}">+ Nächste Staffel hinzufügen</button></p>` : ''}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
       ${myLink(a) ? `<p class="mylinkp">${myLink(a)}</p>` : ''}
+      <div class="lnname"><label>Name im Link <input id="lnName" value="${esc(x.ln || '')}" placeholder="${esc(slugName(seriesName(aid, x.t)))}" autocomplete="off" spellcheck="false"></label><button data-act="lnsave" data-sid="${esc(aid)}">Speichern</button>
+        <small>Nur für diesen Anime (alle Staffeln). Wird mit der Liste synchronisiert, der Link selbst nicht. Leer lassen = automatisch.</small></div>
       <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
       ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
       ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
@@ -1851,6 +1859,13 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'lnsave') {
+    const L = cur(), id = b.dataset.sid, x0 = L.items[id]; if (!x0) return;
+    const v = (($('lnName') || {}).value || '').trim(), y = { ...x0, ts: now() };
+    if (v) y.ln = v; else delete y.ln;
+    if (!v) seasonsInList(L, id).forEach(q => { if (q.aid !== id && L.items[q.aid].ln) { const z = { ...L.items[q.aid], ts: now() }; delete z.ln; L.items[q.aid] = z; } });
+    L.items[id] = y; touch(L); hint(v ? 'Name für den Link gespeichert: ' + slugName(v) : 'Name für den Link wieder automatisch.'); render(); return;
+  }
   if (b.dataset.act === 'nextseason') {
     const L = cur(), base = b.dataset.sid, sl = seasonsInList(L, base), last = sl.length ? sl[sl.length - 1] : { aid: base, ...L.items[base] };
     const lid = aliId(last.aid); if (!lid) return;
