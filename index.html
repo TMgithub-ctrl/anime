@@ -357,7 +357,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 22:05 · MAL über Ausweich-Wege';
+const APP_VERSION = '2026-11-07 22:20 · MAL mit längerem Warten';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -882,20 +882,20 @@ const queueEnrich = () => { setTimeout(enrich, 50); setTimeout(resolveRoots, 400
 /* Folgenbewertungen von MyAnimeList (über Jikan); Skala 1–5 wird auf 1–10 umgerechnet */
 const EPS_KEY = 'anime-eps-v1'; let EPS = {};
 try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
-const epsBusy = {}, epsTry = {}, EPSERR = {};
+const epsBusy = {}, epsTry = {}, EPSERR = {}, epsAuto = {};
 const errText = e => /abort/i.test(e.message || '') ? 'Zeitüberschreitung' : /Failed to fetch|NetworkError|Load failed/i.test(e.message || '') ? 'Verbindung blockiert oder offline' : (e.message || 'Fehler');
 let jikanRoute = 0;
 async function jikanGet(u) {
   const dep = gsDep();
-  const routes = [['direkt', u]];
-  if (dep) routes.push(['Google-Script', GS(dep) + '?u=' + encodeURIComponent(u)]);
+  const routes = [['direkt', u, 45000]];
+  if (dep) routes.push(['Google-Script', GS(dep) + '?u=' + encodeURIComponent(u), 45000]);
   routes.push(['Proxy 1', 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)], ['Proxy 2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)], ['Proxy 3', 'https://corsproxy.io/?' + encodeURIComponent(u)]);
   const errs = [];
   for (let k = 0; k < routes.length; k++) {
-    const [n, f] = routes[(jikanRoute + k) % routes.length];
+    const [n, f, ms] = routes[(jikanRoute + k) % routes.length];
     for (let t = 0; t < 2; t++) {
       try {
-        const j = await jget(f, 12000);
+        const j = await jget(f, ms || 25000);
         if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error('keine Daten');
         jikanRoute = (jikanRoute + k) % routes.length; return j;
       } catch (e) {
@@ -918,7 +918,7 @@ async function loadMalEps(aid, force) {
       if (!(j.pagination && j.pagination.has_next_page)) { complete = true; break; }
       await new Promise(r => setTimeout(r, 450));
     }
-  } catch (e) { if (!got) EPSERR[aid] = e.message && e.message.includes(' · ') ? e.message : errText(e); }
+  } catch (e) { if (!got) { EPSERR[aid] = e.message && e.message.includes(' · ') ? e.message : errText(e); if (!epsAuto[aid]) { epsAuto[aid] = 1; setTimeout(() => { if (!EPS[aid]) loadMalEps(aid, true); }, 15000); } } }
   epsBusy[aid] = 0;
   if (!got && detail === aid) safeRender();
   if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
@@ -1256,7 +1256,7 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MyAnimeList: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? 'MAL-Folgenwertung, 1–5 Sterne auf 1–10 umgerechnet.' : 'MAL hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `MAL nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen …'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button>' : ''}</div>
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MyAnimeList: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? 'MAL-Folgenwertung, 1–5 Sterne auf 1–10 umgerechnet.' : 'MAL hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `MAL nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button>' : ''}</div>
   ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>MAL Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
