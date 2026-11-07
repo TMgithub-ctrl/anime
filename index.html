@@ -120,6 +120,12 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 .tools .mv{color:var(--text)}
 .mylnk{display:inline-flex;align-items:center;font:inherit;font-size:.8rem;font-weight:700;padding:3px 12px;border-radius:999px;border:1px solid var(--accent);color:var(--text);text-decoration:none;white-space:nowrap;line-height:1.4}
 .mylnk:hover{background:var(--accent);color:#2a1c00}
+.sform{display:flex;flex-direction:column;gap:8px}
+.sform label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted)}
+.sform input{font:inherit;font-size:.9rem;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);width:100%;box-sizing:border-box}
+.side .sform button{justify-content:center;text-align:center;padding:9px 14px}
+.side .sform p{overflow-wrap:anywhere}
+.mylinkp{margin:4px 0 6px}
 .mylink{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 8px;font-size:.85rem;color:var(--muted)}
 .mylink input{font:inherit;width:min(26em,70vw);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin-left:6px}
 .mylink button{font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
@@ -372,7 +378,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 01:30 · Eigener Link mit Namen';
+const APP_VERSION = '2026-11-08 01:45 · Eigener Link global in der Seitenleiste';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -902,7 +908,8 @@ const strmLink = a => {
 /* Eigener Link: Vorlage nur lokal gespeichert, Name als „name-mit-bindestrichen“ angehängt (oder an Stelle von {name}) */
 const slugName = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/['’‘`´]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const myUrl = t => { const tpl = String(db.lnk || '').trim(); if (!/^https?:\/\//i.test(tpl)) return ''; const sl = slugName(t); return tpl.includes('{name}') ? tpl.replace(/\{name\}/g, sl) : tpl.replace(/\/*$/, '/') + sl; };
-const myLink = a => { if (game()) return ''; const u = myUrl(a.t); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ Link</a>` : ''; };
+const myLink = a => { if (game()) return ''; const u = myUrl(a.t); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ ${esc(lnkName())}</a>` : ''; };
+const lnkName = () => String(db.lnkName || '').trim() || 'Link';
 const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub">★ ${fmt(m.sc / 10)} <small>AniList</small></p>` : ''; };
 let metaBusy = false; const metaTry = {};
 async function enrich() {
@@ -1377,8 +1384,7 @@ function renderDetail(L, aid) {
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
       <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${aliId(aid) ? `<p class="nexts"><button data-act="nextseason" data-sid="${esc(aid)}">+ Nächste Staffel hinzufügen</button></p>` : ''}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
-      <div class="mylink"><label>Eigener Link <input id="lnkTpl" value="${esc(db.lnk || '')}" placeholder="https://www.crunchyroll.com/de/series/…/" autocomplete="off" spellcheck="false"></label><button data-act="lnksave">Speichern</button>${myUrl(x.t) ? `<a class="mylnk" href="${esc(myUrl(x.t))}" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>` : ''}
-        <small>${myUrl(x.t) ? 'Öffnet: ' + esc(myUrl(x.t)) : 'Link eintragen und speichern. Der Name wird mit Bindestrichen angehängt, oder an der Stelle von {name} eingesetzt. Nur auf diesem Gerät gespeichert.'}</small></div>
+      ${myLink(a) ? `<p class="mylinkp">${myLink(a)}</p>` : ''}
       <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
       ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
       ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
@@ -1758,15 +1764,24 @@ $('out').addEventListener('click', async e => {
 /* ---------- Seitenleiste: Anime / osu! ---------- */
 const countOf = m => db.lists.filter(l => typeOf(l) === m).reduce((n, l) => n + live(l).length, 0);
 function renderSide() {
+  const ae = document.activeElement; if (ae && ae.tagName === 'INPUT' && $('side').contains(ae)) return;
   $('side').innerHTML = `<h2>Bereiche</h2>
     ${Object.keys(MODES).map(m => `<button data-mode="${m}" class="${db.mode === m ? 'on' : ''}"${db.mode === m ? ' aria-current="true"' : ''}><span class="sl">${MODES[m].icon}${MODES[m].side}</span><small>${countOf(m)}</small></button>`).join('')}
-    <p>Jeder Bereich hat eigene Listen. Alle lassen sich online mit anderen abgleichen.</p>`;
+    <p>Jeder Bereich hat eigene Listen. Alle lassen sich online mit anderen abgleichen.</p>
+    <h2 style="margin-top:18px">Eigener Link</h2>
+    <div class="sform">
+      <label>Name des Knopfs<input id="lnkName" value="${esc(db.lnkName || '')}" placeholder="z. B. Crunchyroll" autocomplete="off"></label>
+      <label>Link<input id="lnkTpl" value="${esc(db.lnk || '')}" placeholder="https://www.crunchyroll.com/de/search?q={name}" autocomplete="off" spellcheck="false"></label>
+      <button data-lnk="save">Speichern</button>
+      <p>Gilt für alle Anime. Der Anime-Name wird mit Bindestrichen ans Ende gesetzt oder an die Stelle von {name}. Nur auf diesem Gerät gespeichert.${db.lnk && myUrl('Frieren Beyond Journey\'s End') ? '<br>Beispiel: ' + esc(myUrl('Frieren Beyond Journey\'s End')) : ''}</p>
+    </div>`;
 }
 const sideOpen = o => { $('side').classList.toggle('open', o); $('scrim').hidden = !o; $('sbtn').setAttribute('aria-expanded', String(o)); };
 $('sbtn').onclick = () => sideOpen(!$('side').classList.contains('open'));
 $('scrim').onclick = () => sideOpen(false);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') sideOpen(false); });
 $('side').onclick = e => {
+  if (e.target.closest('button[data-lnk]')) { db.lnkName = $('lnkName').value.trim(); db.lnk = $('lnkTpl').value.trim(); save(); renderSide(); render(); hint(db.lnk ? 'Eigener Link gespeichert.' : 'Eigener Link entfernt.'); return; }
   const b = e.target.closest('button[data-mode]'); if (!b) return;
   if (db.mode !== b.dataset.mode) { db.mode = b.dataset.mode; db.cat = 'list'; detail = null; screen = null; panel = null; results = []; showSug(); $('q').value = ''; hint(''); save(); cur(); }
   sideOpen(false); render(); renderPanel();
@@ -1825,7 +1840,6 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
-  if (b.dataset.act === 'lnksave') { db.lnk = (($('lnkTpl') || {}).value || '').trim(); save(); hint(db.lnk ? 'Link gespeichert.' : 'Link entfernt.'); render(); return; }
   if (b.dataset.act === 'nextseason') {
     const L = cur(), base = b.dataset.sid, sl = seasonsInList(L, base), last = sl.length ? sl[sl.length - 1] : { aid: base, ...L.items[base] };
     const lid = aliId(last.aid); if (!lid) return;
