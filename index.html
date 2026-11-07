@@ -365,7 +365,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 00:45 · Alle verbundenen Scripts probieren';
+const APP_VERSION = '2026-11-08 01:00 · Vergleich in einer Zeile, IMDb nur bei Abweichung';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -1332,7 +1332,8 @@ function renderDetail(L, aid) {
     const mk = scoreOf(L, me, `e:${aid}#${k}`);
     const vals = P.map(p => scoreOf(L, p, `e:${aid}#${k}`)).filter(Boolean), avg = vals.length > 1 ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
     const our = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
-    const malChip = SRCS.map(([n, sv]) => { const mv = sv[k]; if (!mv) return ''; if (our !== null) pairsBy[n].push([our, mv]); const dl = our !== null ? our - mv : null;
+    const malK = (SRCS.find(q => q[0] === 'MAL') || [0, {}])[1][k];
+    const malChip = SRCS.map(([n, sv]) => { const mv = sv[k]; if (!mv) return ''; if (n === 'IMDb' && malK && Math.abs(mv - malK) <= 1) { if (our !== null) pairsBy[n].push([our, mv]); return ''; } if (our !== null) pairsBy[n].push([our, mv]); const dl = our !== null ? our - mv : null;
       return `<span class="chip mal ${n === 'IMDb' ? 'imdb' : ''}">${n} <b>${fmt(mv)}</b>${dl !== null ? ` <i class="d ${dl >= 0 ? 'up' : 'dn'}">${dl >= 0 ? '+' : '−'}${fmt(Math.abs(dl))}</i>` : ''}</span>`; }).join('');
     rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}${eoG(mk, gold10(L, `e:${aid}#${k}`))}
       <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}${malChip}</span></div>`;
@@ -1366,8 +1367,11 @@ function renderDetail(L, aid) {
       if (SRCPART[id]) return `lädt … (${Object.keys(SRCPART[id]).length} Folgen bisher)`;
       return n === 'MAL' ? 'lädt … (kann bis zu einer Minute dauern)' : 'lädt …'; };
     const anyErr = SRCERR['MAL' + aid] || SRCERR['IMDb' + aid], keyBad = /Invalid API key|Schlüssel/i.test(SRCERR['IMDb' + aid] || '');
-    const sums = SRCS.map(([n]) => { const pr = pairsBy[n]; if (!pr.length) return ''; const o = pr.reduce((s2, q) => s2 + q[0], 0) / pr.length, m2 = pr.reduce((s2, q) => s2 + q[1], 0) / pr.length, d2 = o - m2;
-      return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${n} Ø <b>${fmt(m2)}</b></span><span>${pr.length} Folgen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b> als ${n}</span></div>`; }).join('');
+    const avgOf = pr => pr.length ? [pr.reduce((s2, q) => s2 + q[0], 0) / pr.length, pr.reduce((s2, q) => s2 + q[1], 0) / pr.length] : null;
+    const aM = avgOf(pairsBy.MAL), aI = avgOf(pairsBy.IMDb);
+    const part = (n, av, cnt) => { const d2 = av[0] - av[1]; return `<span>${n} Ø <b>${fmt(av[1])}</b> <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${d2 >= 0 ? '+' : '−'}${fmt(Math.abs(d2))}</b> <small>(${cnt} ${cnt === 1 ? 'Folge' : 'Folgen'})</small></span>`; };
+    const showI = aI && (!aM || Math.abs(aI[1] - aM[1]) > 1);
+    const sums = aM || aI ? `<div class="malsum"><span>Euer Ø <b>${fmt((aM || aI)[0])}</b></span>${aM ? part('MAL', aM, pairsBy.MAL.length) : ''}${showI ? part('IMDb', aI, pairsBy.IMDb.length) : ''}</div>` : '';
     return `<div class="malbar"><button data-act="mal" class="on">Vergleich mit MAL/IMDb: an</button>${anyErr ? `<button data-act="malretry" data-sid="${esc(aid)}">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>` : ''}</div>
     <p class="srcst"><span><b>IMDb:</b> ${st1('IMDb')}</span><span><b>MAL:</b> ${st1('MAL')}</span></p>
     ${!db.omdb || keyBad ? `<div class="omdb"><label>OMDb-Schlüssel für IMDb: <input id="omdbKey" value="${esc(db.omdb || '')}" placeholder="z. B. a1b2c3d4" autocomplete="off" spellcheck="false"></label><button data-act="omdbsave" data-sid="${esc(aid)}">Speichern</button><small>Kostenlos auf omdbapi.com. Wird nur auf diesem Gerät gespeichert.</small></div>` : ''}
