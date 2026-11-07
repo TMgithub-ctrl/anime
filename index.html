@@ -384,7 +384,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 02:15 · Link-Name pro Anime (synchronisiert)';
+const APP_VERSION = '2026-11-08 02:30 · Link mit gezeigter Staffel und aktueller Folge';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -923,9 +923,21 @@ function seriesName(aid, t) {
 }
 const seasonNo = aid => (GRP[aid] ? GRP[aid].d : 0) + 1;
 const epUrl = (aid, t, k) => { const u = myUrl(seriesName(aid, t)); if (!u) return ''; const tpl = String(db.lnk || ''); const S = seasonNo(aid);
-  if (/\{(staffel|folge)\}/.test(tpl)) return myUrl(seriesName(aid, t)).replace(/\{staffel\}/g, S).replace(/\{folge\}/g, k);
+  if (/\{(staffel|folge)\}/.test(tpl)) return u.replace(/\{staffel\}/g, S).replace(/\{folge\}/g, k);
+  if (u.includes('?')) return u;
   return u.replace(/\/*$/, '') + `/staffel-${S}/episode-${k}`; };
-const myLink = a => { if (game()) return ''; const u = myUrl(seriesName(a.aid, a.t)).replace(/\{staffel\}/g, seasonNo(a.aid)).replace(/\{folge\}/g, 1); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ ${esc(lnkName())}</a>` : ''; };
+const seasonUrl = (aid, t) => { const u = myUrl(seriesName(aid, t)); if (!u) return ''; const tpl = String(db.lnk || ''); const S = seasonNo(aid);
+  if (/\{(staffel|folge)\}/.test(tpl)) return u.replace(/\{staffel\}/g, S).replace(/\{folge\}/g, 1);
+  if (u.includes('?')) return u;
+  return u.replace(/\/*$/, '') + `/staffel-${S}`; };
+/* Karten-Knopf: am Schauen -> direkt zur aktuellen Folge der gezeigten Staffel, sonst zur gezeigten Staffel */
+const myLink = a => {
+  if (game()) return ''; const L = cur(), S = seasonNo(a.aid), me = db.me.id;
+  const watching = statOf(L, me, a) === 'w', ep = epOf(L, me, a) || 1;
+  const u = watching ? epUrl(a.aid, a.t, ep) : seasonUrl(a.aid, a.t); if (!u) return '';
+  const lab = esc(lnkName()) + (watching ? ` · S${S} F${ep}` : ` · S${S}`);
+  return `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ ${lab}</a>`;
+};
 const lnkName = () => String(db.lnkName || '').trim() || 'Link';
 const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub">★ ${fmt(m.sc / 10)} <small>AniList</small></p>` : ''; };
 let metaBusy = false; const metaTry = {};
@@ -1329,7 +1341,7 @@ function renderWatching(L) {
         <div class="scs">${chip('Du', my, gold10(L, `e:${a.aid}#${ep}`))}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`), gold10(L, `e:${a.aid}#${ep}`))).join('')}</div>
         <span class="minilab">Folge ${ep} bewerten</span>${rng(my, 'e', ep, `Deine Bewertung für Folge ${ep}`)}
       </div>
-      <div class="wact"><button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
+      <div class="wact">${myLink(a)}<button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
     </article>`;
   }).join('')}</div>`;
 }
