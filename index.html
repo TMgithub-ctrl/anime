@@ -217,6 +217,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .fin .eo{font-weight:800;font-size:1.3rem;color:hsl(var(--h) 85% 66%)}.fin .eo.none{color:var(--muted)}
 .elist{display:grid;gap:8px}
 .erow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border-radius:12px;padding:8px 14px}
+.erow .eplnk{margin-left:auto;font-size:.78rem;font-weight:700;padding:4px 11px;border-radius:999px;border:1px solid var(--accent);color:var(--text);text-decoration:none;white-space:nowrap}
+.erow .eplnk:hover{background:var(--accent);color:#2a1c00}
 .erow .ek{min-width:80px;font-weight:600}
 .erow input[type=range]{flex:1;min-width:140px;max-width:260px;margin:0}
 .erow .eo{min-width:2ch;font-weight:800;color:hsl(var(--h) 85% 66%)}.erow .eo.none{color:var(--muted)}
@@ -378,7 +380,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 01:45 · Eigener Link global in der Seitenleiste';
+const APP_VERSION = '2026-11-08 02:00 · Folgen-Link mit Staffel und Episode';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -908,7 +910,16 @@ const strmLink = a => {
 /* Eigener Link: Vorlage nur lokal gespeichert, Name als „name-mit-bindestrichen“ angehängt (oder an Stelle von {name}) */
 const slugName = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/['’‘`´]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const myUrl = t => { const tpl = String(db.lnk || '').trim(); if (!/^https?:\/\//i.test(tpl)) return ''; const sl = slugName(t); return tpl.includes('{name}') ? tpl.replace(/\{name\}/g, sl) : tpl.replace(/\/*$/, '/') + sl; };
-const myLink = a => { if (game()) return ''; const u = myUrl(a.t); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ ${esc(lnkName())}</a>` : ''; };
+const stripSeason = t => String(t || '').replace(/\s*[:\-–]?\s*(\d+(st|nd|rd|th)\s+season|season\s*\d+|staffel\s*\d+|part\s*\d+|cour\s*\d+|s\d+)\s*$/i, '').trim();
+function seriesName(aid, t) {
+  const g = GRP[aid]; if (g && g.r !== aid) { const L = cur(), r = L.items[g.r]; if (r && !r.d) return r.t; }
+  return g && g.d > 0 ? stripSeason(t) : t;
+}
+const seasonNo = aid => (GRP[aid] ? GRP[aid].d : 0) + 1;
+const epUrl = (aid, t, k) => { const u = myUrl(seriesName(aid, t)); if (!u) return ''; const tpl = String(db.lnk || ''); const S = seasonNo(aid);
+  if (/\{(staffel|folge)\}/.test(tpl)) return myUrl(seriesName(aid, t)).replace(/\{staffel\}/g, S).replace(/\{folge\}/g, k);
+  return u.replace(/\/*$/, '') + `/staffel-${S}/episode-${k}`; };
+const myLink = a => { if (game()) return ''; const u = myUrl(seriesName(a.aid, a.t)).replace(/\{staffel\}/g, seasonNo(a.aid)).replace(/\{folge\}/g, 1); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ ${esc(lnkName())}</a>` : ''; };
 const lnkName = () => String(db.lnkName || '').trim() || 'Link';
 const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub">★ ${fmt(m.sc / 10)} <small>AniList</small></p>` : ''; };
 let metaBusy = false; const metaTry = {};
@@ -1375,7 +1386,7 @@ function renderDetail(L, aid) {
     const malChip = SRCS.map(([n, sv]) => { const mv = sv[k]; if (!mv) return ''; if (n === 'IMDb' && malK && Math.abs(mv - malK) <= 1) { if (our !== null) pairsBy[n].push([our, mv]); return ''; } if (our !== null) pairsBy[n].push([our, mv]); const dl = our !== null ? our - mv : null;
       return `<span class="chip mal ${n === 'IMDb' ? 'imdb' : ''}">${n} <b>${fmt(mv)}</b>${dl !== null ? ` <i class="d ${dl >= 0 ? 'up' : 'dn'}">${dl >= 0 ? '+' : '−'}${fmt(Math.abs(dl))}</i>` : ''}</span>`; }).join('');
     rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}${eoG(mk, gold10(L, `e:${aid}#${k}`))}
-      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}${malChip}</span></div>`;
+      <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}${malChip}</span>${epUrl(aid, x.t, k) ? `<a class="eplnk" href="${esc(epUrl(aid, x.t, k))}" target="_blank" rel="noopener noreferrer" title="${esc(epUrl(aid, x.t, k))}" aria-label="Staffel ${seasonNo(aid)}, Folge ${k} öffnen">▶ S${seasonNo(aid)} F${k}</a>` : ''}</div>`;
   }
   const more = ep > 20 ? `<button class="lnk" data-act="showall">${detailAll ? 'Nur die letzten 20 zeigen' : `Alle ${ep} Folgen anzeigen`}</button>` : '';
   $('out').innerHTML = `<div class="dback"><button data-act="back">← Zurück</button></div>
@@ -1773,7 +1784,7 @@ function renderSide() {
       <label>Name des Knopfs<input id="lnkName" value="${esc(db.lnkName || '')}" placeholder="z. B. Crunchyroll" autocomplete="off"></label>
       <label>Link<input id="lnkTpl" value="${esc(db.lnk || '')}" placeholder="https://www.crunchyroll.com/de/search?q={name}" autocomplete="off" spellcheck="false"></label>
       <button data-lnk="save">Speichern</button>
-      <p>Gilt für alle Anime. Der Anime-Name wird mit Bindestrichen ans Ende gesetzt oder an die Stelle von {name}. Nur auf diesem Gerät gespeichert.${db.lnk && myUrl('Frieren Beyond Journey\'s End') ? '<br>Beispiel: ' + esc(myUrl('Frieren Beyond Journey\'s End')) : ''}</p>
+      <p>Gilt für alle Anime. Der Anime-Name wird mit Bindestrichen ans Ende gesetzt oder an die Stelle von {name}. Bei den Folgen kommt /staffel-1/episode-1 dahinter (oder nutze {staffel} und {folge}). Nur auf diesem Gerät gespeichert.${db.lnk && myUrl('Frieren Beyond Journey\'s End') ? '<br>Beispiel: ' + esc(myUrl('Frieren Beyond Journey\'s End')) : ''}</p>
     </div>`;
 }
 const sideOpen = o => { $('side').classList.toggle('open', o); $('scrim').hidden = !o; $('sbtn').setAttribute('aria-expanded', String(o)); };
