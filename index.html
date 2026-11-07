@@ -118,6 +118,12 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 @media (hover:none){.slw{max-height:150px;opacity:1}}
 .tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
 .tools .mv{color:var(--text)}
+.mylnk{display:inline-flex;align-items:center;font:inherit;font-size:.8rem;font-weight:700;padding:3px 12px;border-radius:999px;border:1px solid var(--accent);color:var(--text);text-decoration:none;white-space:nowrap;line-height:1.4}
+.mylnk:hover{background:var(--accent);color:#2a1c00}
+.mylink{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 8px;font-size:.85rem;color:var(--muted)}
+.mylink input{font:inherit;width:min(26em,70vw);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text);margin-left:6px}
+.mylink button{font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
+.mylink small{width:100%;word-break:break-all}
 .nexts{margin:2px 0 6px}.nexts button{font:inherit;font-size:.8rem;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:3px 12px;cursor:pointer}.nexts button:hover{color:var(--text);border-color:var(--accent)}
 .seas{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:4px 0 6px}
 .seas span{font-size:.72rem;color:var(--muted);margin-right:2px}
@@ -366,7 +372,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 01:20 · Staffeln über Reiter hinweg zusammen, nächste Staffel hinzufügen';
+const APP_VERSION = '2026-11-08 01:30 · Eigener Link mit Namen';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -893,6 +899,10 @@ const strmLink = a => {
   const [n, bg, fg] = STRM[m.sl.k];
   return `<a class="strm" style="--sc:${bg};--sf:${fg}" href="${esc(m.sl.u)}" target="_blank" rel="noopener noreferrer">▶ ${n}</a>`;
 };
+/* Eigener Link: Vorlage nur lokal gespeichert, Name als „name-mit-bindestrichen“ angehängt (oder an Stelle von {name}) */
+const slugName = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/['’‘`´]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const myUrl = t => { const tpl = String(db.lnk || '').trim(); if (!/^https?:\/\//i.test(tpl)) return ''; const sl = slugName(t); return tpl.includes('{name}') ? tpl.replace(/\{name\}/g, sl) : tpl.replace(/\/*$/, '/') + sl; };
+const myLink = a => { if (game()) return ''; const u = myUrl(a.t); return u ? `<a class="mylnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">↗ Link</a>` : ''; };
 const animeSub = a => { const m = META[a.aid]; return m && m.sc ? `<p class="sub">★ ${fmt(m.sc / 10)} <small>AniList</small></p>` : ''; };
 let metaBusy = false; const metaTry = {};
 async function enrich() {
@@ -1103,7 +1113,7 @@ async function resolveRoots() {
   } catch (e) { relBusy = false; }
 }
 const subLine = (L, a) => !game() ? animeSub(a) : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
-const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button>${strmLink(a)}<button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
+const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button>${strmLink(a)}${myLink(a)}<button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
   const o = others(L).map(p => [pname(L, p), scoreOf(L, p, aid)]).filter(x => x[1]);
   return o.length ? `<div class="oth">${o.map(([n, v]) => `<span${v === 10 && gold10(L, aid) ? ' class="gold"' : ''}>${esc(n)} <b>${fmtG(v, gold10(L, aid))}</b></span>`).join('')}</div>` : '';
@@ -1228,7 +1238,7 @@ function render() {
 }
 let lastIn = 0, dragging = false, rt = null;
 function safeRender() {
-  if ((screen || (document.activeElement && document.activeElement.id === 'omdbKey')) && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
+  if ((screen || (document.activeElement && /^(omdbKey|lnkTpl)$/.test(document.activeElement.id))) && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
   if (dragging || now() - lastIn < 2500) { clearTimeout(rt); rt = setTimeout(safeRender, 800); return; }
   render();
 }
@@ -1321,7 +1331,7 @@ function renderDone(L) {
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
     ${r.c != null ? ringC(r.c, 'sm', r.sc) : ''}
-    <div class="wact">${strmLink(r)}<button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
+    <div class="wact">${strmLink(r)}${myLink(r)}<button data-act="detail">Details</button>${game() ? '' : '<button data-act="watch">Weiter schauen</button>'}<button data-act="todo">${T('Zur Liste', 'Zu den Vorschlägen')}</button></div>
   </article>`;
   const section = (title, list, start) => list.length ? `<h3>${title}</h3><div class="rows">${list.map((r, i) => rowH(r, start ? i + start : 0)).join('')}</div>` : '';
   let h = P.length > 1 ? `<div class="ctl"><span class="lab">Anzeigen:</span><div class="who">${P.map(p => `<button data-p="${esc(p)}" class="${sel.includes(p) ? 'on' : ''}">${esc(pname(L, p))}</button>`).join('')}</div></div><p class="note">Die Reihenfolge richtet sich nach dem Durchschnitt der Gesamtbewertungen der Gewählten.</p>` : '';
@@ -1367,6 +1377,8 @@ function renderDetail(L, aid) {
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
       <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${aliId(aid) ? `<p class="nexts"><button data-act="nextseason" data-sid="${esc(aid)}">+ Nächste Staffel hinzufügen</button></p>` : ''}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
+      <div class="mylink"><label>Eigener Link <input id="lnkTpl" value="${esc(db.lnk || '')}" placeholder="https://www.crunchyroll.com/de/series/…/" autocomplete="off" spellcheck="false"></label><button data-act="lnksave">Speichern</button>${myUrl(x.t) ? `<a class="mylnk" href="${esc(myUrl(x.t))}" target="_blank" rel="noopener noreferrer">Öffnen ↗</a>` : ''}
+        <small>${myUrl(x.t) ? 'Öffnet: ' + esc(myUrl(x.t)) : 'Link eintragen und speichern. Der Name wird mit Bindestrichen angehängt, oder an der Stelle von {name} eingesetzt. Nur auf diesem Gerät gespeichert.'}</small></div>
       <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
       ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
       ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
@@ -1813,6 +1825,7 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'lnksave') { db.lnk = (($('lnkTpl') || {}).value || '').trim(); save(); hint(db.lnk ? 'Link gespeichert.' : 'Link entfernt.'); render(); return; }
   if (b.dataset.act === 'nextseason') {
     const L = cur(), base = b.dataset.sid, sl = seasonsInList(L, base), last = sl.length ? sl[sl.length - 1] : { aid: base, ...L.items[base] };
     const lid = aliId(last.aid); if (!lid) return;
