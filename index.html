@@ -358,7 +358,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 23:00 · Verbindungstest für Folgenwertungen';
+const APP_VERSION = '2026-11-07 23:15 · Folgenwertungen über Google-Script';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -521,7 +521,7 @@ const BK = {
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
-const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
+const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
 function key_(k){return String(k||'').replace(/\\W/g,'');}
 function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
@@ -897,7 +897,7 @@ async function jikanGet(u) {
     for (let t = 0; t < 2; t++) {
       try {
         const j = await jget(f, ms || 25000);
-        if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error('keine Daten');
+        if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error(n === 'Google-Script' ? 'keine Daten (Script-Code noch alt?)' : 'keine Daten');
         jikanRoute = (jikanRoute + k) % routes.length; return j;
       } catch (e) {
         if (t === 0 && /HTTP (429|5\d\d)/.test(e.message)) { await new Promise(r => setTimeout(r, 1500)); continue; }
@@ -907,17 +907,23 @@ async function jikanGet(u) {
   }
   throw new Error(errs.join(' · '));
 }
+async function viaGet(u, ms) {
+  const errs = [], dep = gsDep();
+  try { return await jget(u, ms); } catch (e) { errs.push('direkt: ' + errText(e)); }
+  if (dep) { try { const j = await jget(GS(dep) + '?u=' + encodeURIComponent(u), 45000); if (j && typeof j === 'object' && Object.keys(j).length) return j; throw new Error('keine Daten (Script-Code noch alt?)'); } catch (e) { errs.push('Google-Script: ' + errText(e)); } }
+  throw new Error(errs.join(' · '));
+}
 /* Ausweich-Quelle: IMDb über imdbapi.dev (ohne Schlüssel). Staffel-Zuordnung ist geschätzt (n-te Staffel in der Kette = IMDb-Staffel n). */
 async function imdbEps(aid) {
   const it = (cur().items[aid]) || {};
   const q = String(it.t || '').replace(/\s*[:\-–]?\s*(\d+(st|nd|rd|th)\s+season|season\s*\d+|part\s*\d+|cour\s*\d+|s\d+|\d+)\s*$/i, '').trim();
   if (!q) throw new Error('kein Titel');
-  const sr = await jget('https://api.imdbapi.dev/search/titles?query=' + encodeURIComponent(q) + '&limit=6', 15000);
+  const sr = await viaGet('https://api.imdbapi.dev/search/titles?query=' + encodeURIComponent(q) + '&limit=6', 15000);
   const t = (sr.titles || []).find(x => /tvSeries|tvMiniSeries/i.test(x.type || '')) || (sr.titles || [])[0];
   if (!t || !t.id) throw new Error('kein IMDb-Treffer');
   const season = (GRP[aid] ? GRP[aid].d : 0) + 1, sc = {}; let tok = '';
   for (let i = 0; i < 6; i++) {
-    const j = await jget(`https://api.imdbapi.dev/titles/${encodeURIComponent(t.id)}/episodes?season=${season}&pageSize=50${tok ? '&pageToken=' + encodeURIComponent(tok) : ''}`, 15000);
+    const j = await viaGet(`https://api.imdbapi.dev/titles/${encodeURIComponent(t.id)}/episodes?season=${season}&pageSize=50${tok ? '&pageToken=' + encodeURIComponent(tok) : ''}`, 15000);
     for (const e of (j.episodes || [])) { const v = e.rating && e.rating.aggregateRating, n = +e.episodeNumber; if (v > 0 && n > 0) sc[n] = Math.round(v * 10) / 10; }
     if (!j.nextPageToken) break; tok = j.nextPageToken;
   }
@@ -941,7 +947,7 @@ async function loadMalEps(aid, force) {
   if (!got) {
     try { const r = await imdbEps(aid); sc = r.sc; got = true; complete = true; src = 'IMDb'; imdb = r.id; }
     catch (e) {
-      EPSERR[aid] = (jerr ? jerr + ' || ' : '') + 'IMDb: ' + errText(e);
+      EPSERR[aid] = (jerr ? jerr + ' || ' : '') + 'IMDb: ' + (e.message && e.message.includes(' · ') ? e.message : errText(e));
       if (!epsAuto[aid]) { epsAuto[aid] = 1; setTimeout(() => { if (!EPS[aid]) loadMalEps(aid, true); }, 15000); }
     }
   }
