@@ -133,6 +133,9 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 .omdb input{font:inherit;width:9.5em;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
 .omdb button{font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--accent);border-radius:999px;padding:4px 12px;cursor:pointer}
 .omdb small{width:100%}
+.srcst{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 8px;font-size:.82rem;color:var(--muted)}
+.srcst b{color:var(--text)}
+.chip.mal.imdb{border-color:#c9a227;color:#e8d38a}.chip.mal.imdb b{color:#ffe7a0}
 .maltest{font:inherit;font-size:.8rem;color:var(--muted);white-space:pre-wrap;margin:0 0 8px}
 .malbar small{color:var(--muted)}
 .malsum{display:flex;gap:6px 18px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:10px;font-size:.9rem;color:var(--muted)}
@@ -362,7 +365,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 23:55 · IMDb-Ausweich über OMDb';
+const APP_VERSION = '2026-11-08 00:10 · IMDb und MAL parallel laden';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -941,32 +944,44 @@ async function imdbEps(aid) {
   for (const e of (j.Episodes || [])) { const v = parseFloat(e.imdbRating), n = parseInt(e.Episode, 10); if (v > 0 && n > 0) sc[n] = Math.round(v * 10) / 10; }
   return { sc, id: t.imdbID, name: t.Title };
 }
-async function loadMalEps(aid, force) {
+const EPSI_KEY = 'anime-epsi-v1'; let EPSI = {};
+try { EPSI = JSON.parse(localStorage.getItem(EPSI_KEY)) || {}; } catch (e) { EPSI = {}; }
+for (const k of Object.keys(EPS)) if (EPS[k] && EPS[k].src === 'IMDb') { EPSI[k] = EPS[k]; delete EPS[k]; }
+const SRCBUSY = {}, SRCTRY = {}, SRCERR = {}, SRCAUTO = {}, SRCPART = {};
+const srcCache = n => n === 'MAL' ? EPS : EPSI;
+const srcSave = n => { try { localStorage.setItem(n === 'MAL' ? EPS_KEY : EPSI_KEY, JSON.stringify(srcCache(n))); } catch (e) {} };
+async function loadSrc(aid, n, force) {
   const m = META[aid]; if (!m) return;
-  if (force) { delete epsTry[aid]; delete EPSERR[aid]; }
-  const c = EPS[aid]; if ((c && now() - c.t < 7 * 864e5) || epsBusy[aid] || EPSERR[aid] || now() - (epsTry[aid] || 0) < 300000) return;
-  epsBusy[aid] = 1; epsTry[aid] = now(); let sc = {}, complete = false, got = false, src = 'MAL', imdb = '', jerr = '';
-  if (m.mal) {
-    try {
+  if (n === 'MAL' && !m.mal) return;
+  if (n === 'IMDb' && !db.omdb) return;
+  const id = n + aid, C = srcCache(n);
+  if (force) { delete SRCTRY[id]; delete SRCERR[id]; }
+  const c = C[aid]; if ((c && now() - c.t < 7 * 864e5) || SRCBUSY[id] || SRCERR[id] || now() - (SRCTRY[id] || 0) < 300000) return;
+  SRCBUSY[id] = 1; SRCTRY[id] = now();
+  let sc = {}, complete = false, got = false, extra = '';
+  try {
+    if (n === 'MAL') {
       for (let pg = 1; pg <= 12; pg++) {
         const j = await jikanGet(`https://api.jikan.moe/v4/anime/${m.mal}/episodes?page=${pg}`); got = true;
         for (const e of (j.data || [])) if (e.score > 0) sc[e.mal_id] = Math.round(e.score * 20) / 10;
         if (!(j.pagination && j.pagination.has_next_page)) { complete = true; break; }
+        SRCPART[id] = { ...sc }; if (detail === aid) safeRender();
         await new Promise(r => setTimeout(r, 450));
       }
-    } catch (e) { if (!got) jerr = 'MAL: ' + (e.message && e.message.includes(' · ') ? e.message : errText(e)); }
-  }
-  if (!got) {
-    try { const r = await imdbEps(aid); sc = r.sc; got = true; complete = true; src = 'IMDb'; imdb = r.id + ' · ' + (r.name || ''); }
-    catch (e) {
-      EPSERR[aid] = (jerr ? jerr + ' || ' : '') + 'IMDb: ' + (e.message && e.message.includes(' · ') ? e.message : errText(e));
-      if (!epsAuto[aid]) { epsAuto[aid] = 1; setTimeout(() => { if (!EPS[aid]) loadMalEps(aid, true); }, 15000); }
+    } else {
+      const r = await imdbEps(aid); sc = r.sc; got = true; complete = true; extra = r.id + ' · ' + (r.name || '');
+    }
+  } catch (e) {
+    if (!got) {
+      SRCERR[id] = e.message && e.message.includes(' · ') ? e.message : errText(e);
+      if (!SRCAUTO[id] && !/Invalid API key|Schlüssel/i.test(SRCERR[id])) { SRCAUTO[id] = 1; setTimeout(() => { if (!srcCache(n)[aid]) loadSrc(aid, n, true); }, 15000); }
     }
   }
-  epsBusy[aid] = 0;
-  if (!got && detail === aid) safeRender();
-  if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc, src, imdb }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
+  SRCBUSY[id] = 0; delete SRCPART[id];
+  if (got) { C[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc, imdb: extra, src: n }; srcSave(n); }
+  if (detail === aid) safeRender();
 }
+function loadMalEps(aid, force) { loadSrc(aid, 'IMDb', force); loadSrc(aid, 'MAL', force); }
 /* ---------- Staffeln zu einer Karte zusammenfassen (Vorgänger-Kette über AniList) ---------- */
 const GRP_KEY = 'anime-grp-v1', REL_KEY = 'anime-rel-v1'; let GRP = {}, REL = {};
 try { GRP = JSON.parse(localStorage.getItem(GRP_KEY)) || {}; REL = JSON.parse(localStorage.getItem(REL_KEY)) || {}; } catch (e) { GRP = {}; REL = {}; }
@@ -1266,19 +1281,19 @@ function renderDetail(L, aid) {
   const x = L.items[aid], P = parts(L), me = db.me.id, a = { aid, ...x };
   const W = watchersOf(L, x), iWatch = W.includes(me), st = iWatch ? statOf(L, me, a) : 't';
   const malOn = db.mal !== false, hasMal = !!(META[aid] && aliId(aid)); if (malOn && hasMal) loadMalEps(aid);
-  const malS = malOn && EPS[aid] ? EPS[aid].s : null, srcN = (EPS[aid] && EPS[aid].src) || 'MAL';
+  const SRCS = malOn ? [['IMDb', EPSI[aid] ? EPSI[aid].s : SRCPART['IMDb' + aid]], ['MAL', EPS[aid] ? EPS[aid].s : SRCPART['MAL' + aid]]].filter(q => q[1]) : [], malS = SRCS.length ? 1 : null;
   const total = x.n || 0, ep = iWatch ? epOf(L, me, a) : 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0;
   const stBtn = (v, l) => `<button data-act="st" data-st="${v}" class="${st === v ? 'on' : ''}">${l}</button>`;
   const my = scoreOf(L, me, 'r:' + aid), es = epStats(L, me, aid);
   $('stats').textContent = x.t;
   const from = detailAll ? 1 : Math.max(1, ep - 19);
-  let rows = ''; const pairs = [];
+  let rows = ''; const pairsBy = { MAL: [], IMDb: [] };
   for (let k = ep; k >= from; k--) {
     const mk = scoreOf(L, me, `e:${aid}#${k}`);
     const vals = P.map(p => scoreOf(L, p, `e:${aid}#${k}`)).filter(Boolean), avg = vals.length > 1 ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
-    const mv = malS && malS[k]; if (mv && vals.length) { const our = vals.reduce((s2, v) => s2 + v, 0) / vals.length; pairs.push([our, mv]); }
-    const dl = mv && vals.length ? (vals.reduce((s2, v) => s2 + v, 0) / vals.length) - mv : null;
-    const malChip = mv ? `<span class="chip mal">${srcN} <b>${fmt(mv)}</b>${dl !== null ? ` <i class="d ${dl >= 0 ? 'up' : 'dn'}">${dl >= 0 ? '+' : '−'}${fmt(Math.abs(dl))}</i>` : ''}</span>` : '';
+    const our = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
+    const malChip = SRCS.map(([n, sv]) => { const mv = sv[k]; if (!mv) return ''; if (our !== null) pairsBy[n].push([our, mv]); const dl = our !== null ? our - mv : null;
+      return `<span class="chip mal ${n === 'IMDb' ? 'imdb' : ''}">${n} <b>${fmt(mv)}</b>${dl !== null ? ` <i class="d ${dl >= 0 ? 'up' : 'dn'}">${dl >= 0 ? '+' : '−'}${fmt(Math.abs(dl))}</i>` : ''}</span>`; }).join('');
     rows += `<div class="erow" data-aid="${esc(aid)}" style="--h:${hue(mk)}"><span class="ek">Folge ${k}</span>${rng(mk, 'e', k, `Deine Bewertung für Folge ${k}`)}${eoG(mk, gold10(L, `e:${aid}#${k}`))}
       <span class="scs">${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${aid}#${k}`), gold10(L, `e:${aid}#${k}`))).join('')}${avg ? `<span class="chip" style="--h:${hue(avg)}">Ø <b>${fmt(avg)}</b></span>` : ''}${malChip}</span></div>`;
   }
@@ -1300,8 +1315,24 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? `Quelle: IMDb über OMDb (${esc((EPS[aid] && EPS[aid].imdb) || '')}, Staffel ${(GRP[aid] ? GRP[aid].d : 0) + 1} – Zuordnung geschätzt).` : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malOn && hasMal && (!malS || !db.omdb) ? `<div class="omdb"><label>IMDb-Ausweich (OMDb-Schlüssel): <input id="omdbKey" value="${esc(db.omdb || '')}" placeholder="z. B. a1b2c3d4" autocomplete="off" spellcheck="false"></label><button data-act="omdbsave" data-sid="${esc(aid)}">Speichern</button><small>Kostenlos auf omdbapi.com. Wird nur auf diesem Gerät gespeichert.</small></div>` : ''}${malTestText && malOn && hasMal && !malS ? `<pre id="maltest" class="maltest">${esc(malTestText)}</pre>` : malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
-  ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${srcN} Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
+  ${(() => {
+    if (!malOn) return `<div class="malbar"><button data-act="mal">Vergleich mit MAL/IMDb: aus</button></div>`;
+    if (!hasMal) return `<div class="malbar"><button data-act="mal" class="on">Vergleich mit MAL/IMDb: an</button><small>Für diesen Anime gibt es keine Verknüpfung (geht nur bei Anime aus der Suche).</small></div>`;
+    const st1 = n => { const id = n + aid, C = srcCache(n)[aid];
+      if (n === 'MAL' && !(META[aid] && META[aid].mal)) return 'kein MAL-Eintrag';
+      if (n === 'IMDb' && !db.omdb) return 'kein OMDb-Schlüssel';
+      if (C) return Object.keys(C.s).length ? `${Object.keys(C.s).length} Folgen` + (n === 'IMDb' ? ` (${esc(C.imdb || '')}, Staffel ${(GRP[aid] ? GRP[aid].d : 0) + 1}, geschätzt)` : ' (1–5 Sterne ×2)') : 'noch keine Folgenwertungen';
+      if (SRCERR[id]) return 'nicht erreichbar: ' + esc(SRCERR[id]);
+      if (SRCPART[id]) return `lädt … (${Object.keys(SRCPART[id]).length} Folgen bisher)`;
+      return n === 'MAL' ? 'lädt … (kann bis zu einer Minute dauern)' : 'lädt …'; };
+    const anyErr = SRCERR['MAL' + aid] || SRCERR['IMDb' + aid], keyBad = /Invalid API key|Schlüssel/i.test(SRCERR['IMDb' + aid] || '');
+    const sums = SRCS.map(([n]) => { const pr = pairsBy[n]; if (!pr.length) return ''; const o = pr.reduce((s2, q) => s2 + q[0], 0) / pr.length, m2 = pr.reduce((s2, q) => s2 + q[1], 0) / pr.length, d2 = o - m2;
+      return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${n} Ø <b>${fmt(m2)}</b></span><span>${pr.length} Folgen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b> als ${n}</span></div>`; }).join('');
+    return `<div class="malbar"><button data-act="mal" class="on">Vergleich mit MAL/IMDb: an</button>${anyErr ? `<button data-act="malretry" data-sid="${esc(aid)}">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>` : ''}</div>
+    <p class="srcst"><span><b>IMDb:</b> ${st1('IMDb')}</span><span><b>MAL:</b> ${st1('MAL')}</span></p>
+    ${!db.omdb || keyBad ? `<div class="omdb"><label>OMDb-Schlüssel für IMDb: <input id="omdbKey" value="${esc(db.omdb || '')}" placeholder="z. B. a1b2c3d4" autocomplete="off" spellcheck="false"></label><button data-act="omdbsave" data-sid="${esc(aid)}">Speichern</button><small>Kostenlos auf omdbapi.com. Wird nur auf diesem Gerät gespeichert.</small></div>` : ''}
+    ${malTestText ? `<pre id="maltest" class="maltest">${esc(malTestText)}</pre>` : anyErr ? '<pre id="maltest" class="maltest"></pre>' : ''}${sums}`;
+  })()}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
 
@@ -1745,7 +1776,7 @@ $('out').addEventListener('click', e => {
     })();
     return;
   }
-  if (b.dataset.act === 'omdbsave') { db.omdb = (($('omdbKey') || {}).value || '').trim(); save(); delete EPS[b.dataset.sid]; loadMalEps(b.dataset.sid, true); hint(db.omdb ? 'OMDb-Schlüssel gespeichert.' : 'OMDb-Schlüssel entfernt.'); render(); return; }
+  if (b.dataset.act === 'omdbsave') { db.omdb = (($('omdbKey') || {}).value || '').trim(); save(); delete EPSI[b.dataset.sid]; srcSave('IMDb'); loadSrc(b.dataset.sid, 'IMDb', true); hint(db.omdb ? 'OMDb-Schlüssel gespeichert.' : 'OMDb-Schlüssel entfernt.'); render(); return; }
   if (b.dataset.act === 'malretry') { loadMalEps(b.dataset.sid, true); render(); return; }
   if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
