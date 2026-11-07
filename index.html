@@ -118,6 +118,10 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 @media (hover:none){.slw{max-height:150px;opacity:1}}
 .tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
 .tools .mv{color:var(--text)}
+.seas{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:4px 0 6px}
+.seas span{font-size:.72rem;color:var(--muted);margin-right:2px}
+.seas button{font:inherit;font-size:.72rem;font-weight:700;color:var(--text);background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:999px;padding:1px 9px;min-height:0;cursor:pointer}
+.seas button.on{background:var(--accent);border-color:var(--accent);color:#2a1c00}
 .oprog{margin:6px 0 0;font-size:.85rem;color:var(--muted)}
 .hero .ctl{margin:8px 0 4px}
 .chip.mal{border-color:#4a6fc7;color:#aabdf0}.chip.mal b{color:#cdd8ff;font-size:1rem}
@@ -353,7 +357,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-10-31 13:40 · Wer guckt, Fortschritt pro Person, MAL-Vergleich';
+const APP_VERSION = '2026-11-07 20:45 · Staffeln als eine Karte';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -400,7 +404,7 @@ function statOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['s:' + a.aid]
 function epOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['g:' + a.aid]; if (v) return v[0] || 0; return pid === db.me.id ? (a.ep || 0) : 0; }
 const gTs = (L, pid, aid) => { const e = L.scores[pid], v = e && e.s['g:' + aid]; return v ? v[1] : 0; };
 const catOf = (L, x) => game() ? (playedOf(L, db.me.id, x.aid) ? 'd' : 't') : (x.who && !x.who.includes(db.me.id) ? 't' : statOf(L, db.me.id, x));
-const liveIn = (L, st) => live(L).filter(x => catOf(L, x) === st);
+const liveIn = (L, st) => groupOf(L, live(L).filter(x => catOf(L, x) === st));
 const playersOf = (L, aid) => Object.keys(L.scores).filter(p => p !== db.me.id && !(L.scores[p].d && !nRated(L.scores[p])) && playedOf(L, p, aid));
 const PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
 const playedHtml = (L, a) => {
@@ -874,7 +878,7 @@ async function enrich() {
     saveMeta(); metaBusy = false; safeRender();
   } catch (e) { metaBusy = false; }
 }
-const queueEnrich = () => { setTimeout(enrich, 50); };
+const queueEnrich = () => { setTimeout(enrich, 50); setTimeout(resolveRoots, 400); };
 /* Folgenbewertungen von MyAnimeList (über Jikan); Skala 1–5 wird auf 1–10 umgerechnet */
 const EPS_KEY = 'anime-eps-v1'; let EPS = {};
 try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
@@ -894,6 +898,64 @@ async function loadMalEps(aid) {
   epsBusy[aid] = 0;
   if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
 }
+/* ---------- Staffeln zu einer Karte zusammenfassen (Vorgänger-Kette über AniList) ---------- */
+const GRP_KEY = 'anime-grp-v1', REL_KEY = 'anime-rel-v1'; let GRP = {}, REL = {};
+try { GRP = JSON.parse(localStorage.getItem(GRP_KEY)) || {}; REL = JSON.parse(localStorage.getItem(REL_KEY)) || {}; } catch (e) { GRP = {}; REL = {}; }
+const grpSel = {};
+const SEASON_FMT = ['TV', 'TV_SHORT', 'ONA'];
+function groupOf(L, arr) {
+  if (game()) return arr;
+  const m = new Map(), out = [];
+  for (const a of arr) {
+    const g = GRP[a.aid];
+    if (!g) { out.push(a); continue; }
+    if (!m.has(g.r)) { const e = { root: g.r, list: [], pos: out.length }; m.set(g.r, e); out.push(e); }
+    m.get(g.r).list.push(a);
+  }
+  return out.map(e => {
+    if (!e.list) return e;
+    const seas = e.list.slice().sort((x, y) => GRP[x.aid].d - GRP[y.aid].d);
+    if (seas.length === 1) return seas[0];
+    const lead = seas.find(x => x.aid === grpSel[e.root]) || e.list[0];
+    return { ...lead, _seas: seas, _root: e.root };
+  });
+}
+const seasLabel = a => 'S' + ((GRP[a.aid] ? GRP[a.aid].d : 0) + 1);
+const seasonBar = a => a._seas && a._seas.length > 1 ? `<div class="seas" role="group" aria-label="Staffeln"><span>${a._seas.length} Staffeln</span>${a._seas.map(x => `<button data-act="season" data-sid="${esc(x.aid)}" data-root="${esc(a._root)}" class="${x.aid === a.aid ? 'on' : ''}" title="${esc(x.t)}">${seasLabel(x)}</button>`).join('')}</div>` : '';
+const seasonsInList = (L, aid) => { const g = GRP[aid]; if (!g) return []; return live(L).filter(x => GRP[x.aid] && GRP[x.aid].r === g.r).sort((x, y) => GRP[x.aid].d - GRP[y.aid].d); };
+const detailSeasons = (L, aid) => { const l = seasonsInList(L, aid); return l.length > 1 ? `<div class="seas" role="group" aria-label="Staffeln"><span>${l.length} Staffeln</span>${l.map(x => `<button data-act="sdetail" data-sid="${esc(x.aid)}" class="${x.aid === aid ? 'on' : ''}" title="${esc(x.t)}">${seasLabel(x)}</button>`).join('')}</div>` : ''; };
+let relBusy = false;
+async function resolveRoots() {
+  if (relBusy || game() || !navigator.onLine) return;
+  const ids = live(cur()).map(x => aliId(x.aid)).filter(i => i && !GRP['al' + i]);
+  if (!ids.length) return;
+  relBusy = true;
+  try {
+    let frontier = new Set(ids), hop = 0, changed = false;
+    while (frontier.size && hop++ < 12) {
+      const need = [...frontier].filter(i => REL[i] === undefined);
+      for (let o = 0; o < need.length; o += 50) {
+        const chunk = need.slice(o, o + 50);
+        const r = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ query: 'query($ids:[Int]){Page(perPage:50){media(id_in:$ids,type:ANIME){id format relations{edges{relationType node{id type format}}}}}}', variables: { ids: chunk } }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const got = (await r.json()).data.Page.media, seen = {};
+        for (const m of got) {
+          seen[m.id] = 1; let pre = 0;
+          if (SEASON_FMT.includes(m.format)) { const e = (m.relations.edges || []).find(x => x.relationType === 'PREQUEL' && x.node && x.node.type === 'ANIME' && SEASON_FMT.includes(x.node.format)); if (e) pre = e.node.id; }
+          REL[m.id] = pre;
+        }
+        chunk.forEach(i => { if (!seen[i]) REL[i] = 0; });
+        changed = true;
+        if (o + 50 < need.length) await new Promise(rs => setTimeout(rs, 700));
+      }
+      const next = new Set(); frontier.forEach(i => { if (REL[i]) next.add(REL[i]); }); frontier = next;
+    }
+    ids.forEach(i => { let cur0 = i, d = 0; while (REL[cur0] && d < 20) { cur0 = REL[cur0]; d++; } GRP['al' + i] = { r: 'al' + cur0, d }; });
+    try { localStorage.setItem(REL_KEY, JSON.stringify(REL)); localStorage.setItem(GRP_KEY, JSON.stringify(GRP)); } catch (e) {}
+    relBusy = false; safeRender();
+  } catch (e) { relBusy = false; }
+}
 const subLine = (L, a) => !game() ? animeSub(a) : `<p class="sub">${[a.m ? 'Mapper: ' + esc(a.m) : '', a.sr ? '★ ' + fmt(a.sr) : ''].filter(Boolean).join(' · ')}${a.by ? `${a.m || a.sr ? '<br>' : ''}Vorgeschlagen von ${esc(pname(L, a.by))}` : ''}</p>`;
 const tools = (L, a) => game() ? `<div class="tools"><button class="mv" data-act="done">✓ Gespielt</button><button data-act="detail">Details</button><button class="del" data-act="del">Entfernen</button></div>` : `<div class="tools"><button class="mv" data-act="done">✓ Geguckt</button><button class="mv" data-act="watch">Am Schauen</button>${strmLink(a)}<button data-act="detail">Details</button><button data-act="alt" ${L.alts[a.aid] && L.alts[a.aid].length ? '' : 'hidden'}>Anderes Bild</button><button class="del" data-act="del">Entfernen</button></div>`;
 const othersHtml = (L, aid) => {
@@ -906,7 +968,7 @@ function card(L, a, rank) {
     <div class="poster">${poster(a)}</div>
     ${rank ? `<span class="rank r${rank}">#${rank}</span>` : ''}
     <output class="badge ${a.s ? '' : 'none'}${a.s === 10 && gold10(L, a.aid) ? ' gold' : ''}">${a.s ? fmtG(a.s, gold10(L, a.aid)) : '–'}${a.s === 10 && gold10(L, a.aid) ? SPK : ''}</output>${playedBadge(L, a)}
-    <div class="info"><p class="title">${esc(a.t)}</p>${subLine(L, a)}${playedHtml(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
+    <div class="info"><p class="title">${esc(a.t)}</p>${seasonBar(a)}${subLine(L, a)}${playedHtml(L, a)}${othersHtml(L, a.aid)}<div class="slw">${slider(a, a.s)}${tools(L, a)}</div></div>
   </article>`;
 }
 function hero(L, a) {
@@ -914,7 +976,7 @@ function hero(L, a) {
     <div class="poster">${poster(a)}</div>
     <div class="txt">
       <span class="flag">${T('Als Nächstes gucken', 'Als Nächstes spielen')}</span>
-      <h2>${esc(a.t)}</h2>${subLine(L, a)}${playedHtml(L, a)}
+      <h2>${esc(a.t)}</h2>${seasonBar(a)}${subLine(L, a)}${playedHtml(L, a)}
       ${othersHtml(L, a.aid).replace('class="oth"', 'class="oth" style="font-size:.9rem;margin-bottom:12px"')}
       <div class="srow"><div class="ring${a.s === 10 && gold10(L, a.aid) ? ' gold' : ''}"><output>${fmtG(a.s, gold10(L, a.aid))}</output>${a.s === 10 && gold10(L, a.aid) ? SPK : ''}</div><div class="sctl">${slider(a, a.s)}${tools(L, a)}</div></div>
     </div>
@@ -964,7 +1026,7 @@ function renderCompare(L) {
   const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${r.i ? `<img src="${esc(r.i)}" alt="" loading="lazy">` : ''}</div>
-    <div class="mid"><div class="nm">${esc(r.t)}</div>${playedHtml(L, r)}
+    <div class="mid"><div class="nm">${esc(r.t)}</div>${seasonBar(r)}${playedHtml(L, r)}
       <div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i], r.sc)).join('')}</div>
       ${sel.includes(db.me.id) ? `<input type="range" min="1" max="10" step="1" value="${r.mine || 5}" title="Deine Bewertung ändern" aria-label="Deine Bewertung für ${esc(r.t)}">` : ''}
     </div>
@@ -980,7 +1042,7 @@ function renderCompare(L) {
     const t = both[0];
     h += `<section class="hero" style="--h:${hue(t.c)};--art:url('${esc(t.i)}')">
       <div class="poster">${poster(t)}</div>
-      <div class="txt"><span class="flag">${T('Das solltet ihr zuerst gucken', 'Das solltet ihr zuerst spielen')}</span><h2>${esc(t.t)}</h2>
+      <div class="txt"><span class="flag">${T('Das solltet ihr zuerst gucken', 'Das solltet ihr zuerst spielen')}</span><h2>${esc(t.t)}</h2>${seasonBar(t)}
         <div class="scs">${sel.map((p, i) => chip(names[i], t.sc[i], t.sc)).join('')}</div>
         <div class="srow">${ringC(t.c, '', t.sc)}</div></div></section>`;
     h += section('Eure Rangliste', both.slice(1), 2);
@@ -1066,8 +1128,7 @@ function moveLegacy(L, aid, st) {
 }
 function setEp(L, aid, v) { if (!L.items[aid]) return; setRating(L, db.me.id, 'g:' + aid, v); }
 function renderCats() {
-  const L = cur(), c = { list: 0, watch: 0, done: 0 };
-  live(L).forEach(x => { const s = catOf(L, x); c[s === 't' ? 'list' : s === 'w' ? 'watch' : 'done']++; });
+  const L = cur(), c = { list: liveIn(L, 't').length, watch: liveIn(L, 'w').length, done: liveIn(L, 'd').length };
   $('cats').innerHTML = (game() ? [['list', 'Vorschläge'], ['done', 'Gespielt']] : [['list', 'Liste'], ['watch', 'Am Schauen'], ['done', 'Bewertungen']]).map(([k, l]) => `<button data-c="${k}" class="${db.cat === k ? 'on' : ''}">${l}<small>${c[k]}</small></button>`).join('');
 }
 const imgOf = a => a.i ? `<img src="${esc(a.i)}" alt="" loading="lazy">` : '';
@@ -1082,7 +1143,7 @@ function renderWatching(L) {
     const ep = epOf(L, me, a) || 1, total = a.n || 0, pct = total ? Math.min(100, Math.round(ep / total * 100)) : 0, my = scoreOf(L, me, `e:${a.aid}#${ep}`);
     return `<article class="row" data-aid="${esc(a.aid)}" style="--h:${hue(my)}">
       <div class="pst">${imgOf(a)}</div>
-      <div class="mid"><div class="nm">${esc(a.t)}</div>
+      <div class="mid"><div class="nm">${esc(a.t)}</div>${seasonBar(a)}
         <div class="pg">${total ? `<div class="pbar"><i style="width:${pct}%"></i></div>` : ''}<span>Folge ${ep}${total ? ` von ${total}` : ''}</span></div>
         ${watchersOf(L, a).filter(q => q !== me && gTs(L, q, a.aid)).map(q => `<p class="oprog">${esc(pname(L, q))}: Folge ${epOf(L, q, a)}${total ? ` von ${total}` : ''}</p>`).join('')}
         <div class="scs">${chip('Du', my, gold10(L, `e:${a.aid}#${ep}`))}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`), gold10(L, `e:${a.aid}#${ep}`))).join('')}</div>
@@ -1109,7 +1170,7 @@ function renderDone(L) {
   const rowH = (r, rank) => `<article class="row" data-aid="${esc(r.aid)}" style="--h:${hue(r.c)}">
     ${rank ? `<span class="rk">#${rank}</span>` : ''}
     <div class="pst">${imgOf(r)}</div>
-    <div class="mid"><div class="nm">${esc(r.t)}</div>
+    <div class="mid"><div class="nm">${esc(r.t)}</div>${seasonBar(r)}
       ${subLine(L, r)}<div class="scs">${sel.map((p, i) => chip(names[i], r.sc[i], r.sc)).join('')}${epChip(r)}</div>
       ${sel.includes(me) ? `<span class="minilab">Deine Gesamtbewertung</span>${rng(r.mine, 'r', 0, 'Deine Gesamtbewertung für ' + r.t)}` : ''}
     </div>
@@ -1158,7 +1219,7 @@ function renderDetail(L, aid) {
     <div class="poster">${poster(a)}</div>
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
-      <h2>${esc(x.t)}</h2>${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
+      <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
       <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
       ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
       ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
@@ -1586,6 +1647,8 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'season') { grpSel[b.dataset.root] = b.dataset.sid; render(); return; }
+  if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
   const box = b.closest('[data-aid]'); if (!box) return;
