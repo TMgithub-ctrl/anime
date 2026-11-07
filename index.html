@@ -17,6 +17,13 @@
 :root{--bg:#0e1024;--panel:#181c3a;--line:#2b3160;--text:#eef0fb;--muted:#8d93bd;--accent:#ffb347;--danger:#ff6b81;--ok:#6ee7a8;--r:16px;--g1:#2a2470;--g2:#4a1d5c}
 [data-theme=sakura]{--bg:#1a0f1c;--panel:#2b1a30;--line:#4a2a52;--accent:#ff7eb6;--g1:#5a1f4a;--g2:#2e1a5c}
 [data-theme=mint]{--bg:#0a1a1c;--panel:#12292c;--line:#1f4a4c;--accent:#5eead4;--g1:#0f4a4a;--g2:#1c3a5c}
+[data-theme=ozean]{--bg:#0a1120;--panel:#13203a;--line:#22365e;--accent:#60a5fa;--muted:#8fa3c8;--g1:#0f2f5c;--g2:#1a1f5c}
+[data-theme=lavendel]{--bg:#120e22;--panel:#1f193b;--line:#372b63;--accent:#c4a1ff;--muted:#9c93c4;--g1:#3a2470;--g2:#1d2a5c}
+[data-theme=feuer]{--bg:#190d0b;--panel:#2a1814;--line:#4b2a22;--accent:#ff8a5c;--muted:#bd978d;--g1:#5c1f14;--g2:#4a1d3a}
+[data-theme=limette]{--bg:#0d1509;--panel:#192513;--line:#2d4321;--accent:#a3e635;--muted:#9bb08d;--g1:#26450f;--g2:#0f3a2e}
+[data-theme=gold]{--bg:#13100a;--panel:#231e12;--line:#41381f;--accent:#facc15;--muted:#b5a882;--g1:#4a3a0f;--g2:#3a1d1d}
+[data-theme=nacht]{--bg:#0b0c0f;--panel:#16181e;--line:#2a2e38;--accent:#e2e8f0;--muted:#8b919e;--g1:#22252e;--g2:#1a1c24}
+[data-theme=kirsche]{--bg:#170a10;--panel:#28121c;--line:#4a2133;--accent:#fb7185;--muted:#c0909f;--g1:#5c1430;--g2:#2e1a4a}
 *{box-sizing:border-box}
 body{margin:0;color:var(--text);font:16px/1.5 "Outfit","Trebuchet MS",system-ui,sans-serif;padding:32px 18px 80px;
   background:radial-gradient(900px 420px at 80% -10%,var(--g1) 0%,transparent 70%),radial-gradient(700px 400px at -10% 10%,var(--g2) 0%,transparent 65%),var(--bg);background-attachment:fixed}
@@ -29,7 +36,7 @@ h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin:0;letter-spacing:-.02em
 .sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:8px}
 .sync.ok{color:var(--ok)}.sync.ok::before{background:var(--ok)}
 .sync.bad{color:var(--danger)}.sync.bad::before{background:var(--danger)}
-.themes{display:flex;gap:10px;margin-top:12px}
+.themes{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .themes button{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:var(--c);cursor:pointer;padding:0}
 .themes button.on{outline:2px solid var(--text);outline-offset:2px}
 
@@ -324,6 +331,13 @@ a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
       <button data-t="" style="--c:#ffb347" title="Bernstein"></button>
       <button data-t="sakura" style="--c:#ff7eb6" title="Sakura"></button>
       <button data-t="mint" style="--c:#5eead4" title="Mint"></button>
+      <button data-t="ozean" style="--c:#60a5fa" title="Ozean"></button>
+      <button data-t="lavendel" style="--c:#c4a1ff" title="Lavendel"></button>
+      <button data-t="kirsche" style="--c:#fb7185" title="Kirsche"></button>
+      <button data-t="feuer" style="--c:#ff8a5c" title="Feuer"></button>
+      <button data-t="gold" style="--c:#facc15" title="Gold"></button>
+      <button data-t="limette" style="--c:#a3e635" title="Limette"></button>
+      <button data-t="nacht" style="--c:#e2e8f0" title="Nacht"></button>
     </div>
   </header>
 
@@ -384,7 +398,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 02:30 · Link mit gezeigter Staffel und aktueller Folge';
+const APP_VERSION = '2026-11-08 02:45 · Neue Farbschemas, Crunchyroll bei Am Schauen';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -1341,7 +1355,7 @@ function renderWatching(L) {
         <div class="scs">${chip('Du', my, gold10(L, `e:${a.aid}#${ep}`))}${P.filter(p => p !== me).map(p => chip(pname(L, p), scoreOf(L, p, `e:${a.aid}#${ep}`), gold10(L, `e:${a.aid}#${ep}`))).join('')}</div>
         <span class="minilab">Folge ${ep} bewerten</span>${rng(my, 'e', ep, `Deine Bewertung für Folge ${ep}`)}
       </div>
-      <div class="wact">${myLink(a)}<button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
+      <div class="wact">${strmLink(a)}${myLink(a)}<button data-act="ep-" aria-label="Eine Folge zurück">−</button><button class="pri" data-act="ep+">${total && ep >= total ? 'Fertig geguckt' : 'Nächste Folge'}</button><button data-act="detail">Details</button><button data-act="done">Geguckt</button><button data-act="todo">Zur Liste</button></div>
     </article>`;
   }).join('')}</div>`;
 }
