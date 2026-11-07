@@ -357,7 +357,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 21:40 · MAL-Fehleranzeige + Wiederholen';
+const APP_VERSION = '2026-11-07 22:05 · MAL über Ausweich-Wege';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -520,7 +520,7 @@ const BK = {
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
-const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
+const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
 function key_(k){return String(k||'').replace(/\\W/g,'');}
 function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
@@ -884,13 +884,27 @@ const EPS_KEY = 'anime-eps-v1'; let EPS = {};
 try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
 const epsBusy = {}, epsTry = {}, EPSERR = {};
 const errText = e => /abort/i.test(e.message || '') ? 'Zeitüberschreitung' : /Failed to fetch|NetworkError|Load failed/i.test(e.message || '') ? 'Verbindung blockiert oder offline' : (e.message || 'Fehler');
+let jikanRoute = 0;
 async function jikanGet(u) {
-  let last;
-  for (let t = 0; t < 4; t++) {
-    try { return await jget(u, 15000); }
-    catch (e) { last = e; if (/HTTP (4(?!29)|404)/.test(e.message) && !/HTTP 429/.test(e.message)) break; await new Promise(r => setTimeout(r, 1200 * (t + 1))); }
+  const dep = gsDep();
+  const routes = [['direkt', u]];
+  if (dep) routes.push(['Google-Script', GS(dep) + '?u=' + encodeURIComponent(u)]);
+  routes.push(['Proxy 1', 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)], ['Proxy 2', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)], ['Proxy 3', 'https://corsproxy.io/?' + encodeURIComponent(u)]);
+  const errs = [];
+  for (let k = 0; k < routes.length; k++) {
+    const [n, f] = routes[(jikanRoute + k) % routes.length];
+    for (let t = 0; t < 2; t++) {
+      try {
+        const j = await jget(f, 12000);
+        if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error('keine Daten');
+        jikanRoute = (jikanRoute + k) % routes.length; return j;
+      } catch (e) {
+        if (t === 0 && /HTTP (429|5\d\d)/.test(e.message)) { await new Promise(r => setTimeout(r, 1500)); continue; }
+        errs.push(n + ': ' + errText(e)); break;
+      }
+    }
   }
-  throw last;
+  throw new Error(errs.join(' · '));
 }
 async function loadMalEps(aid, force) {
   const m = META[aid]; if (!m || !m.mal) return;
@@ -904,7 +918,7 @@ async function loadMalEps(aid, force) {
       if (!(j.pagination && j.pagination.has_next_page)) { complete = true; break; }
       await new Promise(r => setTimeout(r, 450));
     }
-  } catch (e) { if (!got) EPSERR[aid] = errText(e); }
+  } catch (e) { if (!got) EPSERR[aid] = e.message && e.message.includes(' · ') ? e.message : errText(e); }
   epsBusy[aid] = 0;
   if (!got && detail === aid) safeRender();
   if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
