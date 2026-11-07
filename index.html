@@ -129,6 +129,7 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 .malbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
 .malbar button{font:inherit;font-size:.85rem;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
 .malbar button.on{color:var(--text);border-color:var(--accent)}
+.maltest{font:inherit;font-size:.8rem;color:var(--muted);white-space:pre-wrap;margin:0 0 8px}
 .malbar small{color:var(--muted)}
 .malsum{display:flex;gap:6px 18px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:10px;font-size:.9rem;color:var(--muted)}
 .malsum b{color:var(--text)}.malsum b.d.up{color:#7be0a4}.malsum b.d.dn{color:#ff9a9a}
@@ -357,7 +358,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 22:45 · IMDb als Ausweich-Quelle';
+const APP_VERSION = '2026-11-07 23:00 · Verbindungstest für Folgenwertungen';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -1281,7 +1282,7 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? 'Quelle: IMDb (Ausweich-Quelle, Staffel-Zuordnung geschätzt).' : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button>' : ''}</div>
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? 'Quelle: IMDb (Ausweich-Quelle, Staffel-Zuordnung geschätzt).' : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
   ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${srcN} Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
@@ -1699,6 +1700,23 @@ $('out').addEventListener('click', e => {
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
   if (b.dataset.act === 'season') { grpSel[b.dataset.root] = b.dataset.sid; render(); return; }
   if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.act === 'maltest') {
+    const out = $('maltest'); out.textContent = 'Teste …';
+    const T0 = [['AniList', 'https://graphql.anilist.co/?query=%7BPage%7BpageInfo%7Btotal%7D%7D%7D'], ['Jikan (MAL)', 'https://api.jikan.moe/v4/anime/1'], ['IMDb (imdbapi.dev)', 'https://api.imdbapi.dev/search/titles?query=frieren&limit=1'], ['Proxy codetabs', 'https://api.codetabs.com/v1/proxy/?quest=https://api.jikan.moe/v4/anime/1']];
+    const lines = [];
+    (async () => {
+    for (const [n, u] of T0) {
+      const t0 = Date.now(); let res;
+      try { const c = new AbortController(); setTimeout(() => c.abort(), 12000); const r = await fetch(u, { signal: c.signal }); res = `OK (HTTP ${r.status}, ${Date.now() - t0} ms)`; }
+      catch (e) {
+        try { const c = new AbortController(); setTimeout(() => c.abort(), 8000); await fetch(u, { mode: 'no-cors', signal: c.signal }); res = 'erreichbar, aber ohne Erlaubnis für Webseiten (CORS)'; }
+        catch (e2) { res = /abort/i.test(e2.message) ? 'Zeitüberschreitung' : 'blockiert oder nicht erreichbar'; }
+      }
+      lines.push(n + ': ' + res); out.textContent = lines.join('\n');
+    }
+    })();
+    return;
+  }
   if (b.dataset.act === 'malretry') { loadMalEps(b.dataset.sid, true); render(); return; }
   if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
