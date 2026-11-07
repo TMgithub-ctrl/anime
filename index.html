@@ -357,7 +357,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 20:45 · Staffeln als eine Karte';
+const APP_VERSION = '2026-11-07 21:40 · MAL-Fehleranzeige + Wiederholen';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -882,20 +882,31 @@ const queueEnrich = () => { setTimeout(enrich, 50); setTimeout(resolveRoots, 400
 /* Folgenbewertungen von MyAnimeList (über Jikan); Skala 1–5 wird auf 1–10 umgerechnet */
 const EPS_KEY = 'anime-eps-v1'; let EPS = {};
 try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
-const epsBusy = {}, epsTry = {};
-async function loadMalEps(aid) {
+const epsBusy = {}, epsTry = {}, EPSERR = {};
+const errText = e => /abort/i.test(e.message || '') ? 'Zeitüberschreitung' : /Failed to fetch|NetworkError|Load failed/i.test(e.message || '') ? 'Verbindung blockiert oder offline' : (e.message || 'Fehler');
+async function jikanGet(u) {
+  let last;
+  for (let t = 0; t < 4; t++) {
+    try { return await jget(u, 15000); }
+    catch (e) { last = e; if (/HTTP (4(?!29)|404)/.test(e.message) && !/HTTP 429/.test(e.message)) break; await new Promise(r => setTimeout(r, 1200 * (t + 1))); }
+  }
+  throw last;
+}
+async function loadMalEps(aid, force) {
   const m = META[aid]; if (!m || !m.mal) return;
-  const c = EPS[aid]; if ((c && now() - c.t < 7 * 864e5) || epsBusy[aid] || now() - (epsTry[aid] || 0) < 300000) return;
+  if (force) { delete epsTry[aid]; delete EPSERR[aid]; }
+  const c = EPS[aid]; if ((c && now() - c.t < 7 * 864e5) || epsBusy[aid] || EPSERR[aid] || now() - (epsTry[aid] || 0) < 300000) return;
   epsBusy[aid] = 1; epsTry[aid] = now(); const sc = {}; let complete = false, got = false;
   try {
     for (let pg = 1; pg <= 12; pg++) {
-      const j = await jget(`https://api.jikan.moe/v4/anime/${m.mal}/episodes?page=${pg}`, 9000); got = true;
+      const j = await jikanGet(`https://api.jikan.moe/v4/anime/${m.mal}/episodes?page=${pg}`); got = true;
       for (const e of (j.data || [])) if (e.score > 0) sc[e.mal_id] = Math.round(e.score * 20) / 10;
       if (!(j.pagination && j.pagination.has_next_page)) { complete = true; break; }
       await new Promise(r => setTimeout(r, 450));
     }
-  } catch (e) {}
+  } catch (e) { if (!got) EPSERR[aid] = errText(e); }
   epsBusy[aid] = 0;
+  if (!got && detail === aid) safeRender();
   if (got) { EPS[aid] = { t: complete ? now() : now() - 7 * 864e5 + 600000, s: sc }; try { localStorage.setItem(EPS_KEY, JSON.stringify(EPS)); } catch (e) {} if (detail === aid) safeRender(); }
 }
 /* ---------- Staffeln zu einer Karte zusammenfassen (Vorgänger-Kette über AniList) ---------- */
@@ -1231,7 +1242,7 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MyAnimeList: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? 'MAL-Folgenwertung, 1–5 Sterne auf 1–10 umgerechnet.' : 'MAL hat für diesen Anime noch keine Folgenwertungen.') : 'Lade MAL-Folgenwertungen …'}</small></div>
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MyAnimeList: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? 'MAL-Folgenwertung, 1–5 Sterne auf 1–10 umgerechnet.' : 'MAL hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `MAL nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen …'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button>' : ''}</div>
   ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>MAL Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
@@ -1649,6 +1660,7 @@ $('out').addEventListener('click', e => {
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
   if (b.dataset.act === 'season') { grpSel[b.dataset.root] = b.dataset.sid; render(); return; }
   if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
+  if (b.dataset.act === 'malretry') { loadMalEps(b.dataset.sid, true); render(); return; }
   if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
   const box = b.closest('[data-aid]'); if (!box) return;
