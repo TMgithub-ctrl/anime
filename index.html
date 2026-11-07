@@ -358,7 +358,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 23:30 · Script-Test im Verbindungstest';
+const APP_VERSION = '2026-11-07 23:45 · Script meldet Fehler, Testergebnis bleibt';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -521,7 +521,7 @@ const BK = {
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
-const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0)return out_('{}');return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}return out_(read_(key_(e.parameter.k)));}
+const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0)return out_('{}');try{return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}catch(x){return out_(JSON.stringify({scriptError:String(x)}));}}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
 function key_(k){return String(k||'').replace(/\\W/g,'');}
 function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
@@ -883,8 +883,8 @@ const queueEnrich = () => { setTimeout(enrich, 50); setTimeout(resolveRoots, 400
 /* Folgenbewertungen von MyAnimeList (über Jikan); Skala 1–5 wird auf 1–10 umgerechnet */
 const EPS_KEY = 'anime-eps-v1'; let EPS = {};
 try { EPS = JSON.parse(localStorage.getItem(EPS_KEY)) || {}; } catch (e) { EPS = {}; }
-const epsBusy = {}, epsTry = {}, EPSERR = {}, epsAuto = {};
-const errText = e => /abort/i.test(e.message || '') ? 'Zeitüberschreitung' : /Failed to fetch|NetworkError|Load failed/i.test(e.message || '') ? 'Verbindung blockiert oder offline' : (e.message || 'Fehler');
+const epsBusy = {}, epsTry = {}, EPSERR = {}, epsAuto = {}; let malTestText = '';
+const errText = e => /^(Exception|Error|Ausnahme|TypeError)[: ]|Berechtigung|permission/i.test(e.message || '') ? 'Script meldet: ' + e.message : /abort/i.test(e.message || '') ? 'Zeitüberschreitung' : /Failed to fetch|NetworkError|Load failed/i.test(e.message || '') ? 'Verbindung blockiert oder offline' : (e.message || 'Fehler');
 let jikanRoute = 0;
 async function jikanGet(u) {
   const dep = gsDep();
@@ -897,7 +897,7 @@ async function jikanGet(u) {
     for (let t = 0; t < 2; t++) {
       try {
         const j = await jget(f, ms || 25000);
-        if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error(n === 'Google-Script' ? 'keine Daten (Script-Code noch alt?)' : 'keine Daten');
+        if (j && j.scriptError) throw new Error(j.scriptError); if (!j || typeof j !== 'object' || !Array.isArray(j.data)) throw new Error(n === 'Google-Script' ? 'keine Daten (Script-Code noch alt?)' : 'keine Daten');
         jikanRoute = (jikanRoute + k) % routes.length; return j;
       } catch (e) {
         if (t === 0 && /HTTP (429|5\d\d)/.test(e.message)) { await new Promise(r => setTimeout(r, 1500)); continue; }
@@ -910,7 +910,7 @@ async function jikanGet(u) {
 async function viaGet(u, ms) {
   const errs = [], dep = gsDep();
   try { return await jget(u, ms); } catch (e) { errs.push('direkt: ' + errText(e)); }
-  if (dep) { try { const j = await jget(GS(dep) + '?u=' + encodeURIComponent(u), 45000); if (j && typeof j === 'object' && Object.keys(j).length) return j; throw new Error('keine Daten (Script-Code noch alt?)'); } catch (e) { errs.push('Google-Script: ' + errText(e)); } }
+  if (dep) { try { const j = await jget(GS(dep) + '?u=' + encodeURIComponent(u), 45000); if (j && j.scriptError) throw new Error(j.scriptError); if (j && typeof j === 'object' && Object.keys(j).length) return j; throw new Error('keine Daten (Script-Code noch alt?)'); } catch (e) { errs.push('Google-Script: ' + errText(e)); } }
   throw new Error(errs.join(' · '));
 }
 /* Ausweich-Quelle: IMDb über imdbapi.dev (ohne Schlüssel). Staffel-Zuordnung ist geschätzt (n-te Staffel in der Kette = IMDb-Staffel n). */
@@ -1288,7 +1288,7 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? 'Quelle: IMDb (Ausweich-Quelle, Staffel-Zuordnung geschätzt).' : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? 'Quelle: IMDb (Ausweich-Quelle, Staffel-Zuordnung geschätzt).' : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malTestText && malOn && hasMal && !malS ? `<pre id="maltest" class="maltest">${esc(malTestText)}</pre>` : malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
   ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${srcN} Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
@@ -1707,7 +1707,7 @@ $('out').addEventListener('click', e => {
   if (b.dataset.act === 'season') { grpSel[b.dataset.root] = b.dataset.sid; render(); return; }
   if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.act === 'maltest') {
-    const out = $('maltest'); out.textContent = 'Teste …';
+    let out = $('maltest'); const put = t => { malTestText = t; out = $('maltest'); if (out) out.textContent = t; }; put('Teste … (kann bis zu 2 Minuten dauern)');
     const T0 = [['AniList', 'https://graphql.anilist.co/?query=%7BPage%7BpageInfo%7Btotal%7D%7D%7D'], ['Jikan (MAL)', 'https://api.jikan.moe/v4/anime/1'], ['IMDb (imdbapi.dev)', 'https://api.imdbapi.dev/search/titles?query=frieren&limit=1'], ['Proxy codetabs', 'https://api.codetabs.com/v1/proxy/?quest=https://api.jikan.moe/v4/anime/1']];
     const lines = [];
     (async () => {
@@ -1716,11 +1716,11 @@ $('out').addEventListener('click', e => {
       for (const [n, u] of [['Script → Jikan', 'https://api.jikan.moe/v4/anime/1'], ['Script → IMDb', 'https://api.imdbapi.dev/search/titles?query=frieren&limit=1']]) {
         const t0 = Date.now(); let res;
         try { const c = new AbortController(); setTimeout(() => c.abort(), 45000); const r = await fetch(GS(dep) + '?u=' + encodeURIComponent(u), { signal: c.signal }); const tx = await r.text();
-          res = `HTTP ${r.status}, ${Date.now() - t0} ms, Antwort: ${tx.replace(/\s+/g, ' ').slice(0, 160) || '(leer)'}`; }
-        catch (e) { res = /abort/i.test(e.message) ? 'Zeitüberschreitung' : 'Fehler: ' + e.message; }
-        lines.push(n + ': ' + res); out.textContent = lines.join('\n');
+          res = `HTTP ${r.status}, ${Date.now() - t0} ms, Antwort: ${tx.replace(/\s+/g, ' ').slice(0, 200) || '(leer)'}`; }
+        catch (e) { res = /abort/i.test(e.message) ? 'Zeitüberschreitung (über 45 s)' : 'keine Antwort lesbar – meist ein Script-Absturz, z. B. fehlende Berechtigung (' + e.message + ')'; }
+        lines.push(n + ': ' + res); put(lines.join('\n'));
       }
-    } else { lines.push('Google-Script: nicht verbunden'); out.textContent = lines.join('\n'); }
+    } else { lines.push('Google-Script: nicht verbunden'); put(lines.join('\n')); }
     for (const [n, u] of T0) {
       const t0 = Date.now(); let res;
       try { const c = new AbortController(); setTimeout(() => c.abort(), 12000); const r = await fetch(u, { signal: c.signal }); res = `OK (HTTP ${r.status}, ${Date.now() - t0} ms)`; }
@@ -1728,7 +1728,7 @@ $('out').addEventListener('click', e => {
         try { const c = new AbortController(); setTimeout(() => c.abort(), 8000); await fetch(u, { mode: 'no-cors', signal: c.signal }); res = 'erreichbar, aber ohne Erlaubnis für Webseiten (CORS)'; }
         catch (e2) { res = /abort/i.test(e2.message) ? 'Zeitüberschreitung' : 'blockiert oder nicht erreichbar'; }
       }
-      lines.push(n + ': ' + res); out.textContent = lines.join('\n');
+      lines.push(n + ': ' + res); put(lines.join('\n'));
     }
     })();
     return;
