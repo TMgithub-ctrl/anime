@@ -118,6 +118,7 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 @media (hover:none){.slw{max-height:150px;opacity:1}}
 .tools{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:4px}
 .tools .mv{color:var(--text)}
+.nexts{margin:2px 0 6px}.nexts button{font:inherit;font-size:.8rem;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:3px 12px;cursor:pointer}.nexts button:hover{color:var(--text);border-color:var(--accent)}
 .seas{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:4px 0 6px}
 .seas span{font-size:.72rem;color:var(--muted);margin-right:2px}
 .seas button{font:inherit;font-size:.72rem;font-weight:700;color:var(--text);background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:999px;padding:1px 9px;min-height:0;cursor:pointer}
@@ -365,7 +366,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 01:00 · Vergleich in einer Zeile, IMDb nur bei Abweichung';
+const APP_VERSION = '2026-11-08 01:20 · Staffeln über Reiter hinweg zusammen, nächste Staffel hinzufügen';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -412,7 +413,28 @@ function statOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['s:' + a.aid]
 function epOf(L, pid, a) { const e = L.scores[pid], v = e && e.s['g:' + a.aid]; if (v) return v[0] || 0; return pid === db.me.id ? (a.ep || 0) : 0; }
 const gTs = (L, pid, aid) => { const e = L.scores[pid], v = e && e.s['g:' + aid]; return v ? v[1] : 0; };
 const catOf = (L, x) => game() ? (playedOf(L, db.me.id, x.aid) ? 'd' : 't') : (x.who && !x.who.includes(db.me.id) ? 't' : statOf(L, db.me.id, x));
-const liveIn = (L, st) => groupOf(L, live(L).filter(x => catOf(L, x) === st));
+function liveIn(L, st) {
+  if (game()) return live(L).filter(x => catOf(L, x) === st);
+  const all = live(L), out = [], seen = new Map();
+  for (const x of all) {
+    const g = GRP[x.aid];
+    if (!g) { if (catOf(L, x) === st) out.push(x); continue; }
+    if (!seen.has(g.r)) { const e = { root: g.r, list: [] }; seen.set(g.r, e); out.push(e); }
+    seen.get(g.r).list.push(x);
+  }
+  const res = [];
+  for (const e of out) {
+    if (!e.list) { res.push(e); continue; }
+    const seas = e.list.slice().sort((a, b) => GRP[a.aid].d - GRP[b.aid].d), cs = seas.map(x => catOf(L, x));
+    const gc = cs.includes('w') ? 'w' : cs.every(c => c === 'd') ? 'd' : 't';
+    if (gc !== st) continue;
+    if (seas.length === 1) { res.push(seas[0]); continue; }
+    const def = gc === 'w' ? seas[cs.indexOf('w')] : gc === 'd' ? seas[seas.length - 1] : seas[cs.findIndex(c => c !== 'd')];
+    const lead = seas.find(x => x.aid === grpSel[e.root]) || def;
+    res.push({ ...lead, _seas: seas, _root: e.root });
+  }
+  return res;
+}
 const playersOf = (L, aid) => Object.keys(L.scores).filter(p => p !== db.me.id && !(L.scores[p].d && !nRated(L.scores[p])) && playedOf(L, p, aid));
 const PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
 const playedHtml = (L, a) => {
@@ -1344,7 +1366,7 @@ function renderDetail(L, aid) {
     <div class="poster">${poster(a)}</div>
     <div class="txt">
       <span class="flag">${{ t: 'In der Liste', w: 'Am Schauen', d: 'Geguckt' }[st]}</span>
-      <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
+      <h2>${esc(x.t)}</h2>${detailSeasons(L, aid)}${aliId(aid) ? `<p class="nexts"><button data-act="nextseason" data-sid="${esc(aid)}">+ Nächste Staffel hinzufügen</button></p>` : ''}${animeSub(a)}${strmLink(a) ? `<p>${strmLink(a)}</p>` : ''}
       <div class="ctl"><span class="lab">Wer guckt?</span><div class="who">${P.map(q => `<button data-act="who" data-pid="${esc(q)}" class="${W.includes(q) ? 'on' : ''}">${q === me ? 'Du' : esc(pname(L, q))}</button>`).join('')}<button data-act="whoall">Alle</button><button data-act="whome">Nur ich</button></div></div>
       ${W.filter(q => q !== me).map(q => { const eq = epOf(L, q, a), sq = statOf(L, q, a); return `<p class="oprog"><b>${esc(pname(L, q))}</b> · ${{ t: 'noch nicht angefangen', w: 'am Schauen', d: 'fertig' }[sq]}${eq ? ` · Folge ${eq}${total ? ` von ${total}` : ''}` : ''}</p>`; }).join('')}
       ${iWatch ? '' : '<p class="note">Du guckst das nicht mit. Tippe oben bei „Wer guckt?“ auf „Du“, um mitzugucken.</p>'}
@@ -1791,6 +1813,27 @@ $('out').addEventListener('click', e => {
     cmp.sel = s.size ? [...s] : P; render(); return;
   }
   if (b.dataset.act === 'back') { detail = null; detailAll = false; render(); return; }
+  if (b.dataset.act === 'nextseason') {
+    const L = cur(), base = b.dataset.sid, sl = seasonsInList(L, base), last = sl.length ? sl[sl.length - 1] : { aid: base, ...L.items[base] };
+    const lid = aliId(last.aid); if (!lid) return;
+    b.disabled = true; b.textContent = 'Suche nächste Staffel …';
+    (async () => {
+      try {
+        const r = await fetch('https://graphql.anilist.co', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ query: 'query($id:Int){Media(id:$id,type:ANIME){relations{edges{relationType node{id type format episodes seasonYear title{english romaji} coverImage{large}}}}}}', variables: { id: lid } }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const ed = ((await r.json()).data.Media.relations.edges || []).find(e => e.relationType === 'SEQUEL' && e.node && e.node.type === 'ANIME' && SEASON_FMT.includes(e.node.format));
+        if (!ed) { hint('Keine weitere Staffel gefunden.'); render(); return; }
+        const n = ed.node, g = GRP[last.aid] || { r: last.aid, d: 0 };
+        if (live(L).some(x => x.aid === 'al' + n.id)) { hint('Die nächste Staffel ist schon in der Liste.'); render(); return; }
+        GRP['al' + n.id] = { r: g.r, d: g.d + 1 }; if (!GRP[last.aid]) GRP[last.aid] = g; REL[n.id] = lid;
+        try { localStorage.setItem(REL_KEY, JSON.stringify(REL)); localStorage.setItem(GRP_KEY, JSON.stringify(GRP)); } catch (e) {}
+        addItem({ id: 'al' + n.id, title: (n.title && (n.title.english || n.title.romaji)) || 'Nächste Staffel', img: (n.coverImage && n.coverImage.large) || '', year: n.seasonYear || '', episodes: n.episodes || 0 }, []);
+        detail = 'al' + n.id; detailAll = false; render(); window.scrollTo(0, 0);
+      } catch (e) { hint('Nächste Staffel konnte nicht geladen werden (' + errText(e) + ').'); render(); }
+    })();
+    return;
+  }
   if (b.dataset.act === 'season') { grpSel[b.dataset.root] = b.dataset.sid; render(); return; }
   if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.act === 'maltest') {
