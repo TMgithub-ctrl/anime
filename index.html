@@ -129,6 +129,10 @@ h3{font-size:1.1rem;font-weight:600;color:var(--muted);margin:36px 0 14px}
 .malbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
 .malbar button{font:inherit;font-size:.85rem;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 14px;cursor:pointer}
 .malbar button.on{color:var(--text);border-color:var(--accent)}
+.omdb{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:0 0 10px;font-size:.85rem;color:var(--muted)}
+.omdb input{font:inherit;width:9.5em;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.omdb button{font:inherit;font-size:.85rem;color:var(--text);background:var(--panel);border:1px solid var(--accent);border-radius:999px;padding:4px 12px;cursor:pointer}
+.omdb small{width:100%}
 .maltest{font:inherit;font-size:.8rem;color:var(--muted);white-space:pre-wrap;margin:0 0 8px}
 .malbar small{color:var(--muted)}
 .malsum{display:flex;gap:6px 18px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:10px;font-size:.9rem;color:var(--muted)}
@@ -358,7 +362,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-07 23:45 · Script meldet Fehler, Testergebnis bleibt';
+const APP_VERSION = '2026-11-07 23:55 · IMDb-Ausweich über OMDb';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -521,7 +525,7 @@ const BK = {
 const GS_RE = /\/macros\/s\/([A-Za-z0-9_-]+)\/exec/;
 const gsDep = () => { const m = String(db.gsUrl || '').match(GS_RE); return m ? m[1] : null; };
 const GS = dep => `https://script.google.com/macros/s/${dep}/exec`;
-const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0)return out_('{}');try{return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}catch(x){return out_(JSON.stringify({scriptError:String(x)}));}}return out_(read_(key_(e.parameter.k)));}
+const GS_CODE = `function doGet(e){var u=e.parameter.u;if(u){if(u.indexOf('https://store.steampowered.com/')!==0&&u.indexOf('https://api.jikan.moe/')!==0&&u.indexOf('https://api.imdbapi.dev/')!==0&&u.indexOf('https://www.omdbapi.com/')!==0)return out_('{}');try{return out_(UrlFetchApp.fetch(u,{muteHttpExceptions:true}).getContentText());}catch(x){return out_(JSON.stringify({scriptError:String(x)}));}}return out_(read_(key_(e.parameter.k)));}
 function doPost(e){var b=JSON.parse(e.postData.contents);write_(key_(b.k),JSON.stringify(b.d));return out_('{"ok":true}');}
 function key_(k){return String(k||'').replace(/\\W/g,'');}
 function read_(k){var p=PropertiesService.getScriptProperties(),c=+p.getProperty(k+'_c')||0,s='';for(var i=0;i<c;i++)s+=p.getProperty(k+'_'+i)||'';return s||'{}';}
@@ -913,21 +917,29 @@ async function viaGet(u, ms) {
   if (dep) { try { const j = await jget(GS(dep) + '?u=' + encodeURIComponent(u), 45000); if (j && j.scriptError) throw new Error(j.scriptError); if (j && typeof j === 'object' && Object.keys(j).length) return j; throw new Error('keine Daten (Script-Code noch alt?)'); } catch (e) { errs.push('Google-Script: ' + errText(e)); } }
   throw new Error(errs.join(' · '));
 }
-/* Ausweich-Quelle: IMDb über imdbapi.dev (ohne Schlüssel). Staffel-Zuordnung ist geschätzt (n-te Staffel in der Kette = IMDb-Staffel n). */
+/* Ausweich-Quelle: IMDb-Wertungen über OMDb (eigener kostenloser Schlüssel, nur auf diesem Gerät gespeichert).
+   Staffel-Zuordnung ist geschätzt (n-te Staffel in der Kette = IMDb-Staffel n). */
+async function omdbGet(params) {
+  const u = 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb) + '&' + params;
+  const j = await viaGet(u, 15000);
+  if (j && j.Response === 'False') throw new Error('OMDb meldet: ' + (j.Error || 'Fehler'));
+  return j;
+}
 async function imdbEps(aid) {
+  if (!db.omdb) throw new Error('kein OMDb-Schlüssel eingetragen');
   const it = (cur().items[aid]) || {};
   const q = String(it.t || '').replace(/\s*[:\-–]?\s*(\d+(st|nd|rd|th)\s+season|season\s*\d+|part\s*\d+|cour\s*\d+|s\d+|\d+)\s*$/i, '').trim();
   if (!q) throw new Error('kein Titel');
-  const sr = await viaGet('https://api.imdbapi.dev/search/titles?query=' + encodeURIComponent(q) + '&limit=6', 15000);
-  const t = (sr.titles || []).find(x => /tvSeries|tvMiniSeries/i.test(x.type || '')) || (sr.titles || [])[0];
-  if (!t || !t.id) throw new Error('kein IMDb-Treffer');
-  const season = (GRP[aid] ? GRP[aid].d : 0) + 1, sc = {}; let tok = '';
-  for (let i = 0; i < 6; i++) {
-    const j = await viaGet(`https://api.imdbapi.dev/titles/${encodeURIComponent(t.id)}/episodes?season=${season}&pageSize=50${tok ? '&pageToken=' + encodeURIComponent(tok) : ''}`, 15000);
-    for (const e of (j.episodes || [])) { const v = e.rating && e.rating.aggregateRating, n = +e.episodeNumber; if (v > 0 && n > 0) sc[n] = Math.round(v * 10) / 10; }
-    if (!j.nextPageToken) break; tok = j.nextPageToken;
-  }
-  return { sc, id: t.id };
+  let sr;
+  try { sr = await omdbGet('type=series&s=' + encodeURIComponent(q)); }
+  catch (e) { if (/not found/i.test(e.message) && q.includes(':')) sr = await omdbGet('type=series&s=' + encodeURIComponent(q.split(':')[0].trim())); else throw e; }
+  const t = (sr.Search || [])[0];
+  if (!t || !t.imdbID) throw new Error('kein IMDb-Treffer für „' + q + '“');
+  const season = (GRP[aid] ? GRP[aid].d : 0) + 1;
+  const j = await omdbGet('i=' + encodeURIComponent(t.imdbID) + '&Season=' + season);
+  const sc = {};
+  for (const e of (j.Episodes || [])) { const v = parseFloat(e.imdbRating), n = parseInt(e.Episode, 10); if (v > 0 && n > 0) sc[n] = Math.round(v * 10) / 10; }
+  return { sc, id: t.imdbID, name: t.Title };
 }
 async function loadMalEps(aid, force) {
   const m = META[aid]; if (!m) return;
@@ -945,7 +957,7 @@ async function loadMalEps(aid, force) {
     } catch (e) { if (!got) jerr = 'MAL: ' + (e.message && e.message.includes(' · ') ? e.message : errText(e)); }
   }
   if (!got) {
-    try { const r = await imdbEps(aid); sc = r.sc; got = true; complete = true; src = 'IMDb'; imdb = r.id; }
+    try { const r = await imdbEps(aid); sc = r.sc; got = true; complete = true; src = 'IMDb'; imdb = r.id + ' · ' + (r.name || ''); }
     catch (e) {
       EPSERR[aid] = (jerr ? jerr + ' || ' : '') + 'IMDb: ' + (e.message && e.message.includes(' · ') ? e.message : errText(e));
       if (!epsAuto[aid]) { epsAuto[aid] = 1; setTimeout(() => { if (!EPS[aid]) loadMalEps(aid, true); }, 15000); }
@@ -1139,7 +1151,7 @@ function render() {
 }
 let lastIn = 0, dragging = false, rt = null;
 function safeRender() {
-  if (screen && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
+  if ((screen || (document.activeElement && document.activeElement.id === 'omdbKey')) && document.activeElement && $('out').contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) { clearTimeout(rt); rt = setTimeout(safeRender, 1500); return; }
   if (dragging || now() - lastIn < 2500) { clearTimeout(rt); rt = setTimeout(safeRender, 800); return; }
   render();
 }
@@ -1288,7 +1300,7 @@ function renderDetail(L, aid) {
     </div>
   </section>
   <h3>Folgen bewerten</h3>
-  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? 'Quelle: IMDb (Ausweich-Quelle, Staffel-Zuordnung geschätzt).' : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malTestText && malOn && hasMal && !malS ? `<pre id="maltest" class="maltest">${esc(malTestText)}</pre>` : malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
+  <div class="malbar"><button data-act="mal" class="${malOn ? 'on' : ''}">Vergleich mit MAL/IMDb: ${malOn ? 'an' : 'aus'}</button><small>${!hasMal ? 'Für diesen Anime ist kein MAL-Eintrag verknüpft (geht nur bei Anime aus der Suche).' : !malOn ? '' : malS ? (Object.keys(malS).length ? (srcN === 'IMDb' ? `Quelle: IMDb über OMDb (${esc((EPS[aid] && EPS[aid].imdb) || '')}, Staffel ${(GRP[aid] ? GRP[aid].d : 0) + 1} – Zuordnung geschätzt).` : 'Quelle: MyAnimeList, 1–5 Sterne auf 1–10 umgerechnet.') : srcN + ' hat für diesen Anime noch keine Folgenwertungen.') : EPSERR[aid] ? `Folgenwertungen nicht erreichbar (${esc(EPSERR[aid])}).` : 'Lade MAL-Folgenwertungen … (kann bei MAL bis zu einer Minute dauern)'}</small>${malOn && hasMal && !malS && EPSERR[aid] ? '<button data-act="malretry" data-sid="' + esc(aid) + '">Erneut versuchen</button><button data-act="maltest">Verbindung prüfen</button>' : ''}</div>${malOn && hasMal && (!malS || !db.omdb) ? `<div class="omdb"><label>IMDb-Ausweich (OMDb-Schlüssel): <input id="omdbKey" value="${esc(db.omdb || '')}" placeholder="z. B. a1b2c3d4" autocomplete="off" spellcheck="false"></label><button data-act="omdbsave" data-sid="${esc(aid)}">Speichern</button><small>Kostenlos auf omdbapi.com. Wird nur auf diesem Gerät gespeichert.</small></div>` : ''}${malTestText && malOn && hasMal && !malS ? `<pre id="maltest" class="maltest">${esc(malTestText)}</pre>` : malOn && hasMal && !malS && EPSERR[aid] ? '<pre id="maltest" class="maltest"></pre>' : ''}
   ${pairs.length ? (() => { const o = pairs.reduce((s2, q) => s2 + q[0], 0) / pairs.length, m2 = pairs.reduce((s2, q) => s2 + q[1], 0) / pairs.length, d2 = o - m2; return `<div class="malsum"><span>Euer Ø <b>${fmt(o)}</b></span><span>${srcN} Ø <b>${fmt(m2)}</b></span><span>${pairs.length} Folgen verglichen: ihr bewertet im Schnitt <b class="d ${d2 >= 0 ? 'up' : 'dn'}">${fmt(Math.abs(d2))} ${d2 >= 0 ? 'höher' : 'niedriger'}</b></span></div>`; })() : ''}
   ${ep ? `<div class="elist">${rows}</div>${more}` : `<p class="note">${iWatch ? 'Setze oben die aktuelle Folge, dann kannst du die Folgen bewerten.' : 'Zum Bewerten von Folgen musst du mitgucken.'}</p>`}`;
 }
@@ -1708,12 +1720,12 @@ $('out').addEventListener('click', e => {
   if (b.dataset.act === 'sdetail') { detail = b.dataset.sid; detailAll = false; render(); window.scrollTo(0, 0); return; }
   if (b.dataset.act === 'maltest') {
     let out = $('maltest'); const put = t => { malTestText = t; out = $('maltest'); if (out) out.textContent = t; }; put('Teste … (kann bis zu 2 Minuten dauern)');
-    const T0 = [['AniList', 'https://graphql.anilist.co/?query=%7BPage%7BpageInfo%7Btotal%7D%7D%7D'], ['Jikan (MAL)', 'https://api.jikan.moe/v4/anime/1'], ['IMDb (imdbapi.dev)', 'https://api.imdbapi.dev/search/titles?query=frieren&limit=1'], ['Proxy codetabs', 'https://api.codetabs.com/v1/proxy/?quest=https://api.jikan.moe/v4/anime/1']];
+    const T0 = [['AniList', 'https://graphql.anilist.co/?query=%7BPage%7BpageInfo%7Btotal%7D%7D%7D'], ['Jikan (MAL)', 'https://api.jikan.moe/v4/anime/1'], ['OMDb (IMDb)', 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb || 'x') + '&s=frieren&type=series'], ['Proxy codetabs', 'https://api.codetabs.com/v1/proxy/?quest=https://api.jikan.moe/v4/anime/1']];
     const lines = [];
     (async () => {
     const dep = gsDep();
     if (dep) {
-      for (const [n, u] of [['Script → Jikan', 'https://api.jikan.moe/v4/anime/1'], ['Script → IMDb', 'https://api.imdbapi.dev/search/titles?query=frieren&limit=1']]) {
+      for (const [n, u] of [['Script → Jikan', 'https://api.jikan.moe/v4/anime/1'], ['Script → OMDb', 'https://www.omdbapi.com/?apikey=' + encodeURIComponent(db.omdb || 'x') + '&s=frieren&type=series']]) {
         const t0 = Date.now(); let res;
         try { const c = new AbortController(); setTimeout(() => c.abort(), 45000); const r = await fetch(GS(dep) + '?u=' + encodeURIComponent(u), { signal: c.signal }); const tx = await r.text();
           res = `HTTP ${r.status}, ${Date.now() - t0} ms, Antwort: ${tx.replace(/\s+/g, ' ').slice(0, 200) || '(leer)'}`; }
@@ -1733,6 +1745,7 @@ $('out').addEventListener('click', e => {
     })();
     return;
   }
+  if (b.dataset.act === 'omdbsave') { db.omdb = (($('omdbKey') || {}).value || '').trim(); save(); delete EPS[b.dataset.sid]; loadMalEps(b.dataset.sid, true); hint(db.omdb ? 'OMDb-Schlüssel gespeichert.' : 'OMDb-Schlüssel entfernt.'); render(); return; }
   if (b.dataset.act === 'malretry') { loadMalEps(b.dataset.sid, true); render(); return; }
   if (b.dataset.act === 'mal') { db.mal = db.mal === false; save(); render(); return; }
   if (b.dataset.act === 'showall') { detailAll = !detailAll; render(); return; }
