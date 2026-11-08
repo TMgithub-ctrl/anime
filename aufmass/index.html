@@ -2975,6 +2975,121 @@ async function uploadDoc(buf, name) {
   await fetch(Sync.api(`/api/aufmass/${S.p.id}/${encodeURIComponent(name)}`), { method: 'PUT', headers: Sync.hdr({ 'Content-Type': typeOf(name) }), body: buf });
 }
 
+/* =====================================================================
+   Helfer: eigener Link (helfer.html, eigene Datenbank – kein Zugriff aufs
+   echte Aufmaß). Er schickt eine Zip per WhatsApp, hier wird sie geprüft
+   und erst nach Bestätigung übernommen.
+   ===================================================================== */
+async function helferLink() {
+  const p = S.p; const use = [...(p._use || new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([pos]) => posMap().get(pos)).filter(Boolean);
+  const short = x => { let t = x.text.split('\n')[0].replace(/\s+/g, ' ').trim(); if (t.length > 42) t = t.slice(0, 40).replace(/[\s,;(-]+\S*$/, '') + ' …'; return t; };
+  const seen = new Set(); const items = [];
+  for (const x of use) { const t = short(x); if (seen.has(t.toLowerCase())) continue; seen.add(t.toLowerCase()); items.push({ p: x.pos, t, u: /^st/i.test(x.unit) ? 'St' : /^h|std/i.test(x.unit) ? 'Std' : 'm' }); if (items.length >= 24) break; }
+  const cfg = { v: 1, pid: p.id, b: p.name, r: (p.rooms || []).slice(0, 1500), i: items };
+  const json = new TextEncoder().encode(JSON.stringify(cfg)); let data, pre = 'j';
+  if (typeof CompressionStream !== 'undefined') { data = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); pre = 'z'; } else data = json;
+  const b64 = bufToB64(data.buffer).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const base = /github\.io$|^127\.0\.0\.1$|^localhost$/.test(location.hostname) ? location.href.split('#')[0] : 'https://tmgithub-ctrl.github.io/anime/aufmass/';   // Helfer kommt nie an den Pi
+  return new URL('helfer.html', base).href + '#c=' + pre + b64;
+}
+async function shareHelferLink() {
+  const url = await helferLink();
+  const text = `Helfer-Aufmaß für ${S.p.name}: Link öffnen, auf dem iPhone Teilen → „Zum Home-Bildschirm“, dann über das Symbol öffnen. Einträge machen und mit „Abschicken“ per WhatsApp an mich.`;
+  try { if (navigator.share) { await navigator.share({ title: 'Helfer-Aufmaß', text, url }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Link kopiert – in WhatsApp einfügen'); } catch { prompt('Link kopieren:', url); }
+}
+async function readHelferFile(file) {
+  const buf = await file.arrayBuffer(); let txt;
+  if (new Uint8Array(buf)[0] === 0x50) { const zip = await JSZip.loadAsync(buf); const f = zip.file('helfer.json') || zip.file(/\.json$/i)[0]; if (!f) throw new Error('In der Zip ist keine Helfer-Datei.'); txt = await f.async('string'); }
+  else txt = new TextDecoder().decode(buf);
+  const d = JSON.parse(txt); if (d?.type !== 'aufmass-helfer' || !Array.isArray(d.items)) throw new Error('Das ist keine Helfer-Datei.');
+  d.helfer = String(d.helfer || 'Helfer').slice(0, 60);
+  d.items = d.items.slice(0, 2000).map(x => ({ id: String(x.id || uid()).slice(0, 40), date: /^\d{4}-\d\d-\d\d$/.test(x.date) ? x.date : todayISO(), what: String(x.what || '').slice(0, 200),
+    qty: String(x.qty ?? '').slice(0, 20), unit: String(x.unit || '').slice(0, 8), raum: String(x.raum || '').slice(0, 80), bem: String(x.bem || '').slice(0, 200), pos: String(x.pos || '').slice(0, 30) }));
+  d.hours = (Array.isArray(d.hours) ? d.hours : []).filter(h => /^\d{4}-\d\d-\d\d$/.test(h.date) && numDe(h.h) > 0 && numDe(h.h) <= 24).map(h => ({ date: h.date, h: fmtH(numDe(h.h)) }));
+  return d;
+}
+/** Vorschlag je Eintrag: Position aus der Suche (Einheit passend zuerst), Raum aus der Raumliste */
+function helferMatch(x) {
+  const unitOk = pos => { const u = (posMap().get(pos)?.unit || '').toLowerCase(); return x.unit === 'm' ? u === 'm' : x.unit === 'St' ? /^st/.test(u) : x.unit === 'Std' ? /^(h|std)/.test(u) : true; };
+  const r = parseImportLine(`${x.what} ${x.raum}`, S.p.rooms, x.raum);
+  let cands = r.cands.slice(); if (x.pos && posMap().get(x.pos)) cands = [x.pos, ...cands.filter(c => c !== x.pos)];
+  if (cands.length < 3) for (const o of searchPositions(S.p, x.what, 8).results) if (!cands.includes(o.x.pos)) cands.push(o.x.pos);
+  cands.sort((a, b) => (a === x.pos ? -1 : 0) - (b === x.pos ? -1 : 0) || (unitOk(b) ? 1 : 0) - (unitOk(a) ? 1 : 0));
+  const room = x.raum ? (findRoom(S.p, x.raum)?.raum || x.raum) : '';
+  return { cands: cands.slice(0, 8), pos: cands[0] || '', raum: room };
+}
+async function openHelferImport(d) {
+  const seen = new Set((await DB.get('kv', 'helfer-seen:' + S.p.id)) || []);
+  const tplNames = await btbNames(); const who = matchWorker(d.helfer, tplNames) || d.helfer;
+  const rev = d.items.map(x => ({ x, ...helferMatch(x), qty: x.qty, use: !seen.has(x.id), dup: seen.has(x.id) }));
+  const days = [...new Set([...d.items.map(x => x.date), ...d.hours.map(h => h.date)])].sort();
+  const st = { btbHours: true, btbRows: true };
+  const other = d.pid && d.pid !== S.p.id;
+  const draw = () => {
+    openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">Von ${esc(d.helfer)}</div><div class="muted small">${d.items.length} Einträge${d.hours.length ? ' · ' + d.hours.map(h => dm(h.date) + ' ' + h.h + ' Std').join(', ') : ''} · erst nach „Übernehmen“ wird etwas geändert</div></div><button class="x" id="hix">×</button></div>
+      ${other ? `<p class="hint warn">Die Datei gehört zur Baustelle „${esc(d.baustelle || '?')}“, offen ist „${esc(S.p.name)}“.</p>` : ''}
+      ${rev.some(r => r.dup) ? `<p class="hint">${rev.filter(r => r.dup).length} Einträge wurden schon früher übernommen (abgehakt).</p>` : ''}
+      ${days.map(day => { const rs = rev.map((r, i) => [r, i]).filter(([r]) => r.x.date === day); if (!rs.length) return '';
+        return `<h3>${WOCHENTAG[new Date(day + 'T12:00:00').getDay()]}, ${fmtDateShort(day)}</h3>` + rs.map(([r, i]) => `<div class="imp ${r.use ? '' : 'off'}" data-i="${i}">
+        <div class="row"><input type="checkbox" class="iu" ${r.use ? 'checked' : ''} style="width:22px;height:22px"><div class="src grow">„${esc(r.x.what)}“ · ${esc(r.x.qty)} ${esc(r.x.unit)} · ${esc(r.x.raum || 'ohne Raum')}${r.x.bem ? `<br><span class="muted">${esc(r.x.bem)}</span>` : ''}${r.dup ? ' <span class="pill">schon übernommen</span>' : ''}</div></div>
+        <div class="row" style="margin-top:6px"><select class="i ip grow">${r.cands.map(pc => { const x = posMap().get(pc); return `<option value="${esc(pc)}" ${pc === r.pos ? 'selected' : ''}>${esc(pc)} – ${esc(x.text.split('\n')[0])} (${esc(x.unit)})${posTitle(S.p, pc).titel ? ' · ' + esc(posTitle(S.p, pc).titel) : ''}</option>`; }).join('') || '<option value="">– keine Position erkannt –</option>'}</select><button class="btn hs" title="andere Position suchen" style="padding:6px 12px">🔍</button></div>
+        <div class="row" style="margin-top:6px"><input class="i iq" inputmode="decimal" style="width:34%" value="${esc(r.qty)}" placeholder="Menge"><input class="i ir grow" value="${esc(r.raum)}" placeholder="Raum"></div></div>`).join(''); }).join('')}
+      <h3>Bautagesbericht</h3>
+      <label class="row small" style="gap:10px;margin:6px 2px"><input type="checkbox" id="hbH" ${st.btbHours ? 'checked' : ''} style="width:22px;height:22px">Stunden von ${esc(who)} eintragen${d.hours.length ? '' : ' <span class="muted">(keine geschickt)</span>'}</label>
+      <label class="row small" style="gap:10px;margin:6px 2px"><input type="checkbox" id="hbR" ${st.btbRows ? 'checked' : ''} style="width:22px;height:22px">Seine Arbeiten als Stichpunkte mit Kreuz bei ${esc(who)}</label>
+      <button class="btn primary block" id="hisave" style="margin-top:12px">Markierte übernehmen</button>`);
+    $('#hix').onclick = () => { closeSheet(); render(); };
+    document.querySelectorAll('.imp').forEach(el => { const r = rev[+el.dataset.i];
+      el.querySelector('.iu').onchange = ev => { r.use = ev.target.checked; el.classList.toggle('off', !r.use); };
+      el.querySelector('.ip').onchange = ev => r.pos = ev.target.value;
+      el.querySelector('.iq').oninput = ev => r.qty = ev.target.value;
+      el.querySelector('.ir').oninput = ev => r.raum = ev.target.value;
+      el.querySelector('.hs').onclick = () => { const y = window.scrollY; const sc = document.querySelector('.sheet')?.scrollTop || 0;
+        openPosPicker(x => { if (x) { if (!r.cands.includes(x.pos)) r.cands.unshift(x.pos); r.pos = x.pos; r.use = true; } draw(); const s2 = document.querySelector('.sheet'); if (s2) s2.scrollTop = sc; window.scrollTo(0, y); }, r.x.what); };
+    });
+    $('#hbH').onchange = e => st.btbHours = e.target.checked; $('#hbR').onchange = e => st.btbRows = e.target.checked;
+    $('#hisave').onclick = async () => {
+      let n = 0, skipped = 0; const now = Date.now(); const done = new Set(seen);
+      for (const r of rev) {
+        if (!r.use) continue; const qv = evalExpr(String(r.qty)); const raum = String(r.raum || '').trim();
+        if (!r.pos || qv == null || !raum) { skipped++; continue; }
+        const rec = { id: uid(), projectId: S.p.id, pos: r.pos, qty: qv, expr: String(r.qty).trim(), raum, sk: '', date: r.x.date, note: `Helfer ${d.helfer}: ${r.x.what}${r.x.bem ? ' – ' + r.x.bem : ''}`, status: 'offen', created: now + n, updated: now, helfer: d.helfer };
+        await DB.put('entries', rec); S.entries.push(rec); done.add(r.x.id); n++;
+      }
+      let bt = 0;
+      if (st.btbHours || st.btbRows) for (const day of days) {
+        const hrs = d.hours.find(h => h.date === day); const rows = st.btbRows ? rev.filter(r => r.x.date === day && r.use) : [];
+        if (!(st.btbHours && hrs) && !rows.length) continue;
+        let b = (S.berichte || []).find(x => x.datum === day); b = b ? normBericht(JSON.parse(JSON.stringify(b))) : await newBericht(day);
+        if (!b.people.includes(who)) b.people.push(who);
+        if (st.btbHours && hrs) b.hours[who] = hrs.h;
+        for (const r of rows) { const t = [r.x.what, r.raum || r.x.raum].filter(Boolean).join(' – ');
+          const ex = b.rows.find(x => x.text.toLowerCase() === t.toLowerCase()); if (ex) { if (!ex.who.includes(who)) ex.who.push(who); } else b.rows.push({ text: t, st: '', who: [who] }); }
+        b.rows = b.rows.filter(x => x.text || x.who.length); await saveBericht(b); bt++;
+      }
+      await DB.put('kv', [...done].slice(-5000), 'helfer-seen:' + S.p.id);
+      S.exportRes = null; changed(); closeSheet(); render();
+      toast(`${n} Einträge von ${esc(d.helfer)} übernommen${skipped ? `, ${skipped} übersprungen (Menge, Raum oder Position fehlt)` : ''}${bt ? ` · ${bt} Bautagesbericht${bt === 1 ? '' : 'e'} ergänzt` : ''}`, 5000);
+    };
+  };
+  draw();
+}
+function helferCard() {
+  return `<div class="card"><h3 style="margin-top:0">Helfer</h3>
+    <p class="small muted" style="margin-top:0">Dein Helfer bekommt eine eigene, einfache Ansicht (ohne Positionsnummern, ohne Zugriff auf dein Aufmaß). Er schickt dir eine Zip per WhatsApp – du prüfst und übernimmst.</p>
+    <button class="btn block" id="hLink">Helfer-Link schicken</button>
+    <button class="btn primary block" id="hImp" style="margin-top:8px">Helfer-Datei einlesen (.zip)</button>
+    <input type="file" id="hFile" accept=".zip,.json,application/zip,application/json" style="display:none"></div>`;
+}
+function wireHelferCard() {
+  if (!$('#hLink')) return;
+  $('#hLink').onclick = shareHelferLink;
+  $('#hImp').onclick = () => $('#hFile').click();
+  $('#hFile').onchange = async () => { const f = $('#hFile').files[0]; $('#hFile').value = ''; if (!f) return;
+    try { openHelferImport(await readHelferFile(f)); } catch (e) { console.error(e); toast('Konnte die Datei nicht lesen: ' + esc(e.message || e), 5000); } };
+}
+
 
 async function renderExport() {
   const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
@@ -2997,6 +3112,7 @@ async function renderExport() {
         <div class="m small">${st}</div></div>`; }).join('')
       : '<p class="muted small">Noch keine abgeschlossenen Wochen. Ab Montag erscheint hier automatisch das Aufmaß der Vorwoche.</p>'}
   </div>
+  ${helferCard()}
   <div class="card"><h3 style="margin-top:0">Meine Unterschrift</h3>
     ${p.sign?.my ? `<img src="${p.sign.my}" alt="" style="max-height:60px;max-width:220px;background:#fff;border-radius:8px;padding:4px 8px"><div class="small muted">${esc(p.sign.name || '')}</div>
       <label class="row" style="margin-top:10px;gap:8px"><input type="checkbox" id="mySigAuto" ${p.sign.auto ? 'checked' : ''} style="width:20px;height:20px"> automatisch in jedes Wochen-Aufmaß setzen (mit Datum)</label>` : '<p class="small muted" style="margin-top:0">Noch keine hinterlegt. Du kannst auch jedes Aufmaß einzeln unterschreiben.</p>'}
@@ -3031,6 +3147,7 @@ async function renderExport() {
   const showCur = () => { $('#xOut').innerHTML = `<p class="hint ok">Fertig: ${esc(S.curExport.name)} · ${Math.round(S.curExport.buf.byteLength / 1024)} KB</p>` + sendButtons('cur');
     $('#xOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => S.curExport, cw, 'zwischen', null)); };
   if (S.curExport && S.curExport.hash === weekHash(p, cur) + sigHash(sigMeta(p, cw.key, Date.now()))) showCur();
+  wireHelferCard();
   $('#xGo').onclick = async () => {
     $('#xGo').disabled = true; $('#xGo').textContent = 'Erzeuge …';
     try { const sm = sigMeta(p, cw.key, Date.now()); const res = await buildXlsm(p, cur, { sigs: await renderSigs(sm) }); S.curExport = { buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, cw).replace('.xlsm', '_Zwischenstand.xlsm'), hash: weekHash(p, cur) + sigHash(sm) }; showCur(); }
@@ -3425,7 +3542,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
