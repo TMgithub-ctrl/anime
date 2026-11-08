@@ -2705,15 +2705,20 @@ function matchWorker(name, names) {
   return names.find(x => norm(x) === n) || names.find(x => norm(x).split(' ')[0] === n.split(' ')[0]) || names.find(x => norm(x).split(' ').slice(-1)[0] === n.split(' ').slice(-1)[0]) || null;
 }
 /** Seiten: Leistungen auf die 12 Zeilen verteilen, lange Texte umbrechen, bei Bedarf 2. Blatt */
+/** Ein Stichpunkt = eine Zeile. Mehr als 12 Stichpunkte → 2. Blatt */
 function btbPages(b, L) {
-  const cap = L.last - L.first + 1; const lines = [];
-  for (const r of (b.rows || [])) {
-    if (!r.text && !Object.values(r.h || {}).some(v => numDe(v))) continue;
-    const parts = wrapText(r.text || '', 68); if (!parts.length) parts.push('');
-    parts.forEach((t, i) => lines.push(i ? { text: t } : { text: t, st: r.st, h: r.h || {} }));
-  }
+  const cap = L.last - L.first + 1; const lines = (b.rows || []).filter(r => r.text || r.st || (r.who || []).length);
   const pages = []; for (let i = 0; i < Math.max(1, lines.length); i += cap) pages.push(lines.slice(i, i + cap));
   return pages;
+}
+/** ältere Berichte (Stunden je Zeile) auf Kreuze + Tagesstunden umstellen */
+function normBericht(b) {
+  b.hours ||= {}; b.people ||= [];
+  for (const r of (b.rows || [])) {
+    r.who ||= [];
+    if (r.h) { for (const [p, v] of Object.entries(r.h)) { if (!r.who.includes(p)) r.who.push(p); if (numDe(v)) b.hours[p] = fmtH(numDe(b.hours[p]) + numDe(v)); } delete r.h; }
+  }
+  return b;
 }
 async function buildBerichtXlsx(berichte, tplBuf) {
   const T = await btbOpen(tplBuf); const { wb } = T; const zip = wb.zip;
@@ -2737,6 +2742,7 @@ async function buildBerichtXlsx(berichte, tplBuf) {
   let maxSheetFile = 0; zip.forEach(pth => { const m = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(pth); if (m) maxSheetFile = Math.max(maxSheetFile, +m[1]); });
   let maxSheetId = Math.max(...wb.sheets.map(s => s.sheetId)); let maxRid = Math.max(...Object.keys(wb.rels).map(k => +k.replace(/\D/g, '') || 0));
   const used = new Set(); const sheetName = s => { let n = s.replace(/[\[\]:*?\/\\]/g, '-').slice(0, 31), k = 2; while (used.has(n.toLowerCase())) n = (s.slice(0, 27) + ' (' + k++ + ')'); used.add(n.toLowerCase()); return n; };
+  berichte = berichte.map(x => normBericht(JSON.parse(JSON.stringify(x))));
   const jobs = []; for (const b of berichte.slice().sort((x, y) => (x.datum || '').localeCompare(y.datum || ''))) btbPages(b, T).forEach((lines, pi, all) => jobs.push({ b, lines, pi, n: all.length }));
   const names = [];
   for (let j = 0; j < jobs.length; j++) {
@@ -2753,15 +2759,17 @@ async function buildBerichtXlsx(berichte, tplBuf) {
     if (b.baustelle) setStr(doc, cell(T.baustelle), b.baustelle);
     // Mitarbeiter: Spalten aus der Vorlage, weitere Namen in freie Spalten
     const colOf = {}; const free = T.workerCols.filter((c, i) => !T.names[i]);
-    for (const p of (b.people || [])) { const i = T.names.findIndex(x => x && x.toLowerCase() === p.toLowerCase());
+    const ppl = [...new Set([...(b.people || []), ...(b.rows || []).flatMap(r => r.who || []), ...Object.keys(b.hours || {})])];
+    for (const p of ppl) { const i = T.names.findIndex(x => x && x.toLowerCase() === p.toLowerCase());
       if (i >= 0) colOf[p] = T.workerCols[i]; else if (free.length) { const c = free.shift(); colOf[p] = c; setStr(doc, cell(c + T.nameRow), p); } }
-    const sums = {};
-    lines.forEach((ln, i) => { const r = T.first + i;
-      const tc = cell(T.colText + r); setStr(doc, tc, ln.text); restyle(tc, { horizontal: 'left', vertical: 'center' });
-      if (ln.st === 'offen' || ln.st === 'fertig') { const c = cell((ln.st === 'offen' ? T.colOffen : T.colFertig) + r); setStr(doc, c, 'X'); restyle(c, { horizontal: 'center', vertical: 'center' }); }
-      for (const [p, v] of Object.entries(ln.h || {})) { const h = numDe(v); const col = colOf[p]; if (!h || !col) continue;
-        const c = cell(col + r); setNum(doc, c, h); restyle(c, { horizontal: 'center', vertical: 'center' }); sums[col] = (sums[col] || 0) + h; } });
-    for (const [col, s] of Object.entries(sums)) { const c = cell(col + T.totalRow); setFormula(doc, c, `SUM(${col}${T.first}:${col}${T.last})`, s); restyle(c, { horizontal: 'center', vertical: 'center' }); }
+    const mid = { horizontal: 'center', vertical: 'center' };
+    lines.forEach((ln, i) => { const r = T.first + i; const t = ln.text || '';
+      const tc = cell(T.colText + r); setStr(doc, tc, t); restyle(tc, { horizontal: 'left', vertical: 'center' });
+      if (t.length > 62) tc.setAttribute('s', styleFont(tc.getAttribute('s') || '0', t.length > 80 ? 8 : 9));
+      if (ln.st === 'offen' || ln.st === 'fertig') { const c = cell((ln.st === 'offen' ? T.colOffen : T.colFertig) + r); setStr(doc, c, 'X'); restyle(c, mid); }
+      for (const p of (ln.who || [])) { const col = colOf[p]; if (!col) continue; const c = cell(col + r); setStr(doc, c, 'X'); restyle(c, mid); } });
+    if (pi === 0) for (const [p, v] of Object.entries(b.hours || {})) { const h = numDe(v), col = colOf[p]; if (!h || !col) continue;
+      const c = cell(col + T.totalRow); setNum(doc, c, h); restyle(c, mid); }
     for (const sv of doc.getElementsByTagName('sheetView')) { if (j === 0) sv.setAttribute('tabSelected', '1'); else sv.removeAttribute('tabSelected'); }
     const nm = sheetName(`${WOCHENTAG[dt.getDay()].slice(0, 2)} ${fmtDateShort(b.datum || todayISO())}${n > 1 ? ' (' + (pi + 1) + ')' : ''}`); names.push(nm);
     if (j === 0) { zip.file(T.sh.path, serXml(doc)); first.setAttribute('name', nm); continue; }
@@ -2792,31 +2800,37 @@ async function newBericht(datum) {
   const v = await getVorlage('btb');
   return { id: uid(), projectId: S.p.id, datum: datum || todayISO(), created: Date.now(), updated: Date.now(),
     leiter: prev?.leiter || v?.info?.leiter || '', anfahrt: prev?.anfahrt || '', baustelle: prev?.baustelle || v?.info?.baustelle || S.p.name,
-    people: prev?.people?.slice() || [], rows: [{ text: '', st: '', h: {} }], sent: [] };
+    people: prev?.people?.slice() || [], hours: prev ? { ...normBericht(JSON.parse(JSON.stringify(prev))).hours } : {}, rows: [{ text: '', st: '', who: [] }], sent: [] };
 }
 async function saveBericht(b) { b.updated = Date.now(); await DB.put('berichte', b); S.berichte = (S.berichte || []).filter(x => x.id !== b.id).concat(b); changed(); }
-const berichtHours = b => (b.rows || []).reduce((a, r) => a + Object.values(r.h || {}).reduce((x, v) => x + numDe(v), 0), 0);
-const personHours = (b, p) => (b.rows || []).reduce((a, r) => a + numDe(r.h?.[p]), 0);
+const berichtHours = b => { const n = normBericht(JSON.parse(JSON.stringify(b))); return (n.people.length ? n.people : Object.keys(n.hours)).reduce((a, p) => a + numDe(n.hours[p]), 0); };
 function berichtFileName(list) {
   const base = safeName(S.p.name);
   if (list.length === 1) return `Bautagesbericht_${base}_${list[0].datum}.xlsx`;
   const w = weekOf(list[0].datum); return `Bautagesberichte_${base}_KW${String(w.week).padStart(2, '0')}_${w.year}.xlsx`;
 }
-/** Notiz → Leistungszeilen; „Merlin 8h“ landet als Stunden in der Zeile, Namen werden den Spalten zugeordnet */
-function noteToRows(note, names, people) {
+/** Notiz → Stichpunkte; genannte Mitarbeiter bekommen in der Zeile ihr Kreuz, „Merlin 8h“ zählt zu Merlins Tagesstunden */
+function noteToRows(note, names, people, hours) {
   const rows = []; let anfahrt = '';
+  const esc_re = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const raw of String(note.text || '').split('\n')) {
-    const l = raw.trim(); if (!l) continue;
+    const l = raw.replace(/^\s*[-•*–]\s*/, '').trim(); if (!l) continue;
     const r = parseNoteHours({ text: l, date: note.date }); if (r.anfahrt) anfahrt = r.anfahrt;
-    const h = {};
-    let back = '';
+    const who = []; let back = '';
     for (const x of r.rows) { const v = rowHours(x); if (!v) continue;
       let nm = matchWorker(x.name, names); const w = x.name.split(/\s+/);
-      if (!nm && w.length > 1) { const last = matchWorker(w[w.length - 1], names); if (last) { nm = last; back += ' ' + w.slice(0, -1).join(' '); } else { nm = w[w.length - 1]; back += ' ' + w.slice(0, -1).join(' '); } }
-      nm ||= x.name; h[nm] = fmtH(numDe(h[nm]) + v); if (!people.includes(nm)) people.push(nm); }
-    const text = (r.beschreibung.replace(/^(Mo|Di|Mi|Do|Fr|Sa|So): /, '') + back).replace(/\s{2,}/g, ' ').trim();
+      if (!nm && w.length > 1) { nm = matchWorker(w[w.length - 1], names) || w[w.length - 1]; back += ' ' + w.slice(0, -1).join(' '); }
+      nm ||= x.name; if (!who.includes(nm)) who.push(nm); hours[nm] = fmtH(numDe(hours[nm]) + v); if (!people.includes(nm)) people.push(nm); }
+    let text = (r.beschreibung.replace(/^(Mo|Di|Mi|Do|Fr|Sa|So): /, '') + back).replace(/\s{2,}/g, ' ').trim();
+    // Namen ohne Stunden („… mit Merlin und Tjade“) → Kreuz, Name aus dem Stichpunkt raus
+    for (const full of [...new Set([...names, ...people])]) {
+      for (const form of [full, full.split(/\s+/)[0]]) { const re = new RegExp('(^|[\\s,(/+&])' + esc_re(form) + '(?=$|[\\s,.)/+&:;])', 'i');
+        if (form.length > 2 && re.test(text)) { if (!who.includes(full)) who.push(full); if (!people.includes(full)) people.push(full); text = text.replace(re, '$1'); break; } }
+    }
+    text = text.replace(/\s*\b(mit|und|u\.)\s*(?=[,;]|$)/gi, '').replace(/\(\s*\)/g, '').replace(/\s*[,;&+/]\s*(?=[,;&+/]|$)/g, '').replace(/\s{2,}/g, ' ').replace(/^[\s,;:–-]+|[\s,;:–-]+$/g, '').trim();
+    text = text.replace(/\s*\b(mit|und)$/i, '').trim();
     const st = /nicht\s+(ganz\s+)?(fertig|beendet|erledigt)|noch offen|angefangen|begonnen/i.test(text) ? 'offen' : /\b(fertig|erledigt|abgeschlossen|beendet)\b/i.test(text) ? 'fertig' : '';
-    if (text || Object.keys(h).length) rows.push({ text, st, h });
+    if (text || who.length) rows.push({ text, st, who });
   }
   return { rows, anfahrt };
 }
@@ -2826,8 +2840,8 @@ function entriesToRows(datum) {
   for (const e of es) { const x = posMap().get(e.pos); if (!x) continue; const k = (e.raum || '') + '|' + e.pos; const o = by.get(k) || { x, raum: e.raum, q: 0 }; o.q += e.qty; by.set(k, o); }
   const perRaum = new Map();
   for (const o of by.values()) { const k = o.raum || ''; const u = (o.x.unit || '').toLowerCase(); const verb = u === 'm' ? 'verlegt' : (u === 'psch' ? 'ausgeführt' : 'montiert');
-    (perRaum.get(k) || perRaum.set(k, []).get(k)).push(`${fmt(o.q)} ${o.x.unit} ${o.x.text.split('\n')[0].split(/[,;(]/)[0].trim()} ${verb}`); }
-  return [...perRaum.entries()].map(([raum, parts]) => ({ text: (raum ? raum + ': ' : '') + parts.join(', '), st: '', h: {} }));
+    (perRaum.get(k) || perRaum.set(k, []).get(k)).push(`${fmt(o.q)} ${o.x.unit} ${o.x.text.split('\n')[0].split(/[;(]|,\s/)[0].trim()} ${verb}`); }
+  return [...perRaum.entries()].map(([raum, parts]) => ({ text: (raum ? raum + ': ' : '') + parts.join(', '), st: '', who: [] }));
 }
 
 /* ---------- Bautagesberichte: Liste ---------- */
@@ -2860,7 +2874,7 @@ function renderBerichtListe(m) {
 
 /* ---------- Bautagesbericht: Editor ---------- */
 async function openBericht(b, isNew) {
-  b = JSON.parse(JSON.stringify(b)); b.rows ||= []; b.people ||= [];
+  b = normBericht(JSON.parse(JSON.stringify(b))); b.rows ||= [];
   const tplNames = await btbNames();
   const short = p => { const t = p.split(/\s+/); return t[0] + (t.length > 1 ? ' ' + t[t.length - 1][0] + '.' : ''); };
   openSheet(`<div class="head"><div class="grow"><div style="font-weight:700;font-size:18px">Bautagesbericht</div><div class="muted small">${tplNames.length ? 'wird in eure Excel-Vorlage eingetragen' : 'Excel-Vorlage fehlt noch – unter „Vorlagen“ hochladen'}</div></div><button class="x" id="btx">×</button></div>
@@ -2869,7 +2883,9 @@ async function openBericht(b, isNew) {
     <label class="f">Baustelle</label><input class="i" id="btB" value="${esc(b.baustelle || '')}">
     <h3>Wer war da?</h3><div id="btPeople"></div>
     <div class="row" style="margin-top:6px"><input class="i grow" id="btPn" placeholder="weiterer Name"><button class="btn" id="btPadd">+</button></div>
-    <h3>Leistungen / Bemerkungen</h3>
+    <div id="btHours"></div>
+    <h3>Leistungen (Stichpunkte)</h3>
+    <div class="small muted" style="margin:-4px 0 8px">Ein Stichpunkt pro Zeile. Darunter antippen, wer dran war – das wird ein Kreuz unter dem Namen.</div>
     <div class="row" style="gap:6px;margin-bottom:8px"><button class="btn grow" id="btFromNote" style="font-size:13px">Notiz übernehmen</button><button class="btn grow" id="btFromAuf" style="font-size:13px">Aufmaß des Tages</button></div>
     <div id="btRows"></div>
     <button class="btn block" id="btAdd" style="margin-top:6px">+ Leistung</button>
@@ -2880,46 +2896,56 @@ async function openBericht(b, isNew) {
   const allNames = () => [...new Set([...tplNames, ...b.people])];
   const read = () => {
     b.datum = $('#btD').value || b.datum; b.anfahrt = $('#btAn').value.trim(); b.leiter = $('#btL').value.trim(); b.baustelle = $('#btB').value.trim();
+    document.querySelectorAll('#btHours .bt-hh').forEach(i => { if (i.value.trim()) b.hours[i.dataset.p] = i.value.trim(); else delete b.hours[i.dataset.p]; });
     b.rows = Array.from(document.querySelectorAll('#btRows .btrow')).map(el => ({ text: el.querySelector('.bt-t').value.trim(), st: el.dataset.st || '',
-      h: Object.fromEntries(Array.from(el.querySelectorAll('.bt-h')).map(i => [i.dataset.p, i.value.trim()]).filter(x => x[1])) }));
+      who: Array.from(el.querySelectorAll('[data-w].on')).map(x => x.dataset.w) }));
     return b;
   };
   const paint = () => {
     $('#btPeople').innerHTML = `<div class="chips" style="flex-wrap:wrap">${allNames().map(p => `<button class="chip ${b.people.includes(p) ? 'on' : ''}" data-pp="${esc(p)}">${esc(p)}</button>`).join('')}</div>` + (allNames().length ? '' : '<div class="small muted">Namen kommen aus der Vorlage – oder unten eintragen.</div>');
-    $('#btRows').innerHTML = b.rows.map((r, i) => `<div class="card btrow" data-st="${esc(r.st || '')}" style="padding:10px 12px">
-        <div class="row"><textarea class="i bt-t grow" rows="2" placeholder="Was wurde wo gemacht?">${esc(r.text || '')}</textarea><button class="nsx bt-del" title="löschen">✕</button></div>
-        <div class="seg" style="margin:6px 0 4px"><button data-s="offen" class="${r.st === 'offen' ? 'on' : ''}">noch nicht beendet</button><button data-s="fertig" class="${r.st === 'fertig' ? 'on' : ''}">beendet</button><button data-s="" class="${!r.st ? 'on' : ''}">–</button></div>
-        ${b.people.length ? `<div class="angrid">${b.people.map(p => `<label><span>${esc(short(p))}</span><input class="i bt-h" data-p="${esc(p)}" inputmode="decimal" value="${esc(r.h?.[p] || '')}" placeholder="Std"></label>`).join('')}</div>` : '<div class="small muted">Stunden: oben antippen, wer da war.</div>'}</div>`).join('');
+    $('#btHours').innerHTML = b.people.length ? `<label class="f" style="margin-top:12px">Stunden heute <span class="muted">(→ Zeile „Gesamtstunden“)</span></label>
+      <div class="angrid">${b.people.map(p => `<label><span>${esc(short(p))}</span><input class="i bt-hh" data-p="${esc(p)}" inputmode="decimal" value="${esc(b.hours[p] || '')}" placeholder="Std"></label>`).join('')}</div>` : '';
+    $('#btRows').innerHTML = b.rows.map(r => `<div class="card btrow" data-st="${esc(r.st || '')}" style="padding:10px 12px">
+        <div class="row"><input class="i bt-t grow" maxlength="90" placeholder="z. B. Kabeltrasse Flur 1.OG" value="${esc(r.text || '')}"><button class="nsx bt-del" title="löschen">✕</button></div>
+        <div class="seg" style="margin:6px 0 6px"><button data-s="offen" class="${r.st === 'offen' ? 'on' : ''}">noch nicht beendet</button><button data-s="fertig" class="${r.st === 'fertig' ? 'on' : ''}">beendet</button><button data-s="" class="${!r.st ? 'on' : ''}">–</button></div>
+        ${b.people.length ? `<div class="chips" style="flex-wrap:wrap">${b.people.map(p => `<button class="chip ${(r.who || []).includes(p) ? 'on' : ''}" data-w="${esc(p)}">${(r.who || []).includes(p) ? '✕ ' : ''}${esc(short(p))}</button>`).join('')}<button class="chip" data-wall="1">alle</button></div>`
+          : '<div class="small muted">Oben antippen, wer da war – dann hier ankreuzen.</div>'}</div>`).join('');
     wire(); sums();
   };
-  const sums = () => { read(); const t = berichtHours(b);
-    $('#btSum').textContent = t ? `Gesamt ${fmtH(t)} Std · ` + b.people.map(p => short(p) + ' ' + (fmtH(personHours(b, p)) || '0')).join(', ') : '';
-    const L = b.rows.reduce((a, r) => a + Math.max(1, wrapText(r.text, 68).length), 0);
-    if (L > 12) $('#btSum').textContent += ` · ${L} Zeilen – passt nicht auf ein Blatt, es wird ein 2. Blatt angelegt.`; };
+  const sums = () => { read(); const t = berichtHours(b); const parts = [];
+    if (t) parts.push(`Gesamt ${fmtH(t)} Std`);
+    const n = b.rows.filter(r => r.text || r.st || r.who.length).length; if (n > 12) parts.push(`${n} Stichpunkte – passt nicht auf ein Blatt, es wird ein 2. Blatt angelegt`);
+    const long = b.rows.filter(r => r.text.length > 62).length; if (long) parts.push(`${long} lange${long === 1 ? 'r' : ''} Stichpunkt${long === 1 ? '' : 'e'} – wird in Excel kleiner geschrieben`);
+    $('#btSum').textContent = parts.join(' · '); };
   const wire = () => {
-    document.querySelectorAll('[data-pp]').forEach(c => c.onclick = () => { read(); const p = c.dataset.pp; b.people = b.people.includes(p) ? b.people.filter(x => x !== p) : [...b.people, p];
-      b.people.sort((x, y) => { const ix = allNames().indexOf(x), iy = allNames().indexOf(y); return ix - iy; }); paint(); });
+    document.querySelectorAll('[data-pp]').forEach(c => c.onclick = () => { read(); const p = c.dataset.pp;
+      if (b.people.includes(p)) { b.people = b.people.filter(x => x !== p); delete b.hours[p]; b.rows.forEach(r => r.who = r.who.filter(x => x !== p)); } else b.people.push(p);
+      b.people.sort((x, y) => allNames().indexOf(x) - allNames().indexOf(y)); paint(); });
     document.querySelectorAll('#btRows .btrow').forEach(el => {
       el.querySelectorAll('[data-s]').forEach(x => x.onclick = () => { el.dataset.st = x.dataset.s; el.querySelectorAll('[data-s]').forEach(y => y.classList.toggle('on', y === x)); });
+      const lbl = x => { x.textContent = (x.classList.contains('on') ? '✕ ' : '') + short(x.dataset.w); };
+      el.querySelectorAll('[data-w]').forEach(x => x.onclick = () => { x.classList.toggle('on'); lbl(x); });
+      const all = el.querySelector('[data-wall]'); if (all) all.onclick = () => { const ws = Array.from(el.querySelectorAll('[data-w]')); const on = !ws.every(x => x.classList.contains('on')); ws.forEach(x => { x.classList.toggle('on', on); lbl(x); }); };
       el.querySelector('.bt-del').onclick = () => { el.remove(); sums(); };
-      el.querySelectorAll('input,textarea').forEach(i => i.oninput = sums);
+      el.querySelectorAll('input').forEach(i => i.oninput = sums);
     });
+    document.querySelectorAll('#btHours input').forEach(i => i.oninput = sums);
   };
   paint();
   $('#btx').onclick = () => { closeSheet(); render(); };
   $('#btPadd').onclick = () => { read(); const v = $('#btPn').value.trim(); if (!v) return; if (!b.people.includes(v)) b.people.push(v); paint(); $('#btPn').value = ''; };
-  $('#btAdd').onclick = () => { read(); b.rows.push({ text: '', st: '', h: {} }); paint(); };
+  $('#btAdd').onclick = () => { read(); b.rows.push({ text: '', st: '', who: [] }); paint(); const ts = document.querySelectorAll('#btRows .bt-t'); ts[ts.length - 1]?.focus(); };
   $('#btFromAuf').onclick = () => { read(); const r = entriesToRows(b.datum); if (!r.length) { toast('Am ' + fmtDateShort(b.datum) + ' gibt es keine Aufmaß-Einträge.'); return; }
-    b.rows = b.rows.filter(x => x.text || Object.keys(x.h || {}).length).concat(r); paint(); toast(`${r.length} ${r.length === 1 ? 'Zeile' : 'Zeilen'} aus dem Aufmaß übernommen – bitte anpassen`); };
+    b.rows = b.rows.filter(x => x.text || x.who.length).concat(r); paint(); toast(`${r.length} ${r.length === 1 ? 'Zeile' : 'Zeilen'} aus dem Aufmaß übernommen – bitte anpassen`); };
   $('#btFromNote').onclick = () => { read(); const ns = (S.notes || []).slice().sort((x, y) => (x.date === b.datum ? -1 : 0) - (y.date === b.datum ? -1 : 0) || y.updated - x.updated).slice(0, 30);
     if (!ns.length) { toast('Noch keine Notizen.'); return; }
     const snap = JSON.parse(JSON.stringify(b));
     openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Notiz übernehmen</div><button class="x" id="bnx">×</button></div>
-      <p class="small muted">Jede Zeile wird eine Leistung. „Merlin 8h“ wird als Stunden bei Merlin eingetragen.</p>
+      <p class="small muted">Jede Zeile wird ein Stichpunkt. Genannte Namen bekommen dort ihr Kreuz, „Merlin 8h“ zählt zu Merlins Stunden.</p>
       ${ns.map(n => `<div class="card note" data-nid="${n.id}" style="padding:10px 12px"><b class="small ${n.date === b.datum ? '' : 'muted'}">${fmtDate(n.date || todayISO())}</b><div class="ntext">${esc(n.text)}</div></div>`).join('')}`);
     $('#bnx').onclick = () => openBericht(snap, isNew);
-    document.querySelectorAll('[data-nid]').forEach(el => el.onclick = () => { const n = S.notes.find(x => x.id === el.dataset.nid); const r = noteToRows(n, tplNames, snap.people);
-      snap.rows = snap.rows.filter(x => x.text || Object.keys(x.h || {}).length).concat(r.rows); if (r.anfahrt && !snap.anfahrt) snap.anfahrt = r.anfahrt;
+    document.querySelectorAll('[data-nid]').forEach(el => el.onclick = () => { const n = S.notes.find(x => x.id === el.dataset.nid); const r = noteToRows(n, tplNames, snap.people, snap.hours);
+      snap.rows = snap.rows.filter(x => x.text || x.who.length).concat(r.rows); if (r.anfahrt && !snap.anfahrt) snap.anfahrt = r.anfahrt;
       openBericht(snap, isNew); toast(`${r.rows.length} ${r.rows.length === 1 ? 'Zeile' : 'Zeilen'} übernommen – bitte prüfen`); }); };
   $('#btSave').onclick = async () => { read(); await saveBericht(b); toast('Bautagesbericht gespeichert'); };
   if ($('#btDel')) $('#btDel').onclick = async () => { if (!confirm('Bautagesbericht löschen?')) return; await DB.del('berichte', b.id); S.berichte = S.berichte.filter(x => x.id !== b.id); changed(); closeSheet(); render(); };
