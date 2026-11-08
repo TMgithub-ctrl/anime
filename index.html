@@ -37,10 +37,8 @@ h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin:0;letter-spacing:-.02em
 .sync.ok{color:var(--ok)}.sync.ok::before{background:var(--ok)}
 .sync.bad{color:var(--danger)}.sync.bad::before{background:var(--danger)}
 .themes{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-.themes button{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:var(--c);cursor:pointer;padding:0}
-.themes button.on{outline:2px solid var(--text);outline-offset:2px}
-.themes .thsep{width:1px;align-self:stretch;background:var(--line);margin:0 2px}
-.themes .fxsw{border-color:rgba(255,255,255,.5)}
+
+
 
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
 .tab{font:inherit;font-size:.95rem;color:var(--muted);background:rgba(24,28,58,.7);border:1px solid var(--line);border-radius:999px;padding:6px 16px;cursor:pointer}
@@ -324,6 +322,57 @@ header{padding-top:34px}
 [data-theme=manga] #fx::after{content:"";position:absolute;inset:-20%;background:repeating-conic-gradient(from 0deg at 85% -10%,rgba(255,255,255,.05) 0 1.2deg,transparent 1.2deg 6deg);-webkit-mask:linear-gradient(#000,transparent 70%);mask:linear-gradient(#000,transparent 70%)}
 [data-theme=manga] h1{background:none;color:#fff;-webkit-text-stroke:0;text-shadow:3px 3px 0 #ff3b3b;letter-spacing:.01em;text-transform:uppercase;font-style:italic}
 [data-theme=manga] .card,[data-theme=manga] .hero{border:2px solid #f5f5f5;box-shadow:5px 5px 0 #ff3b3b;border-radius:6px}
+
+/* Weitere animierte Themes */
+[data-theme=glut],[data-theme=schnee],[data-theme=regen],[data-theme=gluehwuermchen],[data-theme=lava],[data-theme=wellen]{--fxon:1}
+[data-theme=glut] #fx,[data-theme=schnee] #fx,[data-theme=regen] #fx,[data-theme=gluehwuermchen] #fx,[data-theme=lava] #fx,[data-theme=wellen] #fx{display:block}
+[data-theme=glut]{--bg:#120605;--panel:#22100c;--line:#4a2016;--text:#fff1ea;--muted:#c99a88;--accent:#ff7a2f;--g1:#5c1a08;--g2:#3a0d14}
+[data-theme=glut] #fx::after{content:"";position:absolute;left:0;right:0;bottom:0;height:40vh;background:radial-gradient(120% 90% at 50% 120%,rgba(255,90,20,.45),transparent 70%);animation:fxglow 3s ease-in-out infinite alternate}
+@keyframes fxglow{to{opacity:.55}}
+#fx i.em{position:absolute;bottom:-4vh;width:5px;height:5px;border-radius:50%;background:#ffb347;box-shadow:0 0 8px 2px #ff6a00;animation:fxrise linear infinite,fxflk .4s ease-in-out infinite alternate}
+@keyframes fxrise{0%{transform:translate(0,0);opacity:0}10%{opacity:1}100%{transform:translate(6vw,-108vh);opacity:0}}
+@keyframes fxflk{to{filter:brightness(1.6)}}
+[data-theme=schnee]{--bg:#0a111e;--panel:#141f33;--line:#273a5a;--text:#f2f8ff;--muted:#9fb3cf;--accent:#cfe8ff;--g1:#1c2f52;--g2:#0f1a33}
+#fx i.sn{position:absolute;top:-3vh;width:6px;height:6px;border-radius:50%;background:#fff;opacity:.85;filter:blur(.4px);animation:fxsnow linear infinite}
+@keyframes fxsnow{0%{transform:translate(0,0)}25%{transform:translate(2vw,27vh)}50%{transform:translate(-1vw,55vh)}75%{transform:translate(2.5vw,82vh)}100%{transform:translate(0,108vh)}}
+[data-theme=regen]{--bg:#070c13;--panel:#111a26;--line:#223247;--text:#e9f3ff;--muted:#8ea4bd;--accent:#7dd3fc;--g1:#13233a;--g2:#0a1424}
+#fx i.rd{position:absolute;top:-12vh;width:1.5px;height:9vh;background:linear-gradient(transparent,rgba(170,215,255,.7));transform:rotate(12deg);animation:fxrain linear infinite}
+@keyframes fxrain{to{transform:translate(-22vh,118vh) rotate(12deg)}}
+[data-theme=regen] #fx::after{content:"";position:absolute;inset:0;background:#dbeaff;opacity:0;animation:fxbolt 11s infinite}
+@keyframes fxbolt{0%,93%,100%{opacity:0}94%{opacity:.18}95%{opacity:0}96%{opacity:.12}97%{opacity:0}}
+[data-theme=gluehwuermchen]{--bg:#050b08;--panel:#0d1a12;--line:#1d3526;--text:#f0ffe9;--muted:#8fb39a;--accent:#e3ff6b;--g1:#0f2a18;--g2:#08160f}
+#fx i.ff{position:absolute;width:6px;height:6px;border-radius:50%;background:#f4ff9c;box-shadow:0 0 10px 3px rgba(227,255,107,.8);animation:fxff1 14s ease-in-out infinite alternate,fxpulse 2.4s ease-in-out infinite}
+#fx i.ff:nth-child(3n){animation-name:fxff2,fxpulse}#fx i.ff:nth-child(3n+1){animation-name:fxff3,fxpulse}
+@keyframes fxff1{25%{transform:translate(6vw,-8vh)}50%{transform:translate(-4vw,-14vh)}75%{transform:translate(8vw,4vh)}100%{transform:translate(-6vw,10vh)}}
+@keyframes fxff2{25%{transform:translate(-7vw,6vh)}50%{transform:translate(5vw,12vh)}75%{transform:translate(-3vw,-9vh)}100%{transform:translate(7vw,-4vh)}}
+@keyframes fxff3{25%{transform:translate(4vw,10vh)}50%{transform:translate(9vw,-6vh)}75%{transform:translate(-8vw,-2vh)}100%{transform:translate(2vw,8vh)}}
+@keyframes fxpulse{0%,100%{opacity:.15}50%{opacity:1}}
+[data-theme=lava]{--bg:#140505;--panel:#230c0a;--line:#4b1a14;--text:#fff0e8;--muted:#cf9a8a;--accent:#ff5a36;--g1:#140505;--g2:#140505}
+[data-theme=lava] #fx::before,[data-theme=lava] #fx::after{content:"";position:absolute;border-radius:50%;filter:blur(40px);opacity:.55}
+[data-theme=lava] #fx::before{width:45vmax;height:45vmax;left:-10vmax;bottom:-20vmax;background:radial-gradient(circle,#ff3d00,#c2185b 60%,transparent 70%);animation:fxlava1 16s ease-in-out infinite alternate}
+[data-theme=lava] #fx::after{width:38vmax;height:38vmax;right:-8vmax;top:-12vmax;background:radial-gradient(circle,#ff9100,#ff3d00 55%,transparent 70%);animation:fxlava2 19s ease-in-out infinite alternate}
+@keyframes fxlava1{50%{transform:translate(20vw,-45vh) scale(.8)}100%{transform:translate(45vw,-10vh) scale(1.2)}}
+@keyframes fxlava2{50%{transform:translate(-25vw,50vh) scale(1.25)}100%{transform:translate(-50vw,15vh) scale(.85)}}
+[data-theme=wellen]{--bg:#03101a;--panel:#0b1e2c;--line:#173a52;--text:#e8f8ff;--muted:#86aec4;--accent:#4fd1ff;--g1:#073b5c;--g2:#041a2c}
+[data-theme=wellen] #fx::before,[data-theme=wellen] #fx::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26vh;background-repeat:repeat-x}
+[data-theme=wellen] #fx::before{background-image:radial-gradient(60px 26px at 60px 0,transparent 98%,rgba(79,209,255,.18) 100%);background-size:120px 100%;animation:fxwave 7s linear infinite;opacity:.9}
+[data-theme=wellen] #fx::after{height:18vh;background-image:radial-gradient(45px 20px at 45px 0,transparent 98%,rgba(46,140,220,.25) 100%);background-size:90px 100%;animation:fxwave 5s linear infinite reverse}
+@keyframes fxwave{to{background-position:240px 0}}
+/* Kompakte Theme-Auswahl: drei Gruppen, beim Überfahren/Antippen aufklappen */
+.themes{position:relative;gap:12px}
+.tgrp{position:relative}
+.tgrp>.tg{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--c);cursor:pointer;padding:0;display:block}
+.tgrp.cur>.tg{outline:2px solid var(--text);outline-offset:2px}
+.tpop{display:none;position:absolute;left:-8px;top:100%;padding-top:8px;z-index:45}
+.tpop>div{display:grid;grid-template-columns:repeat(2,minmax(120px,auto));gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.tpop h4{grid-column:1/-1;margin:2px 4px 4px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+@media (hover:hover){.tgrp:hover .tpop{display:block}}
+.tgrp.open .tpop,.tgrp:focus-within .tpop{display:block}
+.tpop button{display:flex;align-items:center;gap:8px;font:inherit;font-size:.85rem;color:var(--text);background:none;border:0;border-radius:10px;padding:6px 8px;cursor:pointer;text-align:left;white-space:nowrap}
+.tpop button i{width:18px;height:18px;border-radius:50%;background:var(--c);border:1px solid rgba(255,255,255,.35);flex:0 0 auto}
+.tpop button:hover{background:rgba(255,255,255,.07)}
+.tpop button.on{background:rgba(255,255,255,.1);font-weight:700}
+.tpop button.on i{outline:2px solid var(--text);outline-offset:1px}
 @media (prefers-reduced-motion:reduce){#fx,#fx::before,#fx::after,#fx i{animation:none!important}}
 @media (prefers-reduced-motion:reduce){.badge.gold,.ring.gold,.chip.gold,.sp{animation:none}.sp{opacity:1}}
 .pbadge{position:absolute;top:58px;right:14px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#7be0a4;color:#0c2417;box-shadow:0 4px 12px rgba(0,0,0,.4)}
@@ -383,25 +432,7 @@ a.lnk{display:inline-block;text-decoration:none;margin-top:6px}
     <p class="stats" id="stats"></p>
     <p class="sync" id="sync"></p>
     <div class="acc" id="acc"></div>
-    <div class="themes" id="themes" aria-label="Farbschema">
-      <button data-t="" style="--c:#ffb347" title="Bernstein"></button>
-      <button data-t="sakura" style="--c:#ff7eb6" title="Sakura"></button>
-      <button data-t="mint" style="--c:#5eead4" title="Mint"></button>
-      <button data-t="ozean" style="--c:#60a5fa" title="Ozean"></button>
-      <button data-t="lavendel" style="--c:#c4a1ff" title="Lavendel"></button>
-      <button data-t="kirsche" style="--c:#fb7185" title="Kirsche"></button>
-      <button data-t="feuer" style="--c:#ff8a5c" title="Feuer"></button>
-      <button data-t="gold" style="--c:#facc15" title="Gold"></button>
-      <button data-t="limette" style="--c:#a3e635" title="Limette"></button>
-      <button data-t="nacht" style="--c:#e2e8f0" title="Nacht"></button>
-      <span class="thsep" aria-hidden="true"></span>
-      <button data-t="synthwave" class="fxsw" style="--c:linear-gradient(135deg,#ffd23f,#ff4fd8 50%,#4a1d7a)" title="Synthwave (Neon-Gitter)"></button>
-      <button data-t="terminal" class="fxsw" style="--c:repeating-linear-gradient(#033 0 2px,#33ff66 2px 4px)" title="Terminal (grüne Konsole)"></button>
-      <button data-t="aurora" class="fxsw" style="--c:linear-gradient(135deg,#2dd4bf,#38bdf8 50%,#8b5cf6)" title="Aurora (Polarlichter)"></button>
-      <button data-t="galaxie" class="fxsw" style="--c:radial-gradient(circle at 30% 30%,#fff 0 1.5px,transparent 2px),radial-gradient(circle at 70% 65%,#cfd8ff 0 1px,transparent 1.5px),#1a1240" title="Galaxie (Sternenhimmel)"></button>
-      <button data-t="bluete" class="fxsw" style="--c:radial-gradient(circle at 35% 35%,#ffe3ef,#ff9cc4 60%,#5c1f48)" title="Blütenregen (fallende Kirschblüten)"></button>
-      <button data-t="manga" class="fxsw" style="--c:radial-gradient(circle,#fff 1px,transparent 1.4px) 0 0/4px 4px,linear-gradient(135deg,#111 50%,#ff3b3b 50%)" title="Manga (Raster und Speedlines)"></button>
-    </div>
+    <div class="themes" id="themes" aria-label="Farbschema"></div>
   </header>
 
   <nav class="cats" id="cats" aria-label="Kategorien"></nav>
@@ -461,7 +492,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 03:00 · Spezial-Themes mit Effekten';
+const APP_VERSION = '2026-11-08 03:20 · Kompakte Theme-Auswahl, 6 neue animierte Themes';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2359,19 +2390,48 @@ async function runImport(entries) {
 }
 
 /* ---------- Farbschema ---------- */
+const THEME_GROUPS = [
+  { id: 'farben', name: 'Farben', c: 'conic-gradient(#ffb347,#ff7eb6,#c4a1ff,#60a5fa,#5eead4,#a3e635,#facc15,#ffb347)', items: [
+    ['', 'Bernstein', '#ffb347'], ['sakura', 'Sakura', '#ff7eb6'], ['mint', 'Mint', '#5eead4'], ['ozean', 'Ozean', '#60a5fa'], ['lavendel', 'Lavendel', '#c4a1ff'],
+    ['kirsche', 'Kirsche', '#fb7185'], ['feuer', 'Feuer', '#ff8a5c'], ['gold', 'Gold', '#facc15'], ['limette', 'Limette', '#a3e635'], ['nacht', 'Nacht', '#e2e8f0']] },
+  { id: 'natur', name: 'Natur (animiert)', c: 'linear-gradient(135deg,#2dd4bf,#38bdf8 40%,#ff9cc4 70%,#e3ff6b)', items: [
+    ['aurora', 'Aurora', 'linear-gradient(135deg,#2dd4bf,#38bdf8 50%,#8b5cf6)'], ['galaxie', 'Galaxie', 'radial-gradient(circle at 30% 30%,#fff 0 1.5px,transparent 2px),radial-gradient(circle at 70% 65%,#cfd8ff 0 1px,transparent 1.5px),#1a1240'],
+    ['bluete', 'Blütenregen', 'radial-gradient(circle at 35% 35%,#ffe3ef,#ff9cc4 60%,#5c1f48)'], ['schnee', 'Schneefall', 'radial-gradient(circle at 30% 35%,#fff 0 2px,transparent 2.5px),radial-gradient(circle at 70% 60%,#fff 0 1.5px,transparent 2px),#1c2f52'],
+    ['regen', 'Gewitterregen', 'repeating-linear-gradient(105deg,#13233a 0 3px,#7dd3fc 3px 4px)'], ['gluehwuermchen', 'Glühwürmchen', 'radial-gradient(circle at 40% 40%,#f4ff9c 0 2px,transparent 4px),radial-gradient(circle at 70% 70%,#e3ff6b 0 1.5px,transparent 3px),#0d1a12'],
+    ['wellen', 'Meereswellen', 'linear-gradient(#073b5c 50%,#4fd1ff 50% 60%,#073b5c 60%)']] },
+  { id: 'stil', name: 'Neon & Stil (animiert)', c: 'linear-gradient(135deg,#ffd23f,#ff4fd8 45%,#33ff66 75%,#ff3b3b)', items: [
+    ['synthwave', 'Synthwave', 'linear-gradient(135deg,#ffd23f,#ff4fd8 50%,#4a1d7a)'], ['terminal', 'Terminal', 'repeating-linear-gradient(#033 0 2px,#33ff66 2px 4px)'],
+    ['manga', 'Manga', 'radial-gradient(circle,#fff 1px,transparent 1.4px) 0 0/4px 4px,linear-gradient(135deg,#111 50%,#ff3b3b 50%)'], ['glut', 'Glut', 'radial-gradient(circle at 50% 80%,#ffb347,#ff6a00 40%,#22100c 75%)'],
+    ['lava', 'Lavalampe', 'radial-gradient(circle at 35% 35%,#ff9100,#ff3d00 45%,#c2185b 70%,#230c0a)']] }
+];
+const FXP = { bluete: [18, 'pt'], glut: [26, 'em'], schnee: [45, 'sn'], regen: [70, 'rd'], gluehwuermchen: [22, 'ff'] };
+function renderThemes(t) {
+  $('themes').innerHTML = THEME_GROUPS.map(g => `<div class="tgrp${g.items.some(i => i[0] === (t || '')) ? ' cur' : ''}" data-g="${g.id}">
+    <button class="tg" style="--c:${g.c}" title="${esc(g.name)}" aria-label="Farbschemas: ${esc(g.name)}" aria-haspopup="true"></button>
+    <div class="tpop"><div><h4>${esc(g.name)}</h4>${g.items.map(([id, n, c]) => `<button data-t="${id}" class="${id === (t || '') ? 'on' : ''}" style="--c:${c}"><i></i>${esc(n)}</button>`).join('')}</div></div></div>`).join('');
+}
 const applyTheme = t => {
   if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
-  const fx = $('fx'); if (fx) { fx.innerHTML = t === 'bluete' ? Array.from({ length: 18 }, (_, i) => `<i class="pt" style="left:${(i * 37) % 100}vw;animation-duration:${9 + (i * 7) % 9}s;animation-delay:-${(i * 13) % 17}s;transform:scale(${0.6 + (i % 5) * 0.15})"></i>`).join('') : ''; }
-  document.querySelectorAll('#themes button').forEach(b => b.classList.toggle('on', b.dataset.t === (t || '')));
+  const fx = $('fx'), cfg = FXP[t];
+  if (fx) fx.innerHTML = cfg ? Array.from({ length: cfg[0] }, (_, i) => {
+    const left = (i * 37 + 11) % 100, dur = t === 'regen' ? 0.7 + (i % 5) * 0.12 : t === 'gluehwuermchen' ? 12 + (i % 6) * 2 : 8 + (i * 7) % 10, del = t === 'regen' ? (i * 0.137) % 1.3 : (i * 13) % 17;
+    const top = t === 'gluehwuermchen' ? `top:${(i * 53 + 7) % 95}vh;` : '';
+    const sc = t === 'schnee' ? 0.4 + (i % 6) * 0.15 : 0.6 + (i % 5) * 0.15;
+    return `<i class="${cfg[1]}" style="left:${left}vw;${top}animation-duration:${dur}s${t === 'gluehwuermchen' ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${t === 'bluete' ? '' : `;width:${t === 'regen' ? 1.5 : (6 * sc).toFixed(1)}px;height:${t === 'regen' ? '9vh' : (6 * sc).toFixed(1) + 'px'}`}"></i>`;
+  }).join('') : '';
+  renderThemes(t);
 };
 let theme = '';
 try { theme = localStorage.getItem('anime-theme') || ''; } catch (e) {}
 applyTheme(theme);
 $('themes').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
+  const g = e.target.closest('.tg');
+  if (g) { const box = g.parentElement, was = box.classList.contains('open'); document.querySelectorAll('.tgrp.open').forEach(x => x.classList.remove('open')); if (!was) box.classList.add('open'); return; }
+  const b = e.target.closest('button[data-t]'); if (!b) return;
   applyTheme(b.dataset.t);
   try { localStorage.setItem('anime-theme', b.dataset.t); } catch (e) {}
 };
+document.addEventListener('click', e => { if (!e.target.closest('#themes')) document.querySelectorAll('.tgrp.open').forEach(x => x.classList.remove('open')); });
 
 save();
 render();
