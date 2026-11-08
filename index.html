@@ -373,6 +373,17 @@ header{padding-top:34px}
 .tpop button:hover{background:rgba(255,255,255,.07)}
 .tpop button.on{background:rgba(255,255,255,.1);font-weight:700}
 .tpop button.on i{outline:2px solid var(--text);outline-offset:1px}
+
+/* Ultra-Themes: Canvas/WebGL, sehr rechenintensiv */
+[data-theme=aurora-ultra] #fx,[data-theme=galaxie-ultra] #fx,[data-theme=glut-ultra] #fx{display:block}
+#fx canvas.fxc{position:absolute;inset:0;width:100%;height:100%;display:block}
+[data-theme=aurora-ultra]{--bg:#02050b;--panel:rgba(10,22,38,.86);--line:#1b3350;--text:#e8fbff;--muted:#86a8bd;--accent:#7cf7c9;--g1:#02050b;--g2:#02050b}
+[data-theme=aurora-ultra] h1{background:linear-gradient(90deg,#7cf7c9,#38bdf8 50%,#c084fc);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 14px rgba(124,247,201,.35))}
+[data-theme=galaxie-ultra]{--bg:#020108;--panel:rgba(16,11,36,.86);--line:#2a2152;--text:#efeaff;--muted:#9a91c4;--accent:#b69cff;--g1:#020108;--g2:#020108}
+[data-theme=galaxie-ultra] h1{background:linear-gradient(90deg,#fff,#c4b5fd 45%,#7dd3fc);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 14px rgba(182,156,255,.45))}
+[data-theme=glut-ultra]{--bg:#0d0403;--panel:rgba(32,13,9,.86);--line:#4a2016;--text:#fff1ea;--muted:#c99a88;--accent:#ff7a2f;--g1:#0d0403;--g2:#0d0403}
+[data-theme=glut-ultra] h1{background:linear-gradient(90deg,#fff3c4,#ffb347 40%,#ff5a1f);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 16px rgba(255,110,30,.6))}
+[data-theme$=-ultra] .card,[data-theme$=-ultra] .hero,[data-theme$=-ultra] .row,[data-theme$=-ultra] .erow{backdrop-filter:blur(3px)}
 @media (prefers-reduced-motion:reduce){#fx,#fx::before,#fx::after,#fx i{animation:none!important}}
 @media (prefers-reduced-motion:reduce){.badge.gold,.ring.gold,.chip.gold,.sp{animation:none}.sp{opacity:1}}
 .pbadge{position:absolute;top:58px;right:14px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#7be0a4;color:#0c2417;box-shadow:0 4px 12px rgba(0,0,0,.4)}
@@ -492,7 +503,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 03:20 · Kompakte Theme-Auswahl, 6 neue animierte Themes';
+const APP_VERSION = '2026-11-08 03:45 · Ultra-Themes (WebGL)';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2402,13 +2413,155 @@ const THEME_GROUPS = [
   { id: 'stil', name: 'Neon & Stil (animiert)', c: 'linear-gradient(135deg,#ffd23f,#ff4fd8 45%,#33ff66 75%,#ff3b3b)', items: [
     ['synthwave', 'Synthwave', 'linear-gradient(135deg,#ffd23f,#ff4fd8 50%,#4a1d7a)'], ['terminal', 'Terminal', 'repeating-linear-gradient(#033 0 2px,#33ff66 2px 4px)'],
     ['manga', 'Manga', 'radial-gradient(circle,#fff 1px,transparent 1.4px) 0 0/4px 4px,linear-gradient(135deg,#111 50%,#ff3b3b 50%)'], ['glut', 'Glut', 'radial-gradient(circle at 50% 80%,#ffb347,#ff6a00 40%,#22100c 75%)'],
-    ['lava', 'Lavalampe', 'radial-gradient(circle at 35% 35%,#ff9100,#ff3d00 45%,#c2185b 70%,#230c0a)']] }
+    ['lava', 'Lavalampe', 'radial-gradient(circle at 35% 35%,#ff9100,#ff3d00 45%,#c2185b 70%,#230c0a)']] },
+  { id: 'ultra', name: 'Ultra (sehr rechenintensiv)', c: 'conic-gradient(from 200deg,#7cf7c9,#8b5cf6,#ff5a1f,#ffd23f,#7cf7c9)', items: [
+    ['aurora-ultra', 'Aurora Ultra', 'linear-gradient(160deg,#02050b 20%,#22c55e 45%,#8b5cf6 70%,#02050b)'],
+    ['galaxie-ultra', 'Galaxie Ultra', 'radial-gradient(circle at 55% 50%,#fff3d6 0 8%,#a78bfa 22%,#1e1b4b 50%,#020108 70%)'],
+    ['glut-ultra', 'Glut Ultra', 'radial-gradient(circle at 50% 85%,#fff3c4 0 6%,#ff7a2f 25%,#b91c1c 50%,#0d0403 75%)']] }
 ];
 const FXP = { bluete: [18, 'pt'], glut: [26, 'em'], schnee: [45, 'sn'], regen: [70, 'rd'], gluehwuermchen: [22, 'ff'] };
 function renderThemes(t) {
   $('themes').innerHTML = THEME_GROUPS.map(g => `<div class="tgrp${g.items.some(i => i[0] === (t || '')) ? ' cur' : ''}" data-g="${g.id}">
     <button class="tg" style="--c:${g.c}" title="${esc(g.name)}" aria-label="Farbschemas: ${esc(g.name)}" aria-haspopup="true"></button>
     <div class="tpop"><div><h4>${esc(g.name)}</h4>${g.items.map(([id, n, c]) => `<button data-t="${id}" class="${id === (t || '') ? 'on' : ''}" style="--c:${c}"><i></i>${esc(n)}</button>`).join('')}</div></div></div>`).join('');
+}
+/* ---------- Ultra-Effekte (WebGL-Shader und Canvas-Partikel) ---------- */
+const GLSL_HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\nuniform vec2 r;uniform float t;\n' +
+  'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
+  'float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),f.x),f.y);}\n' +
+  'float fbm(vec2 p){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*n(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return s;}\n' +
+  'mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}\n';
+const SH_AURORA = GLSL_HEAD + `
+void main(){
+  vec2 uv=gl_FragCoord.xy/r; float ar=r.x/r.y; float x=uv.x*ar;
+  vec3 col=mix(vec3(.03,.075,.12),vec3(.004,.008,.025),pow(uv.y,.6));
+  vec2 g=floor(gl_FragCoord.xy/2.); float st=h(g);
+  col+=vec3(.85,.92,1.)*step(.9975,st)*(.45+.55*sin(t*1.7+st*300.))*smoothstep(.15,.5,uv.y);
+  vec3 au=vec3(0.);
+  for(int i=0;i<4;i++){ float fi=float(i);
+    float base=.40+fi*.065+.11*sin(x*1.05+t*.06+fi*1.9)+.2*(fbm(vec2(x*.8+fi*3.,t*(.025+.01*fi)))-.5);
+    float dy=uv.y-base;
+    float ray=fbm(vec2(x*16.+fi*7.,t*.22+fi))*.65+fbm(vec2(x*42.+fi,t*.35))*.35;
+    ray=pow(ray,2.)*2.4;
+    float body=smoothstep(-.02,.006,dy)*exp(-max(dy,0.)*(3.2+fi*.9));
+    float edge=exp(-abs(dy)*70.)*.9;
+    float I=(body+edge)*ray*(.6+.4*sin(t*.25+fi*2.1+x*.6));
+    vec3 c=mix(vec3(.08,1.,.5),vec3(.5,.22,1.),clamp(dy*2.4,0.,1.));
+    c=mix(c,vec3(1.,.28,.62),clamp(dy*2.4-1.,0.,1.)*.7);
+    au+=c*I*(1.-fi*.17);
+  }
+  col+=au*.7;
+  col+=vec3(.04,.22,.17)*exp(-uv.y*5.)*.5;
+  float m=.11+.07*fbm(vec2(x*2.1,1.))+.025*fbm(vec2(x*9.,5.));
+  float sil=1.-smoothstep(m-.004,m,uv.y);
+  float lake=1.-smoothstep(.055,.06,uv.y);
+  vec3 refl=au*.25*(.6+.4*sin(gl_FragCoord.y*1.3+t*2.+fbm(vec2(x*30.,t))*6.));
+  col=mix(col,vec3(.006,.012,.018),sil);
+  col=mix(col,vec3(.004,.01,.016)+refl,lake);
+  gl_FragColor=vec4(col,1.);
+}`;
+const SH_GALAXY = GLSL_HEAD + `
+float stars(vec2 p,float d,float tw){vec2 g=floor(p*d);vec2 f=fract(p*d)-.5;float s=h(g);vec2 o=vec2(h(g+3.1),h(g+7.7))-.5;float dist=length(f-o*.7);
+  return (1.-smoothstep(0.,.07,dist))*step(.9,s)*(.55+.45*sin(tw+s*80.));}
+void main(){
+  vec2 p=(gl_FragCoord.xy-.5*r)/r.y;
+  vec3 col=vec3(.004,.003,.012);
+  vec2 q=p*1.3+vec2(t*.004,0.);
+  float nb=fbm(q*2.+fbm(q*3.+t*.008)*1.5);
+  col+=mix(vec3(.2,.02,.28),vec3(.02,.12,.32),fbm(q*1.2+5.))*pow(nb,3.)*1.4;
+  col+=vec3(.25,.05,.15)*pow(fbm(q*3.+9.),4.)*1.5;
+  col+=vec3(1.)*stars(p+vec2(t*.003,0.),70.,t*2.)*.7;
+  col+=vec3(.75,.82,1.)*stars(p+vec2(t*.007,0.),140.,t*3.1)*.55;
+  col+=vec3(1.,.9,.78)*stars(p+vec2(t*.013,0.),26.,t*1.4)*1.2;
+  vec2 gp=p-vec2(.22,.06); gp=rot(.45)*gp; gp.y*=2.;
+  float rr=length(gp); float a=atan(gp.y,gp.x);
+  float arms=pow(.5+.5*sin(2.*a-log(rr+.002)*4.3+t*.07),2.4);
+  vec2 dp=rot(t*.02)*gp;
+  float dust=fbm(dp*6.+3.);
+  float dens=arms*exp(-rr*3.)*(.35+1.3*dust);
+  float core=exp(-rr*13.)*1.5+exp(-rr*45.)*2.2;
+  vec3 gc=mix(vec3(.3,.45,1.),vec3(.9,.4,1.),dust)*dens*1.7+vec3(1.,.84,.6)*core;
+  gc*=.55+.65*smoothstep(.32,.7,fbm(dp*9.+1.));
+  gc+=vec3(1.)*stars(dp*1.5,90.,t*4.)*exp(-rr*2.)*arms*2.;
+  col+=gc;
+  for(int k=0;k<2;k++){ float fk=float(k)*2.7;
+    float cyc=floor((t+fk)/6.); float ph=fract((t+fk)/6.);
+    vec2 s0=vec2(h(vec2(cyc,1.+fk))*1.8-.6,.55-h(vec2(cyc,2.+fk))*.35);
+    vec2 dir=normalize(vec2(-1.,-.4-h(vec2(cyc,3.))*.4));
+    vec2 head=s0+dir*ph*1.6; vec2 dv=p-head; float along=dot(dv,-dir); float perp=length(dv+dir*along);
+    float tail=step(0.,along)*exp(-along*5.)*(1.-smoothstep(0.,.0035,perp));
+    col+=vec3(.9,.95,1.)*tail*smoothstep(0.,.08,ph)*(1.-smoothstep(.5,.8,ph))*2.5;
+  }
+  col*=1.-.3*dot(p,p);
+  gl_FragColor=vec4(col,1.);
+}`;
+function glFx(cv, frag) {
+  const gl = cv.getContext('webgl', { antialias: false, alpha: false }) || cv.getContext('experimental-webgl');
+  if (!gl) return null;
+  const mk = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(sh)); return null; } return sh; };
+  const vs = mk(gl.VERTEX_SHADER, 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'), fs = mk(gl.FRAGMENT_SHADER, frag);
+  if (!vs || !fs) return null;
+  const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+  gl.useProgram(pr);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const uR = gl.getUniformLocation(pr, 'r'), uT = gl.getUniformLocation(pr, 't');
+  const resize = () => { const d = Math.min(window.devicePixelRatio || 1, 1.5); cv.width = Math.round(innerWidth * d); cv.height = Math.round(innerHeight * d); gl.viewport(0, 0, cv.width, cv.height); };
+  resize(); addEventListener('resize', resize);
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches, t0 = performance.now() - 40000;
+  let raf = 0;
+  const draw = now => { gl.uniform2f(uR, cv.width, cv.height); gl.uniform1f(uT, (now - t0) / 1000); gl.drawArrays(gl.TRIANGLES, 0, 6); if (!still) raf = requestAnimationFrame(draw); };
+  raf = requestAnimationFrame(draw);
+  return () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); };
+}
+function glutFx(cv) {
+  const c = cv.getContext('2d'); if (!c) return null;
+  let W = 0, H = 0, d = 1;
+  const resize = () => { d = Math.min(window.devicePixelRatio || 1, 1.5); W = cv.width = Math.round(innerWidth * d); H = cv.height = Math.round(innerHeight * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
+  resize(); addEventListener('resize', resize);
+  const sprite = (inner, mid) => { const s = document.createElement('canvas'); s.width = s.height = 64; const x = s.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, inner); g.addColorStop(.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return s; };
+  const SP = [sprite('rgba(255,255,235,1)', 'rgba(255,200,90,.85)'), sprite('rgba(255,220,140,1)', 'rgba(255,120,30,.8)'), sprite('rgba(255,150,70,1)', 'rgba(220,50,10,.7)'), sprite('rgba(200,70,30,.9)', 'rgba(120,20,5,.5)')];
+  const P = [];
+  const spawn = (p, pre) => { p.x = Math.random() * W; p.y = pre ? Math.random() * H : H + Math.random() * 40 * d; p.vx = (Math.random() - .5) * .8 * d; p.vy = -(0.8 + Math.random() * 2.6) * d; p.max = 140 + Math.random() * 320; p.life = pre ? Math.random() * p.max : 0; p.s = (0.6 + Math.random() * 2.2) * d; p.seed = Math.random() * 1000; p.fast = 0; };
+  const want = () => Math.round(Math.min(1600, W * H / (1100 * d * d)));
+  for (let i = 0; i < want(); i++) { const p = {}; spawn(p, true); P.push(p); }
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let raf = 0, last = 0, nextBurst = 0;
+  const frame = now => {
+    while (P.length < want()) { const p = {}; spawn(p, true); P.push(p); }
+    c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.fillStyle = 'rgba(13,4,3,0.20)'; c.fillRect(0, 0, W, H);
+    const fl = .78 + .14 * Math.sin(now * .0041) + .08 * Math.sin(now * .0137);
+    c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(W / 2, H * 1.2, 0, W / 2, H * 1.2, H * .95); g.addColorStop(0, `rgba(255,110,25,${.42 * fl})`); g.addColorStop(.45, `rgba(190,35,8,${.18 * fl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    if (now > nextBurst) { nextBurst = now + 900 + Math.random() * 1800; const bx = Math.random() * W; for (let i = 0; i < 40; i++) { const p = P[(Math.random() * P.length) | 0]; spawn(p, false); p.x = bx + (Math.random() - .5) * 60 * d; p.vy = -(3 + Math.random() * 5) * d; p.vx = (Math.random() - .5) * 4 * d; p.fast = 1; p.max = 70 + Math.random() * 90; } }
+    for (const p of P) {
+      p.life++; const k = p.life / p.max;
+      const wind = Math.sin(p.y * .004 / d + now * .0007 + p.seed) * .5 * d + Math.sin(now * .00031 + p.seed * .01) * .35 * d;
+      p.vx += (wind - p.vx) * (p.fast ? .015 : .04); p.vy -= .01 * d; p.vy *= .996; p.x += p.vx; p.y += p.vy;
+      if (k >= 1 || p.y < -30 * d || p.x < -40 * d || p.x > W + 40 * d) { spawn(p, false); continue; }
+      const heat = 1 - k, flick = .55 + .45 * Math.sin(now * .03 + p.seed);
+      const a = Math.min(1, p.life / 12) * (.25 + .75 * heat) * flick;
+      const sz = p.s * (1.4 + heat * 2.4) * (p.fast ? 1.3 : 1);
+      c.globalAlpha = a;
+      c.drawImage(SP[Math.min(3, (k * 4) | 0)], p.x - sz * 4, p.y - sz * 4, sz * 8, sz * 8);
+    }
+    c.globalAlpha = 1;
+    if (!still) raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  return () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); };
+}
+const ULTRA = { 'aurora-ultra': ['aurora', cv => glFx(cv, SH_AURORA)], 'galaxie-ultra': ['galaxie', cv => glFx(cv, SH_GALAXY)], 'glut-ultra': ['glut', cv => glutFx(cv)] };
+let ultraStop = null;
+function startUltra(t) {
+  if (ultraStop) { try { ultraStop(); } catch (e) {} ultraStop = null; }
+  const u = ULTRA[t], fx = $('fx'); if (!u || !fx) return;
+  const cv = document.createElement('canvas'); cv.className = 'fxc'; fx.appendChild(cv);
+  let stop = null; try { stop = u[1](cv); } catch (e) { stop = null; }
+  if (!stop) { cv.remove(); document.documentElement.dataset.theme = u[0]; hint('Dieses Gerät kann den Ultra-Effekt nicht darstellen – normale Variante aktiv.'); return; }
+  ultraStop = stop;
 }
 const applyTheme = t => {
   if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
@@ -2419,6 +2572,7 @@ const applyTheme = t => {
     const sc = t === 'schnee' ? 0.4 + (i % 6) * 0.15 : 0.6 + (i % 5) * 0.15;
     return `<i class="${cfg[1]}" style="left:${left}vw;${top}animation-duration:${dur}s${t === 'gluehwuermchen' ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${t === 'bluete' ? '' : `;width:${t === 'regen' ? 1.5 : (6 * sc).toFixed(1)}px;height:${t === 'regen' ? '9vh' : (6 * sc).toFixed(1) + 'px'}`}"></i>`;
   }).join('') : '';
+  startUltra(t);
   renderThemes(t);
 };
 let theme = '';
