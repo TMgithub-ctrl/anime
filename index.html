@@ -299,9 +299,9 @@ header{padding-top:34px}
 [data-theme=terminal] .card,[data-theme=terminal] .hero,[data-theme=terminal] .row,[data-theme=terminal] .erow{border-radius:4px}
 /* Aurora: wandernde Polarlichter */
 [data-theme=aurora]{--bg:#04080f;--panel:#0b1626;--line:#1b3350;--text:#e8fbff;--muted:#86a8bd;--accent:#7cf7c9;--g1:#04080f;--g2:#04080f}
-[data-theme=aurora] #fx::before,[data-theme=aurora] #fx::after{content:"";position:absolute;width:90vmax;height:60vmax;border-radius:50%;filter:blur(70px);opacity:.42}
-[data-theme=aurora] #fx::before{left:-25vmax;top:-25vmax;background:radial-gradient(closest-side,#2dd4bf,transparent),radial-gradient(closest-side at 70% 60%,#22c55e,transparent);animation:fxaur1 18s ease-in-out infinite alternate}
-[data-theme=aurora] #fx::after{right:-30vmax;top:-10vmax;background:radial-gradient(closest-side,#8b5cf6,transparent),radial-gradient(closest-side at 30% 70%,#38bdf8,transparent);animation:fxaur2 22s ease-in-out infinite alternate}
+[data-theme=aurora] #fx::before,[data-theme=aurora] #fx::after{content:"";position:absolute;width:90vmax;height:60vmax;border-radius:50%;opacity:.5;will-change:transform}
+[data-theme=aurora] #fx::before{left:-25vmax;top:-25vmax;background:radial-gradient(closest-side,rgba(45,212,191,.9),rgba(45,212,191,.35) 45%,transparent),radial-gradient(closest-side at 70% 60%,rgba(34,197,94,.8),rgba(34,197,94,.25) 50%,transparent);animation:fxaur1 18s ease-in-out infinite alternate}
+[data-theme=aurora] #fx::after{right:-30vmax;top:-10vmax;background:radial-gradient(closest-side,rgba(139,92,246,.9),rgba(139,92,246,.3) 50%,transparent),radial-gradient(closest-side at 30% 70%,rgba(56,189,248,.8),rgba(56,189,248,.25) 50%,transparent);animation:fxaur2 22s ease-in-out infinite alternate}
 @keyframes fxaur1{to{transform:translate(25vw,15vh) rotate(25deg) scale(1.15)}}
 @keyframes fxaur2{to{transform:translate(-20vw,25vh) rotate(-30deg) scale(.9)}}
 [data-theme=aurora] h1{background:linear-gradient(90deg,#7cf7c9,#38bdf8 50%,#a78bfa);-webkit-background-clip:text;background-clip:text}
@@ -333,7 +333,7 @@ header{padding-top:34px}
 @keyframes fxrise{0%{transform:translate(0,0);opacity:0}10%{opacity:1}100%{transform:translate(6vw,-108vh);opacity:0}}
 @keyframes fxflk{to{filter:brightness(1.6)}}
 [data-theme=schnee]{--bg:#0a111e;--panel:#141f33;--line:#273a5a;--text:#f2f8ff;--muted:#9fb3cf;--accent:#cfe8ff;--g1:#1c2f52;--g2:#0f1a33}
-#fx i.sn{position:absolute;top:-3vh;width:6px;height:6px;border-radius:50%;background:#fff;opacity:.85;filter:blur(.4px);animation:fxsnow linear infinite}
+#fx i.sn{position:absolute;top:-3vh;width:6px;height:6px;border-radius:50%;background:radial-gradient(circle,#fff 45%,rgba(255,255,255,0) 75%);opacity:.9;animation:fxsnow linear infinite}
 @keyframes fxsnow{0%{transform:translate(0,0)}25%{transform:translate(2vw,27vh)}50%{transform:translate(-1vw,55vh)}75%{transform:translate(2.5vw,82vh)}100%{transform:translate(0,108vh)}}
 [data-theme=regen]{--bg:#070c13;--panel:#111a26;--line:#223247;--text:#e9f3ff;--muted:#8ea4bd;--accent:#7dd3fc;--g1:#13233a;--g2:#0a1424}
 #fx i.rd{position:absolute;top:-12vh;width:1.5px;height:9vh;background:linear-gradient(transparent,rgba(170,215,255,.7));transform:rotate(12deg);animation:fxrain linear infinite}
@@ -348,7 +348,7 @@ header{padding-top:34px}
 @keyframes fxff3{25%{transform:translate(4vw,10vh)}50%{transform:translate(9vw,-6vh)}75%{transform:translate(-8vw,-2vh)}100%{transform:translate(2vw,8vh)}}
 @keyframes fxpulse{0%,100%{opacity:.15}50%{opacity:1}}
 [data-theme=lava]{--bg:#140505;--panel:#230c0a;--line:#4b1a14;--text:#fff0e8;--muted:#cf9a8a;--accent:#ff5a36;--g1:#140505;--g2:#140505}
-[data-theme=lava] #fx::before,[data-theme=lava] #fx::after{content:"";position:absolute;border-radius:50%;filter:blur(40px);opacity:.55}
+[data-theme=lava] #fx::before,[data-theme=lava] #fx::after{content:"";position:absolute;border-radius:50%;opacity:.6;will-change:transform}
 [data-theme=lava] #fx::before{width:45vmax;height:45vmax;left:-10vmax;bottom:-20vmax;background:radial-gradient(circle,#ff3d00,#c2185b 60%,transparent 70%);animation:fxlava1 16s ease-in-out infinite alternate}
 [data-theme=lava] #fx::after{width:38vmax;height:38vmax;right:-8vmax;top:-12vmax;background:radial-gradient(circle,#ff9100,#ff3d00 55%,transparent 70%);animation:fxlava2 19s ease-in-out infinite alternate}
 @keyframes fxlava1{50%{transform:translate(20vw,-45vh) scale(.8)}100%{transform:translate(45vw,-10vh) scale(1.2)}}
@@ -383,7 +383,8 @@ header{padding-top:34px}
 [data-theme=galaxie-ultra] h1{background:linear-gradient(90deg,#fff,#c4b5fd 45%,#7dd3fc);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 14px rgba(182,156,255,.45))}
 [data-theme=glut-ultra]{--bg:#0d0403;--panel:rgba(32,13,9,.86);--line:#4a2016;--text:#fff1ea;--muted:#c99a88;--accent:#ff7a2f;--g1:#0d0403;--g2:#0d0403}
 [data-theme=glut-ultra] h1{background:linear-gradient(90deg,#fff3c4,#ffb347 40%,#ff5a1f);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 16px rgba(255,110,30,.6))}
-[data-theme$=-ultra] .card,[data-theme$=-ultra] .hero,[data-theme$=-ultra] .row,[data-theme$=-ultra] .erow{backdrop-filter:blur(3px)}
+.fxon .search input,.fxon .rank,.fxon .sbtn,.fxon .card,.fxon .hero,.fxon .row,.fxon .erow{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.fxon .rank{background:var(--bg)}.fxon .search input{background:var(--panel)}
 
 /* ---------- Anime-Themes ---------- */
 [data-theme=magical] #fx,[data-theme=ninja] #fx,[data-theme=mecha] #fx,[data-theme=cybertokyo] #fx,[data-theme=shonen] #fx,[data-theme=yokai] #fx,[data-theme$=-ultra] #fx{display:block}
@@ -419,11 +420,11 @@ header{padding-top:34px}
 [data-theme=shonen]{--bg:#110902;--panel:#22130a;--line:#4a2a12;--text:#fff6e6;--muted:#d1a77a;--accent:#ffb020;--g1:#5a2a00;--g2:#2a0a00}
 [data-theme=shonen] #fx::before{content:"";position:absolute;inset:-60%;background:repeating-conic-gradient(from 0deg at 50% 50%,rgba(255,200,80,.09) 0 1.5deg,transparent 1.5deg 7deg);animation:fxspin 30s linear infinite}
 @keyframes fxspin{to{transform:rotate(360deg)}}
-[data-theme=shonen] #fx::after{content:"";position:absolute;left:10%;right:10%;bottom:-22vh;height:60vh;border-radius:50%;background:radial-gradient(closest-side,rgba(255,200,60,.55),rgba(255,120,0,.22) 55%,transparent);filter:blur(10px);animation:fxpow 1.4s ease-in-out infinite alternate}
+[data-theme=shonen] #fx::after{content:"";position:absolute;left:10%;right:10%;bottom:-22vh;height:60vh;border-radius:50%;background:radial-gradient(closest-side,rgba(255,200,60,.55),rgba(255,120,0,.22) 55%,transparent);animation:fxpow 1.4s ease-in-out infinite alternate}
 @keyframes fxpow{to{transform:scale(1.12);opacity:.7}}
 [data-theme=shonen] h1{background:none;color:#fff;text-shadow:0 0 12px #ffb020,0 0 2px #fff;font-style:italic}
 [data-theme=yokai]{--bg:#0b0715;--panel:#18112b;--line:#33255a;--text:#f1edff;--muted:#a197c4;--accent:#a78bfa;--g1:#2a1555;--g2:#0b0715}
-[data-theme=yokai] #fx::before{content:"";position:absolute;left:-20%;right:-20%;bottom:-10vh;height:55vh;background:radial-gradient(40% 60% at 30% 70%,rgba(167,139,250,.2),transparent),radial-gradient(40% 60% at 70% 80%,rgba(129,140,248,.17),transparent);filter:blur(20px);animation:fxfog 14s ease-in-out infinite alternate}
+[data-theme=yokai] #fx::before{content:"";position:absolute;left:-20%;right:-20%;bottom:-10vh;height:55vh;background:radial-gradient(40% 60% at 30% 70%,rgba(167,139,250,.2),transparent),radial-gradient(40% 60% at 70% 80%,rgba(129,140,248,.17),transparent);animation:fxfog 14s ease-in-out infinite alternate}
 @keyframes fxfog{to{transform:translateX(12vw)}}
 [data-theme=yokai] h1{background:linear-gradient(90deg,#e0e7ff,#a78bfa);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 10px rgba(129,140,248,.6))}
 #fx i.yk{position:absolute;width:calc(var(--s,1) * 14px);height:calc(var(--s,1) * 14px);border-radius:50%;background:radial-gradient(circle at 45% 40%,#eef2ff,#a5b4fc 40%,rgba(129,140,248,0) 70%);box-shadow:0 0 22px 8px rgba(129,140,248,.45);animation:fxff1 16s ease-in-out infinite alternate,fxpulse 3s ease-in-out infinite}
@@ -586,7 +587,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 05:50 · Ultra-Themes stark optimiert';
+const APP_VERSION = '2026-11-08 18:45 · Aurora & Effekte: GPU-Last gesenkt';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2603,13 +2604,13 @@ void main(){
 }`;
 /* Leistung: Effekte in reduzierter Auflösung rendern (weich hochskaliert) und Bildrate begrenzen */
 const FXOPT = {
-  'aurora-ultra': [.5, 30], 'galaxie-ultra': [.6, 30], 'tiefsee-ultra': [.5, 30], 'retro-ultra': [.6, 40], 'loch-ultra': [.6, 30], 'sterne-ultra': [.7, 30],
-  'regenfenster-ultra': [.5, 30], 'abendrot-ultra': [.5, 30], 'powerup-ultra': [.5, 30],
+  'aurora-ultra': [.42, 24, 900], 'galaxie-ultra': [.55, 30, 1000], 'tiefsee-ultra': [.45, 30, 900], 'retro-ultra': [.55, 40, 1000], 'loch-ultra': [.55, 30, 1000], 'sterne-ultra': [.65, 30, 1200],
+  'regenfenster-ultra': [.45, 30, 900], 'abendrot-ultra': [.45, 30, 900], 'powerup-ultra': [.5, 30],
   'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
   'ninja-ultra': [.75, 30], 'manga-ultra': [.85, 30], 'onsen-ultra': [.7, 30], 'winter-ultra': [.75, 30], 'drift-ultra': [.75, 45]
 };
 let fxOpt = [1, 60];
-const fxScale = () => Math.min(window.devicePixelRatio || 1, 1.5) * fxOpt[0];
+const fxScale = (w, h) => { let d = Math.min(window.devicePixelRatio || 1, 1.5) * fxOpt[0]; const cap = fxOpt[2] || 1400; if (w && h && Math.max(w, h) * d > cap) d = cap / Math.max(w, h); return d; };
 const fxGate = () => { const iv = 1000 / fxOpt[1] - 1.5; let lastDraw = -1e9; return now => { if (now - lastDraw < iv) return false; lastDraw = now; return true; }; };
 function glFx(cv, frag) {
   const gl = cv.getContext('webgl', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'low-power' }) || cv.getContext('experimental-webgl');
@@ -2623,7 +2624,7 @@ function glFx(cv, frag) {
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const uR = gl.getUniformLocation(pr, 'r'), uT = gl.getUniformLocation(pr, 't');
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; const d = fxScale(); cv.width = Math.round(st.w * d); cv.height = Math.round(st.h * d); gl.viewport(0, 0, cv.width, cv.height); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; const d = fxScale(st.w, st.h); cv.width = Math.round(st.w * d); cv.height = Math.round(st.h * d); gl.viewport(0, 0, cv.width, cv.height); };
   resize(); addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches, t0 = performance.now() - 40000;
   let raf = 0; const gate = fxGate();
@@ -2634,7 +2635,7 @@ function glFx(cv, frag) {
 function glutFx(cv) {
   const c = cv.getContext('2d'); if (!c) return null;
   let W = 0, H = 0, d = 1;
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; d = fxScale(); W = cv.width = Math.round(st.w * d); H = cv.height = Math.round(st.h * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; d = fxScale(st.w, st.h); W = cv.width = Math.round(st.w * d); H = cv.height = Math.round(st.h * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
   resize(); addEventListener('resize', resize);
   const sprite = (inner, mid) => { const s = document.createElement('canvas'); s.width = s.height = 64; const x = s.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, inner); g.addColorStop(.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return s; };
   const SP = [sprite('rgba(255,255,235,1)', 'rgba(255,200,90,.85)'), sprite('rgba(255,220,140,1)', 'rgba(255,120,30,.8)'), sprite('rgba(255,150,70,1)', 'rgba(220,50,10,.7)'), sprite('rgba(200,70,30,.9)', 'rgba(120,20,5,.5)')];
@@ -2775,7 +2776,7 @@ void main(){
 function canvasFx(cv, setup) {
   const c = cv.getContext('2d'); if (!c) return null;
   const S = { c, W: 0, H: 0, d: 1 }; let api = null;
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; S.d = fxScale(); S.W = cv.width = Math.round(st.w * S.d); S.H = cv.height = Math.round(st.h * S.d); if (api && api.resize) api.resize(); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; S.d = fxScale(st.w, st.h); S.W = cv.width = Math.round(st.w * S.d); S.H = cv.height = Math.round(st.h * S.d); if (api && api.resize) api.resize(); };
   resize(); api = setup(S); if (api.resize) api.resize();
   addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -3334,6 +3335,7 @@ const applyTheme = t => {
     return `<i class="${cfg.c}" style="--s:${sc.toFixed(2)};left:${left}vw;${top}animation-duration:${dur}s${cfg.pulse ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${size}"></i>`;
   }).join('') : '';
   startUltra(t);
+  document.documentElement.classList.toggle('fxon', !!fx && getComputedStyle(fx).display !== 'none');
   renderThemes(t);
 };
 let theme = '';
