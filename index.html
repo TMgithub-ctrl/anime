@@ -586,7 +586,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 05:30 · Neue Ultra-Themes (Ninja, Sterne, Manga, Onsen, Cozy, Drift)';
+const APP_VERSION = '2026-11-08 05:50 · Ultra-Themes stark optimiert';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2601,8 +2601,18 @@ void main(){
   col*=1.-.3*dot(p,p);
   gl_FragColor=vec4(col,1.);
 }`;
+/* Leistung: Effekte in reduzierter Auflösung rendern (weich hochskaliert) und Bildrate begrenzen */
+const FXOPT = {
+  'aurora-ultra': [.5, 30], 'galaxie-ultra': [.6, 30], 'tiefsee-ultra': [.5, 30], 'retro-ultra': [.6, 40], 'loch-ultra': [.6, 30], 'sterne-ultra': [.7, 30],
+  'regenfenster-ultra': [.5, 30], 'abendrot-ultra': [.5, 30], 'powerup-ultra': [.5, 30],
+  'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
+  'ninja-ultra': [.75, 30], 'manga-ultra': [.85, 30], 'onsen-ultra': [.7, 30], 'winter-ultra': [.75, 30], 'drift-ultra': [.75, 45]
+};
+let fxOpt = [1, 60];
+const fxScale = () => Math.min(window.devicePixelRatio || 1, 1.5) * fxOpt[0];
+const fxGate = () => { const iv = 1000 / fxOpt[1] - 1.5; let lastDraw = -1e9; return now => { if (now - lastDraw < iv) return false; lastDraw = now; return true; }; };
 function glFx(cv, frag) {
-  const gl = cv.getContext('webgl', { antialias: false, alpha: false }) || cv.getContext('experimental-webgl');
+  const gl = cv.getContext('webgl', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'low-power' }) || cv.getContext('experimental-webgl');
   if (!gl) return null;
   const mk = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(sh)); return null; } return sh; };
   const vs = mk(gl.VERTEX_SHADER, 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'), fs = mk(gl.FRAGMENT_SHADER, frag);
@@ -2613,18 +2623,18 @@ function glFx(cv, frag) {
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const uR = gl.getUniformLocation(pr, 'r'), uT = gl.getUniformLocation(pr, 't');
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; const d = Math.min(window.devicePixelRatio || 1, 1.5); cv.width = Math.round(st.w * d); cv.height = Math.round(st.h * d); gl.viewport(0, 0, cv.width, cv.height); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; const d = fxScale(); cv.width = Math.round(st.w * d); cv.height = Math.round(st.h * d); gl.viewport(0, 0, cv.width, cv.height); };
   resize(); addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches, t0 = performance.now() - 40000;
-  let raf = 0;
-  const draw = now => { gl.uniform2f(uR, cv.width, cv.height); gl.uniform1f(uT, (now - t0) / 1000); gl.drawArrays(gl.TRIANGLES, 0, 6); if (!still) raf = requestAnimationFrame(draw); };
+  let raf = 0; const gate = fxGate();
+  const draw = now => { if (gate(now) || still) { gl.uniform2f(uR, cv.width, cv.height); gl.uniform1f(uT, (now - t0) / 1000); gl.drawArrays(gl.TRIANGLES, 0, 6); } if (!still) raf = requestAnimationFrame(draw); };
   raf = requestAnimationFrame(draw);
   return () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); };
 }
 function glutFx(cv) {
   const c = cv.getContext('2d'); if (!c) return null;
   let W = 0, H = 0, d = 1;
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; d = Math.min(window.devicePixelRatio || 1, 1.5); W = cv.width = Math.round(st.w * d); H = cv.height = Math.round(st.h * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; d = fxScale(); W = cv.width = Math.round(st.w * d); H = cv.height = Math.round(st.h * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
   resize(); addEventListener('resize', resize);
   const sprite = (inner, mid) => { const s = document.createElement('canvas'); s.width = s.height = 64; const x = s.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, inner); g.addColorStop(.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return s; };
   const SP = [sprite('rgba(255,255,235,1)', 'rgba(255,200,90,.85)'), sprite('rgba(255,220,140,1)', 'rgba(255,120,30,.8)'), sprite('rgba(255,150,70,1)', 'rgba(220,50,10,.7)'), sprite('rgba(200,70,30,.9)', 'rgba(120,20,5,.5)')];
@@ -2633,19 +2643,21 @@ function glutFx(cv) {
   const want = () => Math.round(Math.min(1600, W * H / (1100 * d * d)));
   for (let i = 0; i < want(); i++) { const p = {}; spawn(p, true); P.push(p); }
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let raf = 0, last = 0, nextBurst = 0;
+  let raf = 0, last = performance.now(), nextBurst = 0; const gate = fxGate();
   const frame = now => {
+    if (!gate(now) && !still) { raf = requestAnimationFrame(frame); return; }
+    const dt = Math.max(0, Math.min(60, now - last)) / 16.67; last = now;
     while (P.length < want()) { const p = {}; spawn(p, true); P.push(p); }
-    c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.fillStyle = 'rgba(13,4,3,0.20)'; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.fillStyle = `rgba(13,4,3,${(1 - Math.pow(.8, dt)).toFixed(3)})`; c.fillRect(0, 0, W, H);
     const fl = .78 + .14 * Math.sin(now * .0041) + .08 * Math.sin(now * .0137);
     c.globalCompositeOperation = 'lighter';
     const g = c.createRadialGradient(W / 2, H * 1.2, 0, W / 2, H * 1.2, H * .95); g.addColorStop(0, `rgba(255,110,25,${.42 * fl})`); g.addColorStop(.45, `rgba(190,35,8,${.18 * fl})`); g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     if (now > nextBurst) { nextBurst = now + 900 + Math.random() * 1800; const bx = Math.random() * W; for (let i = 0; i < 40; i++) { const p = P[(Math.random() * P.length) | 0]; spawn(p, false); p.x = bx + (Math.random() - .5) * 60 * d; p.vy = -(3 + Math.random() * 5) * d; p.vx = (Math.random() - .5) * 4 * d; p.fast = 1; p.max = 70 + Math.random() * 90; } }
     for (const p of P) {
-      p.life++; const k = p.life / p.max;
+      p.life += dt; const k = p.life / p.max;
       const wind = Math.sin(p.y * .004 / d + now * .0007 + p.seed) * .5 * d + Math.sin(now * .00031 + p.seed * .01) * .35 * d;
-      p.vx += (wind - p.vx) * (p.fast ? .015 : .04); p.vy -= .01 * d; p.vy *= .996; p.x += p.vx; p.y += p.vy;
+      p.vx += (wind - p.vx) * (p.fast ? .015 : .04) * dt; p.vy -= .01 * d * dt; p.vy *= Math.pow(.996, dt); p.x += p.vx * dt; p.y += p.vy * dt;
       if (k >= 1 || p.y < -30 * d || p.x < -40 * d || p.x > W + 40 * d) { spawn(p, false); continue; }
       const heat = 1 - k, flick = .55 + .45 * Math.sin(now * .03 + p.seed);
       const a = Math.min(1, p.life / 12) * (.25 + .75 * heat) * flick;
@@ -2763,12 +2775,12 @@ void main(){
 function canvasFx(cv, setup) {
   const c = cv.getContext('2d'); if (!c) return null;
   const S = { c, W: 0, H: 0, d: 1 }; let api = null;
-  const st = {}; const resize = () => { if (!fxChanged(st)) return; S.d = Math.min(window.devicePixelRatio || 1, 1.5); S.W = cv.width = Math.round(st.w * S.d); S.H = cv.height = Math.round(st.h * S.d); if (api && api.resize) api.resize(); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; S.d = fxScale(); S.W = cv.width = Math.round(st.w * S.d); S.H = cv.height = Math.round(st.h * S.d); if (api && api.resize) api.resize(); };
   resize(); api = setup(S); if (api.resize) api.resize();
   addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let raf = 0, last = performance.now();
-  const loop = now => { const dt = Math.max(0, Math.min(50, now - last)) / 16.67; last = now; api.frame(now, dt); if (!still) raf = requestAnimationFrame(loop); };
+  let raf = 0, last = performance.now(); const gate = fxGate();
+  const loop = now => { if (gate(now) || still) { const dt = Math.max(0, Math.min(60, now - last)) / 16.67; last = now; api.frame(now, dt); } if (!still) raf = requestAnimationFrame(loop); };
   raf = requestAnimationFrame(loop);
   return () => { cancelAnimationFrame(raf); removeEventListener('resize', resize); };
 }
@@ -2780,7 +2792,7 @@ const matrixFx = cv => canvasFx(cv, S => {
   let cols = [], fs = 16;
   const init = () => { fs = Math.round(16 * S.d); cols = Array.from({ length: Math.ceil(S.W / fs) }, () => ({ row: Math.floor(rnd(-S.H / fs, 0)), v: rnd(.25, 1), acc: 0, len: Math.floor(rnd(8, 30)) })); S.c.fillStyle = '#010702'; S.c.fillRect(0, 0, S.W, S.H); };
   return { resize: init, frame(now, dt) {
-    const c = S.c; c.shadowBlur = 0; c.fillStyle = 'rgba(1,7,2,0.085)'; c.fillRect(0, 0, S.W, S.H);
+    const c = S.c; c.shadowBlur = 0; c.fillStyle = `rgba(1,7,2,${(1 - Math.pow(.915, dt)).toFixed(3)})`; c.fillRect(0, 0, S.W, S.H);
     c.font = `${fs}px ui-monospace,monospace`; c.textBaseline = 'top';
     cols.forEach((col, i) => {
       col.acc += col.v * dt * .55;
@@ -3260,7 +3272,7 @@ const driftFx = cv => canvasFx(cv, S => {
   return { resize: init, frame(now, dt) {
     const c = S.c, W = S.W, H = S.H, d = S.d, f = Math.max(W, H * .9) * .85, sp = .75 * dt;
     const vpx = W / 2 + Math.sin(now * .00035) * W * .14, hz = H * .44, roll = Math.sin(now * .00035 + 1.2) * .07;
-    c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.fillStyle = 'rgba(6,3,14,0.34)'; c.fillRect(0, 0, W, H);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.fillStyle = `rgba(6,3,14,${(1 - Math.pow(.66, dt)).toFixed(3)})`; c.fillRect(0, 0, W, H);
     c.translate(W / 2, H / 2); c.rotate(roll); c.translate(-W / 2, -H / 2);
     const P = (X, Y, Z) => [vpx + X * f / Z, hz + Y * f / Z];
     const sky = c.createLinearGradient(0, 0, 0, hz); sky.addColorStop(0, 'rgba(10,4,24,.4)'); sky.addColorStop(1, 'rgba(70,20,80,.35)'); c.fillStyle = sky; c.fillRect(-W * .2, -H * .2, W * 1.4, hz + H * .2);
@@ -3304,6 +3316,7 @@ let ultraStop = null;
 function startUltra(t) {
   if (ultraStop) { try { ultraStop(); } catch (e) {} ultraStop = null; }
   const u = ULTRA[t], fx = $('fx'); if (!u || !fx) return;
+  fxOpt = FXOPT[t] || [1, 60];
   const cv = document.createElement('canvas'); cv.className = 'fxc'; fx.appendChild(cv);
   let stop = null; try { stop = u[1](cv); } catch (e) { stop = null; }
   if (!stop) { cv.remove(); document.documentElement.dataset.theme = u[0]; hint('Dieses Gerät kann den Ultra-Effekt nicht darstellen – normale Variante aktiv.'); return; }
