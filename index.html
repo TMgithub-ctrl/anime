@@ -272,7 +272,7 @@ header{padding-top:34px}
 .ring.gold .sp{width:15px;height:15px}.ring.sm.gold .sp{width:11px;height:11px}
 
 /* ---------- Spezial-Themes mit Effekten ---------- */
-#fx{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;display:none}
+#fx{position:fixed;top:0;left:0;width:100%;height:100vh;height:100lvh;z-index:-1;pointer-events:none;overflow:hidden;display:none}
 [data-theme=synthwave],[data-theme=terminal],[data-theme=aurora],[data-theme=galaxie],[data-theme=bluete],[data-theme=manga]{--fxon:1}
 [data-theme=synthwave] #fx,[data-theme=terminal] #fx,[data-theme=aurora] #fx,[data-theme=galaxie] #fx,[data-theme=bluete] #fx,[data-theme=manga] #fx{display:block}
 /* Synthwave: Neon-Sonne und laufendes Gitter */
@@ -566,7 +566,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-08 04:30 · Anime-Themes und 8 neue Ultra-Themes';
+const APP_VERSION = '2026-11-08 04:45 · Effekt-Hintergrund am Handy stabil';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2502,6 +2502,9 @@ function renderThemes(t) {
     <div class="tpop"><div><h4>${esc(g.name)}</h4>${g.items.map(([id, n, c, u]) => `<button data-t="${id}" class="${id === (t || '') ? 'on' : ''}" style="--c:${c}"><i></i>${esc(n)}${u ? ' <small>Ultra</small>' : ''}</button>`).join('')}</div></div></div>`).join('');
 }
 /* ---------- Ultra-Effekte (WebGL-Shader und Canvas-Partikel) ---------- */
+/* Größe der Effekt-Fläche; ändert sich nur bei echter Größenänderung (nicht beim Scrollen am Handy) */
+const fxSize = () => { const fx = $('fx'); return [Math.max(1, (fx && fx.clientWidth) || innerWidth), Math.max(1, (fx && fx.clientHeight) || innerHeight)]; };
+const fxChanged = (st) => { const [w, h] = fxSize(); if (st.w === w && Math.abs(st.h - h) < 4) return false; st.w = w; st.h = h; return true; };
 const GLSL_HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\nuniform vec2 r;uniform float t;\n' +
   'float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
   'float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),f.x),f.y);}\n' +
@@ -2583,7 +2586,7 @@ function glFx(cv, frag) {
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(pr, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const uR = gl.getUniformLocation(pr, 'r'), uT = gl.getUniformLocation(pr, 't');
-  const resize = () => { const d = Math.min(window.devicePixelRatio || 1, 1.5); cv.width = Math.round(innerWidth * d); cv.height = Math.round(innerHeight * d); gl.viewport(0, 0, cv.width, cv.height); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; const d = Math.min(window.devicePixelRatio || 1, 1.5); cv.width = Math.round(st.w * d); cv.height = Math.round(st.h * d); gl.viewport(0, 0, cv.width, cv.height); };
   resize(); addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches, t0 = performance.now() - 40000;
   let raf = 0;
@@ -2594,7 +2597,7 @@ function glFx(cv, frag) {
 function glutFx(cv) {
   const c = cv.getContext('2d'); if (!c) return null;
   let W = 0, H = 0, d = 1;
-  const resize = () => { d = Math.min(window.devicePixelRatio || 1, 1.5); W = cv.width = Math.round(innerWidth * d); H = cv.height = Math.round(innerHeight * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; d = Math.min(window.devicePixelRatio || 1, 1.5); W = cv.width = Math.round(st.w * d); H = cv.height = Math.round(st.h * d); c.fillStyle = '#0d0403'; c.fillRect(0, 0, W, H); };
   resize(); addEventListener('resize', resize);
   const sprite = (inner, mid) => { const s = document.createElement('canvas'); s.width = s.height = 64; const x = s.getContext('2d'); const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, inner); g.addColorStop(.25, mid); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return s; };
   const SP = [sprite('rgba(255,255,235,1)', 'rgba(255,200,90,.85)'), sprite('rgba(255,220,140,1)', 'rgba(255,120,30,.8)'), sprite('rgba(255,150,70,1)', 'rgba(220,50,10,.7)'), sprite('rgba(200,70,30,.9)', 'rgba(120,20,5,.5)')];
@@ -2733,7 +2736,7 @@ void main(){
 function canvasFx(cv, setup) {
   const c = cv.getContext('2d'); if (!c) return null;
   const S = { c, W: 0, H: 0, d: 1 }; let api = null;
-  const resize = () => { S.d = Math.min(window.devicePixelRatio || 1, 1.5); S.W = cv.width = Math.round(innerWidth * S.d); S.H = cv.height = Math.round(innerHeight * S.d); if (api && api.resize) api.resize(); };
+  const st = {}; const resize = () => { if (!fxChanged(st)) return; S.d = Math.min(window.devicePixelRatio || 1, 1.5); S.W = cv.width = Math.round(st.w * S.d); S.H = cv.height = Math.round(st.h * S.d); if (api && api.resize) api.resize(); };
   resize(); api = setup(S); if (api.resize) api.resize();
   addEventListener('resize', resize);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2826,6 +2829,7 @@ const blossomFx = cv => canvasFx(cv, S => {
   const bokeh = glowSprite(128, [[0, 'rgba(255,190,220,.55)'], [.55, 'rgba(255,150,200,.25)'], [.7, 'rgba(255,150,200,.06)'], [1, 'rgba(0,0,0,0)']]);
   let P = [], B = [], branch = null, gust = 0, gustT = 0;
   const drawBranch = () => {
+    let seed = 7; const rnd = (a, b) => { seed = (seed * 16807) % 2147483647; return a + (seed / 2147483647) * (b - a); };
     branch = document.createElement('canvas'); branch.width = S.W; branch.height = S.H; const x = branch.getContext('2d'); const d = S.d;
     const blossoms = [];
     const limb = (px, py, ang, len, w, depth) => {
@@ -2836,12 +2840,12 @@ const blossomFx = cv => canvasFx(cv, S => {
       limb(nx, ny, ang + rnd(-.55, -.15), len * rnd(.62, .8), w * .7, depth + 1);
       if (Math.random() < .85) limb(nx, ny, ang + rnd(.15, .55), len * rnd(.55, .75), w * .65, depth + 1);
     };
-    limb(-20 * d, S.H * .08, .25, Math.min(S.W, S.H) * .22, 16 * d, 0);
+    limb(-20 * d, Math.max(S.H * .06, 70 * d), .3, Math.max(110 * d, Math.min(S.W, S.H) * .24), 15 * d, 0);
     for (const [bx, by] of blossoms) for (let i = 0; i < 4; i++) { const r = rnd(3, 7) * d; const g = x.createRadialGradient(bx, by, 0, bx, by, r); g.addColorStop(0, '#fff0f6'); g.addColorStop(.6, '#ff9cc4'); g.addColorStop(1, 'rgba(255,120,180,0)'); x.fillStyle = g; x.beginPath(); x.arc(bx + rnd(-9, 9) * d, by + rnd(-9, 9) * d, r, 0, 7); x.fill(); }
   };
   const init = () => {
     const n = Math.round(Math.min(520, S.W * S.H / (2200 * S.d * S.d)));
-    P = Array.from({ length: n }, () => ({ x: rnd(0, S.W), y: rnd(-S.H, S.H), z: rnd(.3, 1.5), rot: rnd(0, 6.28), rv: rnd(-.04, .04), fl: rnd(0, 6.28), fv: rnd(.03, .09), vx: 0, sw: rnd(0, 100) })).sort((a, b) => a.z - b.z);
+    P = Array.from({ length: n }, () => ({ x: rnd(0, S.W), y: rnd(-S.H * .1, S.H), z: rnd(.3, 1.5), rot: rnd(0, 6.28), rv: rnd(-.04, .04), fl: rnd(0, 6.28), fv: rnd(.03, .09), vx: 0, sw: rnd(0, 100) })).sort((a, b) => a.z - b.z);
     B = Array.from({ length: 22 }, () => ({ x: rnd(0, S.W), y: rnd(0, S.H), r: rnd(30, 110) * S.d, a: rnd(.15, .5), v: rnd(.05, .25) * S.d }));
     drawBranch();
   };
@@ -2854,11 +2858,13 @@ const blossomFx = cv => canvasFx(cv, S => {
     c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; if (branch) c.drawImage(branch, 0, 0);
     if (now > gustT) { gustT = now + rnd(4000, 9000); gust = rnd(1.5, 3.5); }
     gust *= Math.pow(.992, dt);
-    const wind = Math.sin(now * .00025) * .8 + .6 + gust;
+    const wind = (Math.sin(now * .00025) * .8 + .6 + gust) * Math.min(1, S.W / (1100 * S.d));
     for (const p of P) {
       p.fl += p.fv * dt; p.rot += p.rv * dt; p.vx += (wind * p.z - p.vx) * .02 * dt;
       p.x += (p.vx + Math.sin(now * .0011 + p.sw) * .6 * p.z) * S.d * dt; p.y += (.45 + p.z * 1.1) * S.d * dt * (.7 + .3 * Math.sin(p.fl));
-      if (p.y > H + 30 * S.d || p.x > W + 40 * S.d) { p.y = rnd(-80, -10) * S.d; p.x = rnd(-W * .4, W); }
+      if (p.x > W + 40 * S.d) { p.x = -30 * S.d; p.y = rnd(-.1, .9) * H; }
+      else if (p.x < -60 * S.d) { p.x = W + 30 * S.d; }
+      if (p.y > H + 30 * S.d) { p.y = rnd(-80, -10) * S.d; p.x = rnd(-W * .1, W); }
       const sx = Math.cos(p.fl), size = 16 * S.d * p.z, co = Math.cos(p.rot), si = Math.sin(p.rot), k = Math.abs(sx) < .08 ? .08 * Math.sign(sx || 1) : sx;
       c.setTransform(co * k, si * k, -si, co, p.x, p.y);
       c.globalAlpha = Math.min(1, .45 + .5 * p.z);
