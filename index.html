@@ -503,6 +503,13 @@ header{padding-top:34px}
 [data-theme=sakura-glas] input[type=range]{background:linear-gradient(90deg,rgba(255,105,180,.7),rgba(255,255,255,.15))}
 [data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{background:#fff;border:3px solid #ff69b4;box-shadow:0 0 12px rgba(255,105,180,.8)}
 [data-theme=sakura-glas] input[type=range]::-moz-range-thumb{background:#fff;border:3px solid #ff69b4}
+[data-theme=sakura-glas]{--hf:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23ffc4e1' stroke='%23ff3d9a' stroke-width='.5'%3E%3Cpath d='M12 12C8.2 9.2 8.6 4.6 10.9 2.6L12 4.1l1.1-1.5c2.3 2 2.7 6.6-1.1 9.4z'/%3E%3Cpath transform='rotate(72 12 12)' d='M12 12C8.2 9.2 8.6 4.6 10.9 2.6L12 4.1l1.1-1.5c2.3 2 2.7 6.6-1.1 9.4z'/%3E%3Cpath transform='rotate(144 12 12)' d='M12 12C8.2 9.2 8.6 4.6 10.9 2.6L12 4.1l1.1-1.5c2.3 2 2.7 6.6-1.1 9.4z'/%3E%3Cpath transform='rotate(216 12 12)' d='M12 12C8.2 9.2 8.6 4.6 10.9 2.6L12 4.1l1.1-1.5c2.3 2 2.7 6.6-1.1 9.4z'/%3E%3Cpath transform='rotate(288 12 12)' d='M12 12C8.2 9.2 8.6 4.6 10.9 2.6L12 4.1l1.1-1.5c2.3 2 2.7 6.6-1.1 9.4z'/%3E%3C/g%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23ffe58a'/%3E%3C/svg%3E")}
+:root[data-theme=sakura-glas] :is(header,.panel,.hero,.row,.erow,.cats,.admbox){background-image:linear-gradient(165deg,rgba(255,255,255,.075),rgba(255,255,255,0) 38%)}
+[data-theme=sakura-glas] main h3::before{content:"";display:inline-block;width:1em;height:1em;margin-right:.45em;vertical-align:-.14em;background:var(--hf) center/contain no-repeat;filter:drop-shadow(0 0 5px rgba(255,105,180,.8))}
+[data-theme=sakura-glas] :is(.cats button.on,.who button.on)::before{content:"";display:inline-block;width:.95em;height:.95em;margin-right:.4em;vertical-align:-.12em;background:var(--hf) center/contain no-repeat;filter:brightness(1.5) saturate(.6)}
+[data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{width:28px;height:28px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat;box-shadow:none;filter:drop-shadow(0 0 6px rgba(255,105,180,.95))}
+[data-theme=sakura-glas] input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat}
+@media (max-width:620px){[data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{width:34px;height:34px}}
 [data-theme=tiefsee-ultra]{--bg:#00070d;--panel:rgba(4,24,36,.86);--line:#0f3a52;--text:#e6fbff;--muted:#7fb2c4;--accent:#5eead4;--g1:#00070d;--g2:#00070d}
 [data-theme=tiefsee-ultra] h1{background:linear-gradient(90deg,#e0fbff,#5eead4 50%,#38bdf8);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 12px rgba(94,234,212,.45))}
 [data-theme=retro-ultra]{--bg:#0a0218;--panel:rgba(26,8,48,.86);--line:#4a1d7a;--text:#fbeaff;--muted:#b597d6;--accent:#ff4fd8;--g1:#0a0218;--g2:#0a0218}
@@ -658,7 +665,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-09 23:00 · Theme-Menü liegt wieder oben und passt aufs Handy';
+const APP_VERSION = '2026-11-09 23:40 · Sakura Glas: Blüten-Slider, Blüten-Akzente, Glanzkante';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
