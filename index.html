@@ -516,6 +516,28 @@ header{padding-top:34px}
 [data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{width:28px;height:28px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat;box-shadow:none;filter:drop-shadow(0 0 6px rgba(255,105,180,.95))}
 [data-theme=sakura-glas] input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat}
 @media (max-width:620px){[data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{width:34px;height:34px}}
+/* Aurora-Details (Aurora + Aurora Ultra): Polarstern-Slider, Stern-Akzente, Verlaufs-Pillen, Kopfkarte, Hover-Glühen – Hintergrund und Grundfarben unverändert */
+:is([data-theme=aurora],[data-theme=aurora-ultra]){--ak:linear-gradient(120deg,#b6ffe3,#5cf2c0 35%,#38bdf8 70%,#a78bfa);--ai:#032018;--asheen:linear-gradient(165deg,rgba(124,247,201,.07),rgba(124,247,201,0) 40%);
+  --af:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23e6fff6'/%3E%3Cstop offset='.5' stop-color='%237cf7c9'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M12 1.5c.6 5.3 2.3 8.1 10.5 10.5-8.2 2.4-9.9 5.2-10.5 10.5-.6-5.3-2.3-8.1-10.5-10.5C9.7 9.6 11.4 6.8 12 1.5z'/%3E%3Cpath fill='%23fff' opacity='.85' d='M12 8.2c.25 2 .9 3 3.8 3.8-2.9.8-3.55 1.8-3.8 3.8-.25-2-.9-3-3.8-3.8 2.9-.8 3.55-1.8 3.8-3.8z'/%3E%3C/svg%3E");
+  scrollbar-color:#2c8f7a #03101c}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) ::selection{background:#7cf7c9;color:#032018}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) h3{color:#c9f5ea;text-shadow:0 1px 10px rgba(1,5,12,.9)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) main h3::before{content:"";display:inline-block;width:1em;height:1em;margin-right:.45em;vertical-align:-.14em;background:var(--af) center/contain no-repeat;filter:drop-shadow(0 0 5px rgba(124,247,201,.7))}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) header{background:var(--asheen),color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid rgba(124,247,201,.16);border-radius:22px;padding:34px 18px 18px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+@media (min-width:1200px){:is([data-theme=aurora],[data-theme=aurora-ultra]) header{padding-top:18px}}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) .hint{text-shadow:0 1px 8px rgba(1,5,12,.95)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.panel,.row,.erow,.cats,.admbox){background:var(--asheen),var(--panel);border:1px solid rgba(124,247,201,.14);box-shadow:inset 0 1px 0 rgba(200,255,240,.06),0 10px 26px rgba(0,0,0,.35)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) .hero{border-color:rgba(124,247,201,.28);box-shadow:0 0 44px rgba(56,189,248,.1)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.tab,.bar button,.panel button,.wact button,.dback button,.step button,.lnk,.who button):hover{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,247,201,.14)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.tab.on,.bar .pri,.panel .go,.bar .seg button.on,.flag,.seas button.on,.ctl .seg button.on,.cats button.on,.wact .pri,.hero .seg button.on,.side button.on,.acc .on,.asec .pri,.admbox .pri,.who button.on,.mylnk:hover,.erow .eplnk:hover){background:var(--ak);color:var(--ai);border-color:transparent;font-weight:600;box-shadow:0 4px 18px rgba(80,230,200,.3),inset 0 1px 0 rgba(255,255,255,.6)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.tab.on i,.side button.on small){color:var(--ai)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.cats button.on,.who button.on)::before{content:"";display:inline-block;width:.9em;height:.9em;margin-right:.4em;vertical-align:-.1em;background:var(--af) center/contain no-repeat;filter:brightness(.25) saturate(2)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) .card{box-shadow:0 10px 28px rgba(0,0,0,.5),0 0 0 1px rgba(124,247,201,.16)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) .card:hover{box-shadow:0 16px 36px rgba(0,0,0,.55),0 0 0 1px rgba(124,247,201,.55),0 0 30px rgba(56,189,248,.3)}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]{background:linear-gradient(90deg,rgba(124,247,201,.65),rgba(56,189,248,.4),rgba(255,255,255,.12))}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-webkit-slider-thumb{width:28px;height:28px;border:0;border-radius:0;background:var(--af) center/contain no-repeat;filter:drop-shadow(0 0 6px rgba(124,247,201,.9))}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:0;background:var(--af) center/contain no-repeat}
+@media (max-width:620px){:is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-webkit-slider-thumb{width:34px;height:34px}}
 [data-theme=tiefsee-ultra]{--bg:#00070d;--panel:rgba(4,24,36,.86);--line:#0f3a52;--text:#e6fbff;--muted:#7fb2c4;--accent:#5eead4;--g1:#00070d;--g2:#00070d}
 [data-theme=tiefsee-ultra] h1{background:linear-gradient(90deg,#e0fbff,#5eead4 50%,#38bdf8);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 12px rgba(94,234,212,.45))}
 [data-theme=retro-ultra]{--bg:#0a0218;--panel:rgba(26,8,48,.86);--line:#4a1d7a;--text:#fbeaff;--muted:#b597d6;--accent:#ff4fd8;--g1:#0a0218;--g2:#0a0218}
@@ -671,7 +693,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-10 00:55 · Aurora wieder wie vorher';
+const APP_VERSION = '2026-11-10 01:05 · Aurora: Polarstern-Slider und Details aus dem Hanami-Skin';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
