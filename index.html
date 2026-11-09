@@ -467,9 +467,15 @@ header{padding-top:34px}
 /* Sakura Glas: Glassmorphism über Mondnacht-Kirschblüten */
 [data-theme=sakura-glas]{--bg:#0e0612;--panel:rgba(20,10,25,.65);--line:rgba(255,255,255,.1);--text:#fff6fb;--muted:#cdb3c6;--accent:#ff69b4;--r:16px;--g1:#0e0612;--g2:#0e0612;--gl:rgba(20,10,25,.65);--gb:1px solid rgba(255,255,255,.1);--glow:0 0 0 1px rgba(255,105,180,.9),0 0 18px rgba(255,105,180,.65),0 0 42px rgba(255,105,180,.3);scrollbar-color:#ff69b4 #140a19}
 [data-theme=sakura-glas] #fx{display:block}
+#fxf{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+#fxf i{position:absolute;top:-8vh;width:calc(var(--s) * 15px);height:calc(var(--s) * 13px);background:radial-gradient(circle at 30% 30%,#fff3f8,#ffb0d2 55%,#ff69b4);border-radius:13px 2px 13px 2px;opacity:.9;box-shadow:0 0 10px rgba(255,105,180,.35);animation:fxfl linear infinite;will-change:transform}
+#fxf i:nth-child(odd){animation-name:fxfl2}
+@keyframes fxfl{0%{transform:translate3d(0,0,0) rotate3d(1,.4,.2,0deg)}35%{transform:translate3d(9vw,38vh,0) rotate3d(1,.4,.2,240deg)}70%{transform:translate3d(2vw,76vh,0) rotate3d(1,.4,.2,470deg)}100%{transform:translate3d(12vw,116vh,0) rotate3d(1,.4,.2,700deg)}}
+@keyframes fxfl2{0%{transform:translate3d(0,0,0) rotate3d(.3,1,.1,0deg)}40%{transform:translate3d(-6vw,44vh,0) rotate3d(.3,1,.1,-260deg)}100%{transform:translate3d(7vw,116vh,0) rotate3d(.3,1,.1,-620deg)}}
+@media (prefers-reduced-motion:reduce){#fxf{display:none}}
 [data-theme=sakura-glas] .search svg{z-index:2;stroke:#ffc2df}
 [data-theme=sakura-glas] body{font-family:"Inter","Poppins","Segoe UI",system-ui,sans-serif}
-[data-theme=sakura-glas] #fx::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,3,12,.42),rgba(8,3,12,.22) 45%,rgba(8,3,12,.5))}
+[data-theme=sakura-glas] #fx::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,3,12,.22),rgba(8,3,12,0) 45%,rgba(8,3,12,.28))}
 [data-theme=sakura-glas] ::selection{background:#ff69b4;color:#fff}
 [data-theme=sakura-glas] :is(h1,.hero h2){font-family:"Playfair Display",Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:0;color:#fff}
 [data-theme=sakura-glas] h1{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:#fff;-webkit-text-fill-color:#fff;text-shadow:0 2px 18px rgba(255,105,180,.35)}
@@ -665,7 +671,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-09 23:40 · Sakura Glas: Blüten-Slider, Blüten-Akzente, Glanzkante';
+const APP_VERSION = '2026-11-09 23:55 · Sakura Glas lebendiger: mehr Blüten, heller, Blüten fliegen über das Glas';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2686,7 +2692,7 @@ void main(){
 const FXOPT = {
   'aurora-ultra': [.42, 24, 900], 'galaxie-ultra': [.55, 30, 1000], 'tiefsee-ultra': [.45, 30, 900], 'retro-ultra': [.55, 40, 1000], 'loch-ultra': [.55, 30, 1000], 'sterne-ultra': [.65, 30, 1200],
   'regenfenster-ultra': [.45, 30, 900], 'abendrot-ultra': [.45, 30, 900], 'powerup-ultra': [.5, 30],
-  'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'hanami-ultra': [.75, 40], 'sakura-glas': [.6, 30], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
+  'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'hanami-ultra': [.75, 40], 'sakura-glas': [.75, 40], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
   'ninja-ultra': [.75, 30], 'manga-ultra': [.85, 30], 'onsen-ultra': [.7, 30], 'winter-ultra': [.75, 30], 'drift-ultra': [.75, 45]
 };
 let fxOpt = [1, 60];
@@ -3490,7 +3496,7 @@ const driftFx = cv => canvasFx(cv, S => {
   } };
 });
 const ULTRA = { 'aurora-ultra': ['aurora', cv => glFx(cv, SH_AURORA)], 'galaxie-ultra': ['galaxie', cv => glFx(cv, SH_GALAXY)], 'glut-ultra': ['glut', cv => glutFx(cv)],
-  'bluete-ultra': ['bluete', blossomFx], 'hanami-ultra': ['bluete', hanamiFx], 'sakura-glas': ['bluete', cv => hanamiFx(cv, .45)], 'tiefsee-ultra': ['wellen', cv => glFx(cv, SH_DEEP)], 'retro-ultra': ['synthwave', cv => glFx(cv, SH_RETRO)], 'loch-ultra': ['galaxie', cv => glFx(cv, SH_HOLE)],
+  'bluete-ultra': ['bluete', blossomFx], 'hanami-ultra': ['bluete', hanamiFx], 'sakura-glas': ['bluete', cv => hanamiFx(cv, .9)], 'tiefsee-ultra': ['wellen', cv => glFx(cv, SH_DEEP)], 'retro-ultra': ['synthwave', cv => glFx(cv, SH_RETRO)], 'loch-ultra': ['galaxie', cv => glFx(cv, SH_HOLE)],
   'matrix-ultra': ['terminal', matrixFx], 'gewitter-ultra': ['regen', stormFx], 'powerup-ultra': ['shonen', cv => glFx(cv, SH_POWER)], 'lampion-ultra': ['yokai', lanternFx],
   'gluehwuermchen-ultra': ['gluehwuermchen', fireflyFx], 'ninja-ultra': ['ninja', ninjaUltraFx], 'sterne-ultra': ['galaxie', cv => glFx(cv, SH_STARS)], 'manga-ultra': ['manga', mangaFx],
   'onsen-ultra': ['schnee', onsenFx], 'regenfenster-ultra': ['regen', cv => glFx(cv, SH_RAINWIN)], 'abendrot-ultra': ['feuer', cv => glFx(cv, SH_SUNSET)], 'winter-ultra': ['schnee', winterFx], 'drift-ultra': ['cybertokyo', driftFx] };
@@ -3517,6 +3523,7 @@ const applyTheme = t => {
   }).join('') : '';
   if (t === 'sakura-glas' && !$('glasFont')) { const l = document.createElement('link'); l.id = 'glasFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'hanami-ultra' && !$('hanamiFont')) { const l = document.createElement('link'); l.id = 'hanamiFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@800&display=swap'; document.head.appendChild(l); }
+  let ff = $('fxf'); if (t === 'sakura-glas') { if (!ff) { ff = document.createElement('div'); ff.id = 'fxf'; ff.setAttribute('aria-hidden', 'true'); ff.innerHTML = Array.from({ length: 14 }, (_, i) => `<i style="--s:${(.7 + (i * 7 % 6) * .14).toFixed(2)};left:${(i * 41 + 5) % 100}vw;animation-duration:${(11 + (i * 5) % 9).toFixed(1)}s;animation-delay:-${(i * 2.3) % 19}s"></i>`).join(''); document.body.appendChild(ff); } } else if (ff) ff.remove();
   startUltra(t);
   document.documentElement.classList.toggle('fxon', !!fx && getComputedStyle(fx).display !== 'none');
   renderThemes(t);
