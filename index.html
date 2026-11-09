@@ -538,6 +538,11 @@ header{padding-top:34px}
 :is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-webkit-slider-thumb{width:28px;height:28px;border:0;border-radius:0;background:var(--af) center/contain no-repeat;filter:drop-shadow(0 0 6px rgba(124,247,201,.9))}
 :is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:0;background:var(--af) center/contain no-repeat}
 @media (max-width:620px){:is([data-theme=aurora],[data-theme=aurora-ultra]) input[type=range]::-webkit-slider-thumb{width:34px;height:34px}}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(h1,.hero h2){font-family:"Josefin Sans","Outfit",system-ui,sans-serif;font-weight:700;letter-spacing:.01em}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) h1{line-height:1.15;padding-top:.08em}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) h3{font-family:"Josefin Sans","Outfit",system-ui,sans-serif;font-weight:600;font-size:.95rem;text-transform:uppercase;letter-spacing:.14em}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) :is(.flag,.tpop h4,.ctl .lab){font-family:"Josefin Sans","Outfit",system-ui,sans-serif;letter-spacing:.06em}
+:is([data-theme=aurora],[data-theme=aurora-ultra]) .tab.on::before{content:"";display:inline-block;width:.9em;height:.9em;margin-right:.4em;vertical-align:-.1em;background:var(--af) center/contain no-repeat;filter:brightness(.25) saturate(2)}
 [data-theme=tiefsee-ultra]{--bg:#00070d;--panel:rgba(4,24,36,.86);--line:#0f3a52;--text:#e6fbff;--muted:#7fb2c4;--accent:#5eead4;--g1:#00070d;--g2:#00070d}
 [data-theme=tiefsee-ultra] h1{background:linear-gradient(90deg,#e0fbff,#5eead4 50%,#38bdf8);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 12px rgba(94,234,212,.45))}
 [data-theme=retro-ultra]{--bg:#0a0218;--panel:rgba(26,8,48,.86);--line:#4a1d7a;--text:#fbeaff;--muted:#b597d6;--accent:#ff4fd8;--g1:#0a0218;--g2:#0a0218}
@@ -693,7 +698,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-10 01:05 · Aurora: Polarstern-Slider und Details aus dem Hanami-Skin';
+const APP_VERSION = '2026-11-10 01:20 · Aurora: neue Schrift (Josefin Sans) und Stern an der aktiven Liste';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -3543,6 +3548,7 @@ const applyTheme = t => {
     const size = cfg.size === 0 ? '' : cfg.rain ? ';width:1.5px;height:9vh' : `;width:${(6 * sc).toFixed(1)}px;height:${(6 * sc).toFixed(1)}px`;
     return `<i class="${cfg.c}" style="--s:${sc.toFixed(2)};left:${left}vw;${top}animation-duration:${dur}s${cfg.pulse ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${size}"></i>`;
   }).join('') : '';
+  if ((t === 'aurora' || t === 'aurora-ultra') && !$('auroraFont')) { const l = document.createElement('link'); l.id = 'auroraFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'sakura-glas' && !$('glasFont')) { const l = document.createElement('link'); l.id = 'glasFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'hanami-ultra' && !$('hanamiFont')) { const l = document.createElement('link'); l.id = 'hanamiFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@800&display=swap'; document.head.appendChild(l); }
   let ff = $('fxf'); if (t === 'sakura-glas') { if (!ff) { ff = document.createElement('div'); ff.id = 'fxf'; ff.setAttribute('aria-hidden', 'true'); ff.innerHTML = Array.from({ length: 10 }, (_, i) => `<i style="--s:${(.7 + (i * 7 % 6) * .14).toFixed(2)};left:${(i * 41 + 5) % 100}vw;animation-duration:${(11 + (i * 5) % 9).toFixed(1)}s;animation-delay:-${(i * 2.3) % 19}s"></i>`).join(''); document.body.appendChild(ff); } } else if (ff) ff.remove();
