@@ -463,6 +463,44 @@ header{padding-top:34px}
 [data-theme=hanami-ultra] input[type=range]::-webkit-slider-thumb{width:26px;height:26px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat;filter:drop-shadow(0 0 4px rgba(255,120,180,.9))}
 [data-theme=hanami-ultra] input[type=range]::-moz-range-thumb{width:24px;height:24px;border:0;border-radius:0;background:var(--hf) center/contain no-repeat}
 @media (max-width:620px){[data-theme=hanami-ultra] input[type=range]::-webkit-slider-thumb{width:32px;height:32px}}
+/* Sakura Glas: Glassmorphism über Mondnacht-Kirschblüten */
+[data-theme=sakura-glas]{--bg:#0e0612;--panel:rgba(20,10,25,.65);--line:rgba(255,255,255,.1);--text:#fff6fb;--muted:#cdb3c6;--accent:#ff69b4;--r:16px;--g1:#0e0612;--g2:#0e0612;--gl:rgba(20,10,25,.65);--gb:1px solid rgba(255,255,255,.1);--glow:0 0 0 1px rgba(255,105,180,.9),0 0 18px rgba(255,105,180,.65),0 0 42px rgba(255,105,180,.3);scrollbar-color:#ff69b4 #140a19}
+[data-theme=sakura-glas] #fx{display:block}
+[data-theme=sakura-glas] .search svg{z-index:2;stroke:#ffc2df}
+[data-theme=sakura-glas] body{font-family:"Inter","Poppins","Segoe UI",system-ui,sans-serif}
+[data-theme=sakura-glas] #fx::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,3,12,.42),rgba(8,3,12,.22) 45%,rgba(8,3,12,.5))}
+[data-theme=sakura-glas] ::selection{background:#ff69b4;color:#fff}
+[data-theme=sakura-glas] :is(h1,.hero h2){font-family:"Playfair Display",Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:0;color:#fff}
+[data-theme=sakura-glas] h1{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:#fff;-webkit-text-fill-color:#fff;text-shadow:0 2px 18px rgba(255,105,180,.35)}
+[data-theme=sakura-glas] h3{color:#f3dbe8;font-weight:600;letter-spacing:.02em}
+:root[data-theme=sakura-glas] :is(header,.panel,.hero,.row,.erow,.cats,.admbox,.search input,.sbtn,.side,.tpop>div){background:var(--gl);border:var(--gb);border-radius:16px;-webkit-backdrop-filter:blur(12px) saturate(1.25)!important;backdrop-filter:blur(12px) saturate(1.25)!important;box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06)}
+[data-theme=sakura-glas] header{padding:34px 20px 18px}
+@media (min-width:1200px){[data-theme=sakura-glas] header{padding-top:20px}}
+[data-theme=sakura-glas] .side{border-radius:0 16px 16px 0}
+[data-theme=sakura-glas] :is(.search input,.cats){border-radius:999px}
+[data-theme=sakura-glas] .hero::before{opacity:.35}
+[data-theme=sakura-glas] .hero::after{background:linear-gradient(100deg,rgba(20,10,25,.55),rgba(20,10,25,.25))}
+[data-theme=sakura-glas] .hero .poster,[data-theme=sakura-glas] .card{border-radius:16px;box-shadow:0 14px 34px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}
+[data-theme=sakura-glas] .card{background:rgba(30,14,36,.85)}
+[data-theme=sakura-glas] .card:hover{box-shadow:0 16px 36px rgba(0,0,0,.55),0 0 0 1px rgba(255,105,180,.7),0 0 26px rgba(255,105,180,.35)}
+[data-theme=sakura-glas] :is(.tab,.bar button,.panel button,.wact button,.dback button,.step button,.lnk,.who button,.ctl .seg button,.side button,.seas button){border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:var(--text);transition:background .15s,border-color .15s,box-shadow .15s}
+[data-theme=sakura-glas] :is(.tab,.bar button,.panel button,.wact button,.dback button,.step button,.lnk,.who button,.ctl .seg button,.side button,.seas button):hover{background:rgba(255,105,180,.12);border-color:rgba(255,105,180,.55)}
+[data-theme=sakura-glas] .side button{border-radius:14px}
+[data-theme=sakura-glas] :is(.tab.on,.bar .pri,.panel .go,.bar .seg button.on,.flag,.seas button.on,.ctl .seg button.on,.cats button.on,.wact .pri,.hero .seg button.on,.side button.on,.acc .on,.asec .pri,.admbox .pri,.who button.on,.erow .eplnk:hover){background:#ff69b4;color:#fff;border-color:#ff8cc6;font-weight:600;box-shadow:var(--glow);text-shadow:0 1px 2px rgba(120,0,60,.5)}
+[data-theme=sakura-glas] :is(.tab.on i,.side button.on small){color:#fff}
+[data-theme=sakura-glas] .seg{border-color:rgba(255,255,255,.12)}
+[data-theme=sakura-glas] :is(input[type=text],input[type=number],input[type=url],input[type=password],input:not([type]),select,textarea){background:rgba(10,4,14,.55);border:1px solid rgba(255,255,255,.14);color:#fff6fb}
+[data-theme=sakura-glas] :is(input,select,textarea):focus{outline:none;border-color:#ff69b4;box-shadow:0 0 0 3px rgba(255,105,180,.22)}
+[data-theme=sakura-glas] ::placeholder{color:rgba(255,230,242,.45)}
+[data-theme=sakura-glas] .strm,[data-theme=sakura-glas] .mylnk{padding:5px 14px;border:0;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .15s,box-shadow .15s}
+[data-theme=sakura-glas] .strm::after,[data-theme=sakura-glas] .mylnk::after{content:"→";margin-left:6px;opacity:.85}
+[data-theme=sakura-glas] .mylnk{background:linear-gradient(135deg,#6d28d9,#1e3a8a);color:#fff}
+[data-theme=sakura-glas] .mylnk:hover{background:linear-gradient(135deg,#7c3aed,#1d4ed8);color:#fff}
+[data-theme=sakura-glas] :is(.strm,.mylnk):hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 14px rgba(255,255,255,.12)}
+[data-theme=sakura-glas] .chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+[data-theme=sakura-glas] input[type=range]{background:linear-gradient(90deg,rgba(255,105,180,.7),rgba(255,255,255,.15))}
+[data-theme=sakura-glas] input[type=range]::-webkit-slider-thumb{background:#fff;border:3px solid #ff69b4;box-shadow:0 0 12px rgba(255,105,180,.8)}
+[data-theme=sakura-glas] input[type=range]::-moz-range-thumb{background:#fff;border:3px solid #ff69b4}
 [data-theme=tiefsee-ultra]{--bg:#00070d;--panel:rgba(4,24,36,.86);--line:#0f3a52;--text:#e6fbff;--muted:#7fb2c4;--accent:#5eead4;--g1:#00070d;--g2:#00070d}
 [data-theme=tiefsee-ultra] h1{background:linear-gradient(90deg,#e0fbff,#5eead4 50%,#38bdf8);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 12px rgba(94,234,212,.45))}
 [data-theme=retro-ultra]{--bg:#0a0218;--panel:rgba(26,8,48,.86);--line:#4a1d7a;--text:#fbeaff;--muted:#b597d6;--accent:#ff4fd8;--g1:#0a0218;--g2:#0a0218}
@@ -618,7 +656,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-09 21:50 · Neuer Blüten-Skin „Hanami“ (Ultra)';
+const APP_VERSION = '2026-11-09 22:40 · Neues Theme „Sakura Glas“ (Glassmorphism)';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2545,6 +2583,7 @@ const THEME_GROUPS = [
     ['glut-ultra', 'Glut Ultra', 'radial-gradient(circle at 50% 85%,#fff3c4 0 6%,#ff7a2f 25%,#b91c1c 50%,#0d0403 75%)'],
     ['bluete-ultra', 'Blüten Ultra', 'radial-gradient(circle at 40% 40%,#fff1f7,#ffb3d1 35%,#f472b6 55%,#2a1230 80%)'],
     ['hanami-ultra', 'Hanami · Blüten-Skin', 'radial-gradient(circle at 70% 26%,#fff6fa 0 13%,transparent 15%),linear-gradient(180deg,#1a0c22 20%,#6a2a5c 62%,#ff9ec4 64%,#2a1030 72%)'],
+    ['sakura-glas', 'Sakura Glas', 'linear-gradient(135deg,rgba(255,255,255,.35),rgba(255,255,255,.05) 50%),radial-gradient(circle at 70% 28%,#fff6fa 0 12%,transparent 14%),linear-gradient(180deg,#1a0c22 30%,#ff69b4 70%,#2a1030 74%)'],
     ['tiefsee-ultra', 'Tiefsee Ultra', 'linear-gradient(180deg,#38bdf8,#0e7490 40%,#00070d)'],
     ['retro-ultra', 'Retro-Highway Ultra', 'linear-gradient(180deg,#160530 0 30%,#ff4f8b 30% 50%,#ffd23f 50% 52%,#0a0218 52%)'],
     ['loch-ultra', 'Schwarzes Loch Ultra', 'radial-gradient(circle,#000 0 28%,#ffd59a 32%,#ff8a3d 40%,#2a1205 55%,#010103 70%)'],
@@ -2638,7 +2677,7 @@ void main(){
 const FXOPT = {
   'aurora-ultra': [.42, 24, 900], 'galaxie-ultra': [.55, 30, 1000], 'tiefsee-ultra': [.45, 30, 900], 'retro-ultra': [.55, 40, 1000], 'loch-ultra': [.55, 30, 1000], 'sterne-ultra': [.65, 30, 1200],
   'regenfenster-ultra': [.45, 30, 900], 'abendrot-ultra': [.45, 30, 900], 'powerup-ultra': [.5, 30],
-  'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'hanami-ultra': [.75, 40], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
+  'glut-ultra': [.75, 40], 'bluete-ultra': [.75, 40], 'hanami-ultra': [.75, 40], 'sakura-glas': [.6, 30], 'matrix-ultra': [1, 30], 'gewitter-ultra': [.75, 40], 'lampion-ultra': [.75, 30], 'gluehwuermchen-ultra': [.75, 30],
   'ninja-ultra': [.75, 30], 'manga-ultra': [.85, 30], 'onsen-ultra': [.7, 30], 'winter-ultra': [.75, 30], 'drift-ultra': [.75, 45]
 };
 let fxOpt = [1, 60];
@@ -2946,7 +2985,7 @@ const blossomFx = cv => canvasFx(cv, S => {
   } };
 });
 /* Hanami (Blüten-Skin): Mondnacht am Teich – Torii, zwei Blütenäste, 3D-Blütenblätter, die auf dem Wasser landen */
-const hanamiFx = cv => canvasFx(cv, S => {
+const hanamiFx = (cv, dens = 1) => canvasFx(cv, S => {
   const mk = (w, h) => { const s = document.createElement('canvas'); s.width = Math.max(1, w); s.height = Math.max(1, h); return s; };
   const seeded = s => (a, b) => { s = (s * 16807) % 2147483647; return a + (s / 2147483647) * (b - a); };
   const petal = (blur, c0, c1, c2) => { const s = mk(64, 64), x = s.getContext('2d'); if (blur) x.filter = `blur(${blur}px)`;
@@ -3001,7 +3040,7 @@ const hanamiFx = cv => canvasFx(cv, S => {
   const init = () => {
     const d = S.d; scene();
     const len = S.W > S.H ? Math.max(110 * d, S.H * .24) : S.W * .2; brL = branch(7, len, 15 * d); brR = branch(23, len * .72, 11 * d);
-    const n = Math.round(Math.min(380, S.W * S.H / (3000 * d * d)));
+    const n = Math.round(Math.min(380, S.W * S.H / (3000 * d * d)) * dens);
     P = Array.from({ length: n }, (_, i) => { const z = i < n * .03 ? rnd(1.9, 2.6) : rnd(.3, 1.5), land = hy + Math.pow((z - .3) / 1.2, 1.3) * (S.H - hy) * 1.25;
       return { x: rnd(0, S.W), y: rnd(-.1, 1) * Math.min(land, S.H), z, land, k: Math.random() < .5 ? 0 : 1, rot: rnd(0, 6.28), rv: rnd(-.04, .04), fl: rnd(0, 6.28), fv: rnd(.03, .09), vx: 0, sw: rnd(0, 100) }; }).sort((a, b) => a.z - b.z);
     split = P.findIndex(p => p.z >= .62); if (split < 0) split = P.length;
@@ -3442,7 +3481,7 @@ const driftFx = cv => canvasFx(cv, S => {
   } };
 });
 const ULTRA = { 'aurora-ultra': ['aurora', cv => glFx(cv, SH_AURORA)], 'galaxie-ultra': ['galaxie', cv => glFx(cv, SH_GALAXY)], 'glut-ultra': ['glut', cv => glutFx(cv)],
-  'bluete-ultra': ['bluete', blossomFx], 'hanami-ultra': ['bluete', hanamiFx], 'tiefsee-ultra': ['wellen', cv => glFx(cv, SH_DEEP)], 'retro-ultra': ['synthwave', cv => glFx(cv, SH_RETRO)], 'loch-ultra': ['galaxie', cv => glFx(cv, SH_HOLE)],
+  'bluete-ultra': ['bluete', blossomFx], 'hanami-ultra': ['bluete', hanamiFx], 'sakura-glas': ['bluete', cv => hanamiFx(cv, .45)], 'tiefsee-ultra': ['wellen', cv => glFx(cv, SH_DEEP)], 'retro-ultra': ['synthwave', cv => glFx(cv, SH_RETRO)], 'loch-ultra': ['galaxie', cv => glFx(cv, SH_HOLE)],
   'matrix-ultra': ['terminal', matrixFx], 'gewitter-ultra': ['regen', stormFx], 'powerup-ultra': ['shonen', cv => glFx(cv, SH_POWER)], 'lampion-ultra': ['yokai', lanternFx],
   'gluehwuermchen-ultra': ['gluehwuermchen', fireflyFx], 'ninja-ultra': ['ninja', ninjaUltraFx], 'sterne-ultra': ['galaxie', cv => glFx(cv, SH_STARS)], 'manga-ultra': ['manga', mangaFx],
   'onsen-ultra': ['schnee', onsenFx], 'regenfenster-ultra': ['regen', cv => glFx(cv, SH_RAINWIN)], 'abendrot-ultra': ['feuer', cv => glFx(cv, SH_SUNSET)], 'winter-ultra': ['schnee', winterFx], 'drift-ultra': ['cybertokyo', driftFx] };
@@ -3467,6 +3506,7 @@ const applyTheme = t => {
     const size = cfg.size === 0 ? '' : cfg.rain ? ';width:1.5px;height:9vh' : `;width:${(6 * sc).toFixed(1)}px;height:${(6 * sc).toFixed(1)}px`;
     return `<i class="${cfg.c}" style="--s:${sc.toFixed(2)};left:${left}vw;${top}animation-duration:${dur}s${cfg.pulse ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${size}"></i>`;
   }).join('') : '';
+  if (t === 'sakura-glas' && !$('glasFont')) { const l = document.createElement('link'); l.id = 'glasFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'hanami-ultra' && !$('hanamiFont')) { const l = document.createElement('link'); l.id = 'hanamiFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@800&display=swap'; document.head.appendChild(l); }
   startUltra(t);
   document.documentElement.classList.toggle('fxon', !!fx && getComputedStyle(fx).display !== 'none');
