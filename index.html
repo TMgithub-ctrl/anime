@@ -549,6 +549,31 @@ header{padding-top:34px}
 [data-theme=retro-ultra] h1{background:linear-gradient(90deg,#ffd23f,#ff4fd8 55%,#7a5cff);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 14px rgba(255,79,216,.6))}
 [data-theme=loch-ultra]{--bg:#010103;--panel:rgba(18,12,10,.88);--line:#3a2a1a;--text:#fff4e6;--muted:#b8a48c;--accent:#ffb454;--g1:#010103;--g2:#010103}
 [data-theme=loch-ultra] h1{background:linear-gradient(90deg,#fff,#ffd59a 45%,#ff8a3d);-webkit-background-clip:text;background-clip:text;filter:drop-shadow(0 0 14px rgba(255,160,60,.5))}
+:is([data-theme=loch-ultra]){--bk:linear-gradient(120deg,#fff1d6,#ffc46b 40%,#ff7a2f);--bi:#2a0f00;--bsheen:linear-gradient(165deg,rgba(255,190,110,.07),rgba(255,190,110,0) 40%);--bf:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%23fff4d6'/%3E%3Cstop offset='.45' stop-color='%23ffb454'/%3E%3Cstop offset='1' stop-color='%23ff5a1f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg transform='rotate%28-12 12 12%29'%3E%3Cellipse cx='12' cy='12' rx='11.2' ry='3.1' fill='none' stroke='url%28%23g%29' stroke-width='1.7'/%3E%3Cpath d='M5.9 10.6A6.3 6.3 0 0 1 18.1 10.6' fill='none' stroke='%23ffd59a' stroke-width='1.3' opacity='.95'/%3E%3Ccircle cx='12' cy='12' r='5.4' fill='%23050302' stroke='%23ffe2b0' stroke-width='.7'/%3E%3Cpath d='M.8 12a11.2 3.1 0 0 0 22.4 0' fill='none' stroke='url%28%23g%29' stroke-width='1.9'/%3E%3C/g%3E%3C/svg%3E");scrollbar-color:#9a4a16 #0a0605}
+[data-theme=loch-ultra] ::selection{background:#ffb454;color:#2a0f00}
+[data-theme=loch-ultra] :is(h1,.hero h2){font-family:"Exo 2","Outfit",system-ui,sans-serif;font-weight:700;letter-spacing:.02em}
+[data-theme=loch-ultra] h3{font-family:"Exo 2","Outfit",system-ui,sans-serif;font-weight:600;font-size:.95rem;text-transform:uppercase;letter-spacing:.16em;color:#ffdcae;text-shadow:0 1px 10px rgba(0,0,0,.9)}
+[data-theme=loch-ultra] :is(.flag,.tpop h4,.ctl .lab){font-family:"Exo 2","Outfit",system-ui,sans-serif;letter-spacing:.06em}
+[data-theme=loch-ultra] main h3::before{content:"";display:inline-block;width:1.25em;height:1.25em;margin-right:.45em;vertical-align:-.28em;background:var(--bf) center/contain no-repeat;filter:drop-shadow(0 0 5px rgba(255,150,60,.7))}
+[data-theme=loch-ultra] header{background:var(--bsheen),color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid rgba(255,180,84,.18);border-radius:22px;padding:34px 18px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+@media (min-width:1200px){[data-theme=loch-ultra] header{padding-top:18px}}
+[data-theme=loch-ultra] .hint{text-shadow:0 1px 8px rgba(0,0,0,.95)}
+[data-theme=loch-ultra] :is(.panel,.row,.erow,.cats,.admbox){background:var(--bsheen),var(--panel);border:1px solid rgba(255,180,84,.14);box-shadow:inset 0 1px 0 rgba(255,230,190,.06),0 10px 26px rgba(0,0,0,.45)}
+[data-theme=loch-ultra] .hero{border-color:rgba(255,180,84,.28);box-shadow:0 0 44px rgba(255,120,40,.1)}
+[data-theme=loch-ultra] :is(.tab,.bar button,.panel button,.sbtn,.wact button,.dback button,.step button,.lnk,.who button,.side button){background:rgba(26,16,12,.9);border-color:rgba(255,180,84,.2)}
+[data-theme=loch-ultra] .search input{background:rgba(20,12,9,.92);border-color:rgba(255,180,84,.24)}
+[data-theme=loch-ultra] .side{background:linear-gradient(180deg,#24140c,#080403)}
+[data-theme=loch-ultra] .tpop>div{background:#1a0f0a}
+[data-theme=loch-ultra] :is(.tab,.bar button,.panel button,.wact button,.dback button,.step button,.lnk,.who button):hover{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,180,84,.14)}
+[data-theme=loch-ultra] :is(.tab.on,.bar .pri,.panel .go,.bar .seg button.on,.flag,.seas button.on,.ctl .seg button.on,.cats button.on,.wact .pri,.hero .seg button.on,.side button.on,.acc .on,.asec .pri,.admbox .pri,.who button.on,.mylnk:hover,.erow .eplnk:hover){background:var(--bk);color:var(--bi);border-color:transparent;font-weight:600;box-shadow:0 4px 18px rgba(255,130,40,.32),inset 0 1px 0 rgba(255,255,255,.6)}
+[data-theme=loch-ultra] :is(.tab.on i,.side button.on small){color:var(--bi)}
+[data-theme=loch-ultra] :is(.cats button.on,.who button.on,.tab.on)::before{content:"";display:inline-block;width:1.15em;height:1.15em;margin-right:.35em;vertical-align:-.25em;background:var(--bf) center/contain no-repeat;filter:saturate(1.4) brightness(.8)}
+[data-theme=loch-ultra] .card{box-shadow:0 10px 28px rgba(0,0,0,.55),0 0 0 1px rgba(255,180,84,.16)}
+[data-theme=loch-ultra] .card:hover{box-shadow:0 16px 36px rgba(0,0,0,.6),0 0 0 1px rgba(255,180,84,.55),0 0 30px rgba(255,110,30,.32)}
+[data-theme=loch-ultra] input[type=range]{background:linear-gradient(90deg,rgba(255,240,210,.7),rgba(255,140,50,.55),rgba(255,255,255,.1))}
+[data-theme=loch-ultra] input[type=range]::-webkit-slider-thumb{width:34px;height:34px;border:0;border-radius:0;background:var(--bf) center/contain no-repeat;filter:drop-shadow(0 0 6px rgba(255,140,50,.9))}
+[data-theme=loch-ultra] input[type=range]::-moz-range-thumb{width:32px;height:32px;border:0;border-radius:0;background:var(--bf) center/contain no-repeat}
+@media (max-width:620px){[data-theme=loch-ultra] input[type=range]::-webkit-slider-thumb{width:40px;height:40px}}
 [data-theme=matrix-ultra]{--bg:#010702;--panel:rgba(4,20,9,.9);--line:#0f3d1b;--text:#b7ffca;--muted:#4fae6a;--accent:#33ff66;--g1:#010702;--g2:#010702}
 [data-theme=matrix-ultra] body{font-family:ui-monospace,"Cascadia Mono","Consolas","Menlo",monospace}
 [data-theme=matrix-ultra] h1{background:none;color:#33ff66;text-shadow:0 0 12px rgba(51,255,102,.7)}
@@ -698,7 +723,7 @@ let db = load();
 db.gsUrl = db.gsUrl || '';
 db.cat = ['list', 'watch', 'done'].includes(db.cat) ? db.cat : 'list';
 db.mode = db.mode === 'osu' || db.mode === 'steam' ? db.mode : 'anime';
-const APP_VERSION = '2026-11-10 01:20 · Aurora: neue Schrift (Josefin Sans) und Stern an der aktiven Liste';
+const APP_VERSION = '2026-11-10 01:50 · Schwarzes Loch: detaillierter Shader (Linsenbogen, Photonenring, Doppler) und eigener Skin';
 const REG_DEFAULT = 'gs:AKfycbxhn8LNNTUcHqQhfWnNR5eR_maTkdjGArZQDm9zB3_ZNUhUmVPPIpDbOow8Il-eVndn~nfgwy1h8xzxrazz2h8xz';
 db.reg = typeof db.reg === 'string' && db.reg ? db.reg : REG_DEFAULT;
 if (!db.gsUrl && /^gs:[A-Za-z0-9_-]+~/.test(db.reg)) db.gsUrl = 'https://script.google.com/macros/s/' + db.reg.slice(3).split('~')[0] + '/exec';
@@ -2835,27 +2860,55 @@ void main(){
   gl_FragColor=vec4(col,1.);
 }`;
 const SH_HOLE = GLSL_HEAD + `
-float st2(vec2 p,float d){vec2 g=floor(p*d);vec2 f=fract(p*d)-.5;float s=h(g);return (1.-smoothstep(0.,.08,length(f-(vec2(h(g+1.3),h(g+5.1))-.5)*.6)))*step(.92,s);}
+float st(vec2 p,float d,float th){vec2 g=floor(p*d);vec2 f=fract(p*d)-.5;vec2 o=(vec2(h(g+1.3),h(g+5.1))-.5)*.6;return (1.-smoothstep(0.,.08,length(f-o)))*step(th,h(g))*(.4+.6*h(g+9.7));}
+float fb4(vec2 p){float s=0.,a=.5;for(int i=0;i<4;i++){s+=a*n(p);p=p*2.07+vec2(3.1,1.7);a*=.5;}return s;}
+vec3 temp(float x){return mix(mix(vec3(1.,.95,.86),vec3(1.,.6,.22),smoothstep(0.,.28,x)),vec3(.55,.1,.02),smoothstep(.28,1.,x));}
+vec2 tex(float dr,float ph){vec2 c=vec2(cos(ph),sin(ph));return vec2(fb4(vec2(dr*30.,dr*2.)+c*2.6),n(vec2(dr*5.,0.)+c*1.4));}
+vec2 flow(float dr,float da,float w){float P=24.,a=fract(t/P),b=fract(t/P+.5),wa=1.-abs(2.*a-1.);float base=da+t*.04;
+  return mix(tex(dr,base+w*a*P*.3),tex(dr,base+w*b*P*.3),1.-wa);}
+float shade(vec2 f,float x){return (.18+.55*f.y+1.1*f.x*f.x)*(1.5*exp(-x*1.6)+.25);}
 void main(){
-  vec2 p=(gl_FragCoord.xy-.5*r)/r.y; p=rot(.12)*p;
-  float rs=.12; float d=length(p);
-  vec2 q=p+normalize(p+1e-5)*(rs*rs*1.6/max(d,.02));
-  vec3 col=vec3(.004,.003,.008);
-  col+=vec3(.9,.92,1.)*st2(q+vec2(t*.002,0.),70.)*.8+vec3(1.,.9,.8)*st2(q*1.3,28.)*.9;
-  col+=vec3(.16,.05,.22)*pow(fbm(q*2.+3.),3.)*.9;
-  vec2 dp=vec2(p.x,p.y/.23); float dr=length(dp); float da=atan(dp.y,dp.x);
-  float sw=fbm(vec2(dr*7.-t*.7,da*3.+t*.9-dr*5.));
-  float ring=smoothstep(rs*1.5,rs*2.1,dr)*(1.-smoothstep(.5,.85,dr));
-  float dop=1.+.75*(-cos(da));
-  vec3 dc=mix(vec3(1.,.96,.88),vec3(1.,.42,.08),smoothstep(rs*2.,.6,dr))*ring*(.3+1.1*sw)*dop*.85;
-  float ha=atan(p.y,p.x);
-  vec3 halo=vec3(1.,.62,.25)*exp(-abs(d-rs*1.55)*30.)*(.45+.9*fbm(vec2(ha*3.+t*.6,d*9.)))*(.6+.4*smoothstep(-.1,.1,p.y));
-  float sh=1.-smoothstep(rs*.96,rs*1.02,d);
-  col+=halo; col+=dc*step(0.,dp.y);
+  vec2 uv=(gl_FragCoord.xy-.5*r)/r.y;
+  float por=smoothstep(.95,.62,r.x/r.y);
+  vec2 p=rot(.13+.02*sin(t*.03))*(uv-vec2(0.,.03-.17*por))*(1.+.025*sin(t*.045))*(1.+.25*por);
+  float Rs=.105,d=length(p),ang=atan(p.y,p.x),tE=Rs*1.7;
+  float sh=1.-smoothstep(Rs*.985,Rs*1.004,d);
+  vec2 q=p*(1.-tE*tE/max(d*d,1e-4))+vec2(t*.0015,0.);
+  float mag=clamp(1./abs(1.-pow(tE/max(d,1e-3),4.)),1.,4.);
+  vec2 bb=rot(-.55)*q; float band=exp(-bb.y*bb.y*7.);
+  float neb=fb4(q*1.25+11.);
+  vec3 col=vec3(.003,.002,.007);
+  col+=mix(vec3(.12,.03,.2),vec3(.03,.09,.2),n(q*.8+3.))*pow(neb,2.6)*1.1;
+  col+=vec3(.42,.33,.45)*band*pow(fb4(bb*1.6+2.),2.2)*.55*(1.-.75*smoothstep(.5,.72,neb));
+  col+=(vec3(.9,.94,1.)*st(q,95.,.9)*.75+vec3(1.,.86,.7)*st(q*1.1+3.,36.,.94)*1.2+vec3(.95)*band*st(q+7.,170.,.82)*.45)*mag;
   col*=1.-sh;
-  col+=dc*step(dp.y,0.)*(1.-.0*sh);
-  col+=vec3(1.,.86,.62)*exp(-abs(d-rs*1.04)*110.)*.9;
-  col=1.-exp(-col*1.5);
+  float inc=.075; vec2 dp=vec2(p.x,p.y/inc); float dr=length(dp),da=atan(dp.y,dp.x);
+  float rin=Rs*1.22,rout=.85,x=clamp((dr-rin)/(rout-rin),0.,1.);
+  float dens=smoothstep(rin,rin*1.1,dr)*(1.-smoothstep(rout*.4,rout,dr))*mix(1.,1.-smoothstep(rin*1.6,rin*3.2,dr)*.75,sh);
+  float dop=pow(max(1.-.6*cos(da),.05),1.4);
+  vec3 dcol=mix(temp(x),vec3(.86,.92,1.),.3*smoothstep(0.,1.,-cos(da))*(1.-x));
+  vec3 disk=vec3(0.);
+  if(dens>.001){vec2 tx=flow(dr,da,.9/pow(max(dr,rin)/rin,1.5));disk=dcol*dens*shade(tx,x)*dop;}
+  col+=disk*step(0.,dp.y)*(1.-sh);
+  float sa=abs(sin(ang)),top=step(0.,p.y);
+  float th=Rs*mix(.18,.46,top)*pow(sa,.7);
+  float ad=d-Rs*1.03;
+  float am=smoothstep(0.,Rs*.02,ad)*(1.-smoothstep(th*.7,th,ad));
+  float ar=rin+ad*2.6,ax=clamp((ar-rin)/(rout-rin),0.,1.);
+  float adop=pow(max(1.-.6*cos(ang),.05),1.4);
+  if(am>.001){vec2 atx=flow(ar,ang,.9/pow(max(ar,rin)/rin,1.5));col+=temp(ax+.08)*am*shade(atx,ax+.08)*adop*mix(.32,.6,top)*(1.-sh);}
+  col+=vec3(1.,.88,.7)*(exp(-abs(d-Rs*1.006)*320.)*1.1+exp(-abs(d-Rs*1.022)*110.)*.3)*(.5+.5*adop);
+  col+=vec3(1.,.52,.18)*exp(-max(d-Rs,0.)*12.)*.2*(1.-sh);
+  for(int k=0;k<4;k++){float fk=float(k),rk=rin*(1.35+fk*.55),wk=.9/pow(rk/rin,1.5),ak=t*wk*.3+fk*2.3;
+    vec2 hp=vec2(cos(ak),sin(ak))*rk;float hd=length(dp-hp);float hdop=pow(max(1.-.6*cos(ak),.05),1.4);
+    float vis=mix(1.-sh,1.,step(hp.y,0.));
+    col+=temp(clamp((rk-rin)/(rout-rin),0.,1.))*exp(-hd*hd/(rk*rk*.012))*.55*hdop*vis;}
+  col+=disk*step(dp.y,0.);
+  col+=vec3(1.,.5,.18)*(exp(-abs(p.y)*12.)*.16+exp(-abs(p.y)*5.)*.06)*(1.-smoothstep(.1,1.,abs(p.x)))*(1.25-.5*smoothstep(-.5,.5,p.x))*(1.-.92*sh);
+  col+=vec3(.8,.88,1.)*exp(-abs(p.y)*300.)*exp(-abs(p.x)*3.)*.18*(1.-sh);
+  col=1.-exp(-col*1.4);
+  col*=1.-.28*smoothstep(.45,1.2,length(uv));
+  col+=(h(gl_FragCoord.xy+fract(t))-.5)/255.;
   gl_FragColor=vec4(col,1.);
 }`;
 const SH_POWER = GLSL_HEAD + `
@@ -3549,6 +3602,7 @@ const applyTheme = t => {
     return `<i class="${cfg.c}" style="--s:${sc.toFixed(2)};left:${left}vw;${top}animation-duration:${dur}s${cfg.pulse ? `,${2 + (i % 4) * 0.6}s` : ''};animation-delay:-${del}s${size}"></i>`;
   }).join('') : '';
   if ((t === 'aurora' || t === 'aurora-ultra') && !$('auroraFont')) { const l = document.createElement('link'); l.id = 'auroraFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@600;700&display=swap'; document.head.appendChild(l); }
+  if (t === 'loch-ultra' && !$('lochFont')) { const l = document.createElement('link'); l.id = 'lochFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'sakura-glas' && !$('glasFont')) { const l = document.createElement('link'); l.id = 'glasFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap'; document.head.appendChild(l); }
   if (t === 'hanami-ultra' && !$('hanamiFont')) { const l = document.createElement('link'); l.id = 'hanamiFont'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@800&display=swap'; document.head.appendChild(l); }
   let ff = $('fxf'); if (t === 'sakura-glas') { if (!ff) { ff = document.createElement('div'); ff.id = 'fxf'; ff.setAttribute('aria-hidden', 'true'); ff.innerHTML = Array.from({ length: 10 }, (_, i) => `<i style="--s:${(.7 + (i * 7 % 6) * .14).toFixed(2)};left:${(i * 41 + 5) % 100}vw;animation-duration:${(11 + (i * 5) % 9).toFixed(1)}s;animation-delay:-${(i * 2.3) % 19}s"></i>`).join(''); document.body.appendChild(ff); } } else if (ff) ff.remove();
