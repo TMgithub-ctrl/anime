@@ -1697,6 +1697,7 @@ const fmtH = n => n ? String(round(n, 2)).replace('.', ',') : '';
 const anWeek = n => weekOf(n.week || todayISO());
 const anDayDates = n => { const w = anWeek(n); const d0 = new Date(w.from + 'T12:00:00'); return DAYS.map((_, i) => { const d = new Date(d0); d.setDate(d0.getDate() + i); return isoOf(d.getTime()); }); };
 const rowHours = r => DAYS.reduce((a, _, i) => a + numDe(r.h?.[i]), 0);
+const anHours = n => (n.rows || []).reduce((a, r) => a + rowHours(r), 0);
 function rolePos(role) {
   const re = { ober: /obermonteur/i, mont: /^\s*monteur/i, helf: /helfer/i }[role]; if (!re) return null;
   return S.p.positions.find(x => re.test(x.text) && /^h$/i.test(x.unit)) || null;
@@ -3281,12 +3282,16 @@ async function buildWeekPack(wk, opt) {
   }
   // gleiche Dateinamen vermeiden
   const seen = new Map(); for (const f of files) { const n = seen.get(f.name) || 0; seen.set(f.name, n + 1); if (n) f.name = f.name.replace(/(\.\w+)$/, `_${n + 1}$1`); }
-  return { w, files, notes, mark: async via => { for (const m of marks) await m(via); } };
+  return { w, c, files, notes, mark: async via => { for (const m of marks) await m(via); } };
 }
-function packMailText(w, files) {
+function packMailText(w, files, c) {
   const zr = `${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`;
   const counts = {}; for (const f of files) { const k = f.kind.replace(/ \(.*\)$/, ''); counts[k] = (counts[k] || 0) + 1; }
-  const list = Object.entries(counts).map(([k, n]) => `- ${n > 1 ? n + ' × ' : ''}${k}`).join('\n');
+  let list = Object.entries(counts).map(([k, n]) => `- ${n > 1 ? n + ' × ' : ''}${k}`).join('\n');
+  const an = files.some(f => f.kind === 'Arbeitsnachweis') ? (c?.an || []) : [];
+  if (an.length) { const tot = an.reduce((a, n) => a + anHours(n), 0);
+    list += `\n\nArbeitsnachweise (${fmtH(tot)} Std):\n` + an.map(n => { const rs = (n.rows || []).filter(r => rowHours(r));
+      return `- ${anShort(n) || 'ohne Beschreibung'}: ${fmtH(anHours(n))} Std${rs.length ? ' (' + rs.map(r => (r.name || '?') + ' ' + fmtH(rowHours(r))).join(', ') + ')' : ''}`; }).join('\n'); }
   return { subject: `Unterlagen KW ${w.week}/${w.year} (${zr}) – ${S.p.name}`,
     body: `Hallo,\n\nanbei die Unterlagen der KW ${w.week} (${zr}) für ${S.p.name}:\n${list}\n\nViele Grüße` };
 }
@@ -3326,8 +3331,8 @@ function wireWeekPack() {
     const sentAll = arr => arr.length && arr.every(x => x.sent?.length);
     $('#wpList').innerHTML =
       row('auf', c.cur ? 'Aufmaß (Zwischenstand)' : 'Aufmaß', c.entries.length, c.entries.length ? `${c.entries.length} Einträge · ${fmtMin(sumMinutes(c.entries))}` : 'keine Einträge') +
-      row('an', 'Arbeitsnachweise', c.an.length, c.an.length ? `${c.an.length}${sentAll(c.an) ? ' · versendet ✓' : ''}` : 'keine') +
-      row('bt', 'Bautagesberichte', c.bt.length, c.bt.length ? `${c.bt.length} ${c.bt.length === 1 ? 'Tag' : 'Tage'}${sentAll(c.bt) ? ' · versendet ✓' : ''}` : 'keine') +
+      row('an', 'Arbeitsnachweise', c.an.length, c.an.length ? `${c.an.length} · ${fmtH(c.an.reduce((a, n) => a + anHours(n), 0)) || 0} Std${sentAll(c.an) ? ' · versendet ✓' : ''}` : 'keine') +
+      row('bt', 'Bautagesberichte', c.bt.length, c.bt.length ? `${c.bt.length} ${c.bt.length === 1 ? 'Tag' : 'Tage'}${c.bt.reduce((a, b) => a + berichtHours(b), 0) ? ' · ' + fmtH(c.bt.reduce((a, b) => a + berichtHours(b), 0)) + ' Std' : ''}${sentAll(c.bt) ? ' · versendet ✓' : ''}` : 'keine') +
       row('be', 'Bestellscheine', c.be.length, c.be.length ? String(c.be.length) : 'keine');
     $('#wpList').querySelectorAll('[data-po]').forEach(i => i.onchange = () => { opt[i.dataset.po] = i.checked; });
     $('#wpOut').innerHTML = '';
@@ -3342,7 +3347,7 @@ function wireWeekPack() {
   };
   const done = (r, via, extra = '') => { const out = $('#wpOut').innerHTML; paint(); busy(false, `<p class="hint ok">${esc(via)} ✓ – ${r.files.length} ${r.files.length === 1 ? 'Datei' : 'Dateien'}:<br>${r.files.map(f => '· ' + esc(f.name)).join('<br>')}${r.notes.length ? '<br><span class="neg">' + r.notes.map(esc).join('<br>') + '</span>' : ''}${extra}</p>`); };
   $('#wpMail').onclick = async () => {
-    const r = await build(); if (!r) return; const t = packMailText(r.w, r.files);
+    const r = await build(); if (!r) return; const t = packMailText(r.w, r.files, r.c);
     if (Sync.mailOk) {
       const to = S.p.mail?.to; if (!to) { busy(false, '<p class="hint warn">Bitte unten bei „E-Mail ans Büro“ eine Adresse eintragen.</p>'); return; }
       if (!confirm(`${r.files.length} Dateien in einer E-Mail an ${to} senden?\n\n${r.files.map(f => f.name).join('\n')}`)) { busy(false, ''); return; }
@@ -3356,7 +3361,7 @@ function wireWeekPack() {
     catch (e) { busy(false, `<p class="hint warn">${esc(e.message || e)}</p>`); }
   };
   $('#wpSave').onclick = async () => { const r = await build(); if (!r) return; const z = await packZip(r.w, r.files); downloadFile(z.buf, z.name); done(r, 'Gespeichert als ' + z.name); };
-  $('#wpShare').onclick = async () => { const r = await build(); if (!r) return; const t = packMailText(r.w, r.files);
+  $('#wpShare').onclick = async () => { const r = await build(); if (!r) return; const t = packMailText(r.w, r.files, r.c);
     try { const ok = await shareFiles(r.files, t.subject, t.body); if (ok === null) { for (const f of r.files) downloadFile(f.buf, f.name); done(r, 'Einzeln heruntergeladen'); } else if (ok) done(r, 'Geteilt'); else busy(false, ''); }
     catch (e) { busy(false, `<p class="hint warn">${esc(e.message || e)}</p>`); } };
 }
