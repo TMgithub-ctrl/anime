@@ -3227,6 +3227,140 @@ function wireHelferCard() {
   $('#hFile').onchange = async () => { const f = $('#hFile').files[0]; $('#hFile').value = ''; if (!f) return;
     try { openHelferImport(await readHelferFile(f)); } catch (e) { console.error(e); toast('Konnte die Datei nicht lesen: ' + esc(e.message || e), 5000); } };
 }
+/* =====================================================================
+   Wochenpaket: Aufmaß + Arbeitsnachweise + Bautagesberichte (+ Bestellscheine)
+   einer gewählten Woche – in einer E-Mail ans Büro oder auf einmal speichern.
+   ===================================================================== */
+function packWeeks() {
+  const cw = curWeek().key; const ks = new Set([cw]);
+  for (const e of S.entries) ks.add(weekOf(e.date).key);
+  for (const n of (S.nachweise || [])) ks.add(anWeek(n).key);
+  for (const b of (S.berichte || [])) ks.add(weekOf(b.datum).key);
+  for (const b of (S.bestellungen || [])) ks.add(weekOf(b.datum).key);
+  return [...ks].filter(k => k <= cw).sort().reverse();
+}
+function packContents(wk) {
+  return { cur: wk === curWeek().key, entries: weekEntries(wk),
+    an: (S.nachweise || []).filter(n => anWeek(n).key === wk).sort((a, b) => a.created - b.created),
+    bt: (S.berichte || []).filter(b => weekOf(b.datum).key === wk).sort((a, b) => (a.datum || '').localeCompare(b.datum || '')),
+    be: (S.bestellungen || []).filter(b => weekOf(b.datum).key === wk).sort((a, b) => (a.datum || '').localeCompare(b.datum || '')) };
+}
+/** alle Dateien der Woche frisch erzeugen */
+async function buildWeekPack(wk, opt) {
+  const p = S.p; const w = weekByKey(wk); const c = packContents(wk); const files = [], notes = [], marks = [];
+  if (opt.auf && c.entries.length) {
+    if (c.cur) { const sm = sigMeta(p, wk, Date.now()); const res = await buildXlsm(p, c.entries, { sigs: await renderSigs(sm) });
+      files.push({ buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, w).replace('.xlsm', '_Zwischenstand.xlsm'), kind: 'Aufmaß (Zwischenstand)' }); }
+    else { for (let i = 0; Aufmass.busy && i < 150; i++) await new Promise(r => setTimeout(r, 200));
+      await Aufmass.check(); const rec = await DB.get('aufmasse', p.id + '|' + wk);
+      if (rec) { files.push({ buf: rec.file, name: rec.fileName, kind: 'Aufmaß' }); marks.push(via => markSent(rec, via)); }
+      else { const res = await buildXlsm(p, c.entries, { sigs: await renderSigs(sigMeta(p, wk, Date.now())) }); files.push({ buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, w), kind: 'Aufmaß' }); } }
+  }
+  if (opt.an && c.an.length) {
+    const tpl = await getVorlage('an'); const firma = await getFirma();
+    for (const n of c.an) {
+      const buf = tpl ? await buildNachweisDocx(n, tpl.buf) : await buildNachweisPdf(n, firma);
+      files.push({ buf, name: anFileBase(n) + (tpl ? '.docx' : '.pdf'), kind: 'Arbeitsnachweis' });
+      marks.push(async via => { const x = S.nachweise.find(y => y.id === n.id); if (x) { x.sent = [...(x.sent || []), { at: Date.now(), via }]; await saveNachweis(x); } });
+    }
+    if (!tpl) notes.push('Arbeitsnachweise als PDF (keine Word-Vorlage hochgeladen)');
+  }
+  if (opt.bt && c.bt.length) {
+    const tpl = await getVorlage('btb');
+    if (tpl) { const r = await buildBerichtXlsx(c.bt, tpl.buf); files.push({ buf: r.buf, name: berichtFileName(c.bt), kind: `Bautagesberichte (${r.sheets.length} ${r.sheets.length === 1 ? 'Blatt' : 'Blätter'})` });
+      marks.push(async via => { for (const b of c.bt) { const x = S.berichte.find(y => y.id === b.id); if (x) { x.sent = [...(x.sent || []), { at: Date.now(), via }]; await saveBericht(x); } } }); }
+    else notes.push('Bautagesberichte fehlen: erst die Excel-Vorlage hochladen');
+  }
+  if (opt.be && c.be.length) {
+    const tpl = await getVorlage('be'); const firma = await getFirma(); const used = new Set();
+    for (const b of c.be) {
+      const buf = tpl ? await buildBestellDocx(b, tpl.buf) : await buildBestellPdf(b, firma);
+      let name = `Bestellschein_${safeName(b.bauvorhaben || p.name)}_${b.datum}`, k = 2; while (used.has(name)) name = `Bestellschein_${safeName(b.bauvorhaben || p.name)}_${b.datum}_${k++}`; used.add(name);
+      files.push({ buf, name: name + (tpl ? '.docx' : '.pdf'), kind: 'Bestellschein' });
+    }
+  }
+  // gleiche Dateinamen vermeiden
+  const seen = new Map(); for (const f of files) { const n = seen.get(f.name) || 0; seen.set(f.name, n + 1); if (n) f.name = f.name.replace(/(\.\w+)$/, `_${n + 1}$1`); }
+  return { w, files, notes, mark: async via => { for (const m of marks) await m(via); } };
+}
+function packMailText(w, files) {
+  const zr = `${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}`;
+  const counts = {}; for (const f of files) { const k = f.kind.replace(/ \(.*\)$/, ''); counts[k] = (counts[k] || 0) + 1; }
+  const list = Object.entries(counts).map(([k, n]) => `- ${n > 1 ? n + ' × ' : ''}${k}`).join('\n');
+  return { subject: `Unterlagen KW ${w.week}/${w.year} (${zr}) – ${S.p.name}`,
+    body: `Hallo,\n\nanbei die Unterlagen der KW ${w.week} (${zr}) für ${S.p.name}:\n${list}\n\nViele Grüße` };
+}
+async function mailDirectMulti(files, subject, body) {
+  const to = (S.p.mail?.to || '').trim(); if (!to) throw new Error('Keine Empfänger-Adresse – unten bei „E-Mail ans Büro“ eintragen.');
+  const r = await fetch(Sync.api('/api/mail'), { method: 'POST', headers: Sync.hdr({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ to, cc: S.p.mail?.cc || '', subject, body, files: files.map(f => ({ filename: f.name, data: bufToB64(f.buf) })) }) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('Fehler ' + r.status)); return j;
+}
+async function shareFiles(files, subject, body) {
+  const fs = files.map(f => new File([f.buf], f.name, { type: typeOf(f.name) }));
+  if (navigator.canShare && navigator.canShare({ files: fs })) {
+    try { await navigator.share({ files: fs, title: subject, text: body }); return true; } catch (e) { if (e.name === 'AbortError') return false; throw e; }
+  }
+  return null;   // Teilen mit Dateien geht hier nicht
+}
+async function packZip(w, files) {
+  const zip = new JSZip(); for (const f of files) zip.file(f.name, f.buf);
+  return { buf: await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }), name: `Unterlagen_${safeName(S.p.name)}_KW${String(w.week).padStart(2, '0')}_${w.year}.zip` };
+}
+function weekPackCard() {
+  const ws = packWeeks(); const sel = S.packWeek && ws.includes(S.packWeek) ? S.packWeek : ws[0];
+  return `<div class="card" id="wpCard"><h2 style="margin-bottom:4px">Woche ans Büro</h2>
+    <div class="muted small" style="margin-bottom:10px">Aufmaß, Arbeitsnachweise und Bautagesberichte einer Woche zusammen verschicken oder speichern.</div>
+    <select class="i" id="wpW">${ws.map(k => { const w = weekByKey(k); return `<option value="${k}" ${k === sel ? 'selected' : ''}>KW ${w.week}/${w.year} · ${dm(w.from)}–${dm(w.to)}${k === curWeek().key ? ' (läuft)' : ''}</option>`; }).join('')}</select>
+    <div id="wpList" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:10px"><button class="btn primary grow" id="wpMail">✉ Alles per E-Mail ans Büro</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn grow" id="wpSave">💾 Speichern</button><button class="btn grow" id="wpShare">Teilen …</button></div>
+    <div id="wpOut"></div></div>`;
+}
+function wireWeekPack() {
+  if (!$('#wpW')) return;
+  const opt = S.packOpt ||= { auf: true, an: true, bt: true, be: false };
+  const paint = () => {
+    const wk = $('#wpW').value; S.packWeek = wk; const c = packContents(wk);
+    const row = (k, label, n, extra) => `<label class="row small" style="gap:10px;margin:7px 2px;${n ? '' : 'opacity:.5'}"><input type="checkbox" data-po="${k}" ${opt[k] && n ? 'checked' : ''} ${n ? '' : 'disabled'} style="width:22px;height:22px"><span class="grow">${label}</span><span class="muted">${extra}</span></label>`;
+    const sentAll = arr => arr.length && arr.every(x => x.sent?.length);
+    $('#wpList').innerHTML =
+      row('auf', c.cur ? 'Aufmaß (Zwischenstand)' : 'Aufmaß', c.entries.length, c.entries.length ? `${c.entries.length} Einträge · ${fmtMin(sumMinutes(c.entries))}` : 'keine Einträge') +
+      row('an', 'Arbeitsnachweise', c.an.length, c.an.length ? `${c.an.length}${sentAll(c.an) ? ' · versendet ✓' : ''}` : 'keine') +
+      row('bt', 'Bautagesberichte', c.bt.length, c.bt.length ? `${c.bt.length} ${c.bt.length === 1 ? 'Tag' : 'Tage'}${sentAll(c.bt) ? ' · versendet ✓' : ''}` : 'keine') +
+      row('be', 'Bestellscheine', c.be.length, c.be.length ? String(c.be.length) : 'keine');
+    $('#wpList').querySelectorAll('[data-po]').forEach(i => i.onchange = () => { opt[i.dataset.po] = i.checked; });
+    $('#wpOut').innerHTML = '';
+  };
+  paint(); $('#wpW').onchange = paint;
+  const busy = (on, txt) => { ['#wpMail', '#wpSave', '#wpShare'].forEach(s => $(s).disabled = on); if (txt != null) $('#wpOut').innerHTML = txt; };
+  const build = async () => {
+    busy(true, '<p class="hint">Erzeuge Dateien …</p>');
+    try { const r = await buildWeekPack($('#wpW').value, opt);
+      if (!r.files.length) { busy(false, '<p class="hint warn">Für diese Woche ist nichts ausgewählt bzw. vorhanden.</p>'); return null; }
+      return r; } catch (e) { console.error(e); busy(false, `<p class="hint warn">Fehler: ${esc(e.message || e)}</p>`); return null; }
+  };
+  const done = (r, via, extra = '') => { const out = $('#wpOut').innerHTML; paint(); busy(false, `<p class="hint ok">${esc(via)} ✓ – ${r.files.length} ${r.files.length === 1 ? 'Datei' : 'Dateien'}:<br>${r.files.map(f => '· ' + esc(f.name)).join('<br>')}${r.notes.length ? '<br><span class="neg">' + r.notes.map(esc).join('<br>') + '</span>' : ''}${extra}</p>`); };
+  $('#wpMail').onclick = async () => {
+    const r = await build(); if (!r) return; const t = packMailText(r.w, r.files);
+    if (Sync.mailOk) {
+      const to = S.p.mail?.to; if (!to) { busy(false, '<p class="hint warn">Bitte unten bei „E-Mail ans Büro“ eine Adresse eintragen.</p>'); return; }
+      if (!confirm(`${r.files.length} Dateien in einer E-Mail an ${to} senden?\n\n${r.files.map(f => f.name).join('\n')}`)) { busy(false, ''); return; }
+      try { await mailDirectMulti(r.files, t.subject, t.body); await r.mark('E-Mail an ' + to); done(r, 'Verschickt an ' + to); }
+      catch (e) { busy(false, `<p class="hint warn">Nicht verschickt: ${esc(e.message || e)}</p>`); }
+      return;
+    }
+    try { const ok = await shareFiles(r.files, t.subject, t.body);
+      if (ok === null) { const z = await packZip(r.w, r.files); downloadFile(z.buf, z.name); done(r, 'Teilen geht hier nicht – als Zip gespeichert', '<br>Die Zip an eine E-Mail anhängen.'); return; }
+      if (ok) { await r.mark('Teilen'); done(r, 'Teilen-Menü geöffnet', '<br><span class="muted">Dort „Mail“ wählen – alle Dateien hängen an einer E-Mail.</span>'); } else busy(false, ''); }
+    catch (e) { busy(false, `<p class="hint warn">${esc(e.message || e)}</p>`); }
+  };
+  $('#wpSave').onclick = async () => { const r = await build(); if (!r) return; const z = await packZip(r.w, r.files); downloadFile(z.buf, z.name); done(r, 'Gespeichert als ' + z.name); };
+  $('#wpShare').onclick = async () => { const r = await build(); if (!r) return; const t = packMailText(r.w, r.files);
+    try { const ok = await shareFiles(r.files, t.subject, t.body); if (ok === null) { for (const f of r.files) downloadFile(f.buf, f.name); done(r, 'Einzeln heruntergeladen'); } else if (ok) done(r, 'Geteilt'); else busy(false, ''); }
+    catch (e) { busy(false, `<p class="hint warn">${esc(e.message || e)}</p>`); } };
+}
+
 
 async function renderExport() {
   const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
@@ -3234,7 +3368,7 @@ async function renderExport() {
   if (S.tab !== 'export') return;
   const fmtTs = t => { const d = new Date(t); return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); };
   const mail = p.mail || {};
-  m.innerHTML = `
+  m.innerHTML = weekPackCard() + `
   <div class="card"><h2 style="margin-bottom:2px">Aufmaß ${esc(weekLabel(cw).split(' · ')[0])} <span class="pill">läuft</span></h2>
     <div class="muted small" style="margin-bottom:10px">${esc(weekLabel(cw).split(' · ')[1])} · wird am Montag, ${dm(weekOf(new Date(Date.parse(cw.to) + 86400000).toISOString().slice(0, 10)).from)} automatisch abgeschlossen</div>
     <div class="kv"><span>Einträge</span><span>${cur.length}</span><span>Positionen</span><span>${new Set(cur.map(e => e.pos)).size}</span><span><b>Bauzeit</b></span><span>${fmtMin(sumMinutes(cur))}</span>
@@ -3284,7 +3418,7 @@ async function renderExport() {
   const showCur = () => { $('#xOut').innerHTML = `<p class="hint ok">Fertig: ${esc(S.curExport.name)} · ${Math.round(S.curExport.buf.byteLength / 1024)} KB</p>` + sendButtons('cur');
     $('#xOut').querySelectorAll('[data-act]').forEach(b => b.onclick = () => onSend(b.dataset.act, async () => S.curExport, cw, 'zwischen', null)); };
   if (S.curExport && S.curExport.hash === weekHash(p, cur) + sigHash(sigMeta(p, cw.key, Date.now()))) showCur();
-  wireHelferCard();
+  wireHelferCard(); wireWeekPack();
   $('#xGo').onclick = async () => {
     $('#xGo').disabled = true; $('#xGo').textContent = 'Erzeuge …';
     try { const sm = sigMeta(p, cw.key, Date.now()); const res = await buildXlsm(p, cur, { sigs: await renderSigs(sm) }); S.curExport = { buf: await res.blob.arrayBuffer(), name: aufmassFileName(p, cw).replace('.xlsm', '_Zwischenstand.xlsm'), hash: weekHash(p, cur) + sigHash(sm) }; showCur(); }
@@ -3680,7 +3814,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { buildWeekPack, packWeeks, HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
