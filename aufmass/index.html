@@ -42,7 +42,7 @@ header .proj small{color:var(--muted);font-size:12.5px}
 .pill.sync.warn{color:var(--warn)} .pill.sync.warn::before{content:"☁ "}
 main{max-width:760px;margin:0 auto;padding:14px 16px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
-nav.tabs button{flex:1;background:none;border:0;padding:9px 2px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+nav.tabs button{position:relative;flex:1;background:none;border:0;padding:9px 2px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav.tabs button svg{width:24px;height:24px}
 nav.tabs button.on{color:var(--accent);font-weight:600}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
@@ -97,6 +97,7 @@ input.i:focus,textarea.i:focus,select.i:focus{border-color:var(--accent)}
 .nsb{border:0;background:none;color:var(--accent);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;padding:4px 6px}
 .nsx{border:0;background:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:4px 6px;white-space:nowrap}
 nav.tabs button{font-size:11px}
+.nbadge{position:absolute;top:3px;left:calc(50% + 6px);background:var(--accent);color:var(--accent-text);border-radius:999px;font-size:11px;font-weight:700;min-width:18px;height:18px;line-height:18px;padding:0 5px;text-align:center}
 .qchip{display:inline-block;margin:0 0 10px;padding:6px 11px;border-radius:9px;background:var(--cell-new);font-weight:600;font-size:14px}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:none}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--panel);border-radius:18px 18px 0 0;max-height:92vh;overflow:auto;padding:8px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .22s ease;max-width:760px;margin:0 auto}
@@ -1289,7 +1290,7 @@ async function markSent(rec, via) {
 
 /* ---------------- Rendering ---------------- */
 function render() {
-  const p = S.p;
+  const p = S.p; setTimeout(() => HelferBox.badge(), 0);
   $('#projName').textContent = p ? p.name : 'Aufmaß';
   $('#projSub').textContent = p ? `${p.positions.length} Positionen · ${p.blaetter.length} Blätter${p.lv ? ' · LV' : ''}` : 'Keine Baustelle';
   const cw = curWeek(); const op = p ? weekEntries(cw.key).length : 0;
@@ -2985,7 +2986,8 @@ async function helferLink() {
   const short = x => { let t = x.text.split('\n')[0].replace(/\s+/g, ' ').trim(); if (t.length > 42) t = t.slice(0, 40).replace(/[\s,;(-]+\S*$/, '') + ' …'; return t; };
   const seen = new Set(); const items = [];
   for (const x of use) { const t = short(x); if (seen.has(t.toLowerCase())) continue; seen.add(t.toLowerCase()); items.push({ p: x.pos, t, u: /^st/i.test(x.unit) ? 'St' : /^h|std/i.test(x.unit) ? 'Std' : 'm' }); if (items.length >= 24) break; }
-  const cfg = { v: 1, pid: p.id, b: p.name, r: (p.rooms || []).slice(0, 1500), i: items };
+  const box = await DB.get('kv', 'helfer-box');
+  const cfg = { v: 1, pid: p.id, b: p.name, r: (p.rooms || []).slice(0, 1500), i: items, ...(box?.u ? { m: { u: box.u, t: box.write }, n: box.name || '' } : {}) };
   const json = new TextEncoder().encode(JSON.stringify(cfg)); let data, pre = 'j';
   if (typeof CompressionStream !== 'undefined') { data = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); pre = 'z'; } else data = json;
   const b64 = bufToB64(data.buffer).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -3002,12 +3004,16 @@ async function readHelferFile(file) {
   const buf = await file.arrayBuffer(); let txt;
   if (new Uint8Array(buf)[0] === 0x50) { const zip = await JSZip.loadAsync(buf); const f = zip.file('helfer.json') || zip.file(/\.json$/i)[0]; if (!f) throw new Error('In der Zip ist keine Helfer-Datei.'); txt = await f.async('string'); }
   else txt = new TextDecoder().decode(buf);
-  const d = JSON.parse(txt); if (d?.type !== 'aufmass-helfer' || !Array.isArray(d.items)) throw new Error('Das ist keine Helfer-Datei.');
-  d.helfer = String(d.helfer || 'Helfer').slice(0, 60);
-  d.items = d.items.slice(0, 2000).map(x => ({ id: String(x.id || uid()).slice(0, 40), date: /^\d{4}-\d\d-\d\d$/.test(x.date) ? x.date : todayISO(), what: String(x.what || '').slice(0, 200),
-    qty: String(x.qty ?? '').slice(0, 20), unit: String(x.unit || '').slice(0, 8), raum: String(x.raum || '').slice(0, 80), bem: String(x.bem || '').slice(0, 200), pos: String(x.pos || '').slice(0, 30) }));
-  d.hours = (Array.isArray(d.hours) ? d.hours : []).filter(h => /^\d{4}-\d\d-\d\d$/.test(h.date) && numDe(h.h) > 0 && numDe(h.h) <= 24).map(h => ({ date: h.date, h: fmtH(numDe(h.h)) }));
-  return d;
+  return normHelfer(JSON.parse(txt));
+}
+/** alles, was vom Helfer kommt, ist fremd: prüfen und kürzen */
+function normHelfer(d) {
+  if (d?.type !== 'aufmass-helfer' || !Array.isArray(d.items)) throw new Error('Das ist keine Helfer-Datei.');
+  const okD = v => /^\d{4}-\d\d-\d\d$/.test(v);
+  return { type: d.type, helfer: String(d.helfer || 'Helfer').slice(0, 60), pid: String(d.pid || '').slice(0, 40), baustelle: String(d.baustelle || '').slice(0, 120),
+    items: d.items.slice(0, 2000).map(x => ({ id: String(x.id || uid()).slice(0, 40), date: okD(x.date) ? x.date : todayISO(), what: String(x.what || '').slice(0, 200),
+      qty: String(x.qty ?? '').slice(0, 20), unit: String(x.unit || '').slice(0, 8), raum: String(x.raum || '').slice(0, 80), bem: String(x.bem || '').slice(0, 200), pos: String(x.pos || '').slice(0, 30), updated: Number(x.updated) || 0 })),
+    hours: (Array.isArray(d.hours) ? d.hours : []).filter(h => okD(h.date) && numDe(h.h) > 0 && numDe(h.h) <= 24).map(h => ({ date: h.date, h: fmtH(numDe(h.h)) })) };
 }
 /** Vorschlag je Eintrag: Position aus der Suche (Einheit passend zuerst), Raum aus der Raumliste */
 function helferMatch(x) {
@@ -3019,10 +3025,14 @@ function helferMatch(x) {
   const room = x.raum ? (findRoom(S.p, x.raum)?.raum || x.raum) : '';
   return { cands: cands.slice(0, 8), pos: cands[0] || '', raum: room };
 }
-async function openHelferImport(d) {
-  const seen = new Set((await DB.get('kv', 'helfer-seen:' + S.p.id)) || []);
+async function openHelferImport(d, onDone) {
+  const raw = (await DB.get('kv', 'helfer-seen:' + S.p.id)) || {}; const seenM = Array.isArray(raw) ? Object.fromEntries(raw.map(id => [id, 0])) : raw;
+  const seen = { has: id => id in seenM };
+  const existing = id => S.entries.find(e => e.hid === id);
   const tplNames = await btbNames(); const who = matchWorker(d.helfer, tplNames) || d.helfer;
-  const rev = d.items.map(x => ({ x, ...helferMatch(x), qty: x.qty, use: !seen.has(x.id), dup: seen.has(x.id) }));
+  const rev = d.items.map(x => { const ch = seen.has(x.id) && x.updated > seenM[x.id]; const dup = seen.has(x.id) && !ch; const ex = existing(x.id);
+    const m = helferMatch(x); if (ex && ch) { m.pos = ex.pos; if (!m.cands.includes(ex.pos)) m.cands.unshift(ex.pos); }
+    return { x, ...m, qty: x.qty, use: !dup, dup, ch: ch && !!ex }; });
   const days = [...new Set([...d.items.map(x => x.date), ...d.hours.map(h => h.date)])].sort();
   const st = { btbHours: true, btbRows: true };
   const other = d.pid && d.pid !== S.p.id;
@@ -3032,7 +3042,7 @@ async function openHelferImport(d) {
       ${rev.some(r => r.dup) ? `<p class="hint">${rev.filter(r => r.dup).length} Einträge wurden schon früher übernommen (abgehakt).</p>` : ''}
       ${days.map(day => { const rs = rev.map((r, i) => [r, i]).filter(([r]) => r.x.date === day); if (!rs.length) return '';
         return `<h3>${WOCHENTAG[new Date(day + 'T12:00:00').getDay()]}, ${fmtDateShort(day)}</h3>` + rs.map(([r, i]) => `<div class="imp ${r.use ? '' : 'off'}" data-i="${i}">
-        <div class="row"><input type="checkbox" class="iu" ${r.use ? 'checked' : ''} style="width:22px;height:22px"><div class="src grow">„${esc(r.x.what)}“ · ${esc(r.x.qty)} ${esc(r.x.unit)} · ${esc(r.x.raum || 'ohne Raum')}${r.x.bem ? `<br><span class="muted">${esc(r.x.bem)}</span>` : ''}${r.dup ? ' <span class="pill">schon übernommen</span>' : ''}</div></div>
+        <div class="row"><input type="checkbox" class="iu" ${r.use ? 'checked' : ''} style="width:22px;height:22px"><div class="src grow">„${esc(r.x.what)}“ · ${esc(r.x.qty)} ${esc(r.x.unit)} · ${esc(r.x.raum || 'ohne Raum')}${r.x.bem ? `<br><span class="muted">${esc(r.x.bem)}</span>` : ''}${r.dup ? ' <span class="pill">schon bearbeitet</span>' : ''}${r.ch ? ' <span class="pill accent">geändert – ersetzt den alten Eintrag</span>' : ''}</div></div>
         <div class="row" style="margin-top:6px"><select class="i ip grow">${r.cands.map(pc => { const x = posMap().get(pc); return `<option value="${esc(pc)}" ${pc === r.pos ? 'selected' : ''}>${esc(pc)} – ${esc(x.text.split('\n')[0])} (${esc(x.unit)})${posTitle(S.p, pc).titel ? ' · ' + esc(posTitle(S.p, pc).titel) : ''}</option>`; }).join('') || '<option value="">– keine Position erkannt –</option>'}</select><button class="btn hs" title="andere Position suchen" style="padding:6px 12px">🔍</button></div>
         <div class="row" style="margin-top:6px"><input class="i iq" inputmode="decimal" style="width:34%" value="${esc(r.qty)}" placeholder="Menge"><input class="i ir grow" value="${esc(r.raum)}" placeholder="Raum"></div></div>`).join(''); }).join('')}
       <h3>Bautagesbericht</h3>
@@ -3050,12 +3060,14 @@ async function openHelferImport(d) {
     });
     $('#hbH').onchange = e => st.btbHours = e.target.checked; $('#hbR').onchange = e => st.btbRows = e.target.checked;
     $('#hisave').onclick = async () => {
-      let n = 0, skipped = 0; const now = Date.now(); const done = new Set(seen);
+      let n = 0, upd = 0, skipped = 0; const now = Date.now();
       for (const r of rev) {
         if (!r.use) continue; const qv = evalExpr(String(r.qty)); const raum = String(r.raum || '').trim();
         if (!r.pos || qv == null || !raum) { skipped++; continue; }
-        const rec = { id: uid(), projectId: S.p.id, pos: r.pos, qty: qv, expr: String(r.qty).trim(), raum, sk: '', date: r.x.date, note: `Helfer ${d.helfer}: ${r.x.what}${r.x.bem ? ' – ' + r.x.bem : ''}`, status: 'offen', created: now + n, updated: now, helfer: d.helfer };
-        await DB.put('entries', rec); S.entries.push(rec); done.add(r.x.id); n++;
+        const note = `Helfer ${d.helfer}: ${r.x.what}${r.x.bem ? ' – ' + r.x.bem : ''}`; const ex = existing(r.x.id);
+        if (ex) { Object.assign(ex, { pos: r.pos, qty: qv, expr: String(r.qty).trim(), raum, date: r.x.date, note, updated: now }); await DB.put('entries', ex); upd++; continue; }
+        const rec = { id: uid(), projectId: S.p.id, pos: r.pos, qty: qv, expr: String(r.qty).trim(), raum, sk: '', date: r.x.date, note, status: 'offen', created: now + n, updated: now, helfer: d.helfer, hid: r.x.id };
+        await DB.put('entries', rec); S.entries.push(rec); n++;
       }
       let bt = 0;
       if (st.btbHours || st.btbRows) for (const day of days) {
@@ -3068,28 +3080,153 @@ async function openHelferImport(d) {
           const ex = b.rows.find(x => x.text.toLowerCase() === t.toLowerCase()); if (ex) { if (!ex.who.includes(who)) ex.who.push(who); } else b.rows.push({ text: t, st: '', who: [who] }); }
         b.rows = b.rows.filter(x => x.text || x.who.length); await saveBericht(b); bt++;
       }
-      await DB.put('kv', [...done].slice(-5000), 'helfer-seen:' + S.p.id);
-      S.exportRes = null; changed(); closeSheet(); render();
-      toast(`${n} Einträge von ${esc(d.helfer)} übernommen${skipped ? `, ${skipped} übersprungen (Menge, Raum oder Position fehlt)` : ''}${bt ? ` · ${bt} Bautagesbericht${bt === 1 ? '' : 'e'} ergänzt` : ''}`, 5000);
+      for (const r of rev) seenM[r.x.id] = Math.max(seenM[r.x.id] || 0, r.x.updated || 1);
+      const keep = Object.entries(seenM).slice(-8000); await DB.put('kv', Object.fromEntries(keep), 'helfer-seen:' + S.p.id);
+      S.exportRes = null; changed(); closeSheet(); if (onDone) await onDone(); render();
+      toast(`${n} Einträge von ${esc(d.helfer)} übernommen${upd ? `, ${upd} geändert` : ''}${skipped ? `, ${skipped} übersprungen (Menge, Raum oder Position fehlt)` : ''}${bt ? ` · ${bt} Bautagesbericht${bt === 1 ? '' : 'e'} ergänzt` : ''}`, 5000);
     };
   };
   draw();
 }
+/* ---------- Helfer-Briefkasten: kostenloses Google-Skript im eigenen Google-Konto ----------
+   Helfer schreiben nur hinein (Schreib-Schlüssel im Helfer-Link), lesen kann nur der Chef. Daten liegen im eigenen Google Drive. */
+const rndKey = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return bufToB64(a.buffer).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+function boxScript(chef, write) {
+  return `// Aufmaß – Helfer-Briefkasten. Kostenlos, läuft in deinem Google-Konto, Daten im Ordner „Aufmass-Helfer-Briefkasten“ in deinem Drive.
+const CHEF = '${chef}';      // nur deine App kann lesen
+const SCHREIB = '${write}';  // steht im Helfer-Link, kann nur einwerfen
+const ORDNER = 'Aufmass-Helfer-Briefkasten';
+function ordner_() { const it = DriveApp.getFoldersByName(ORDNER); return it.hasNext() ? it.next() : DriveApp.createFolder(ORDNER); }
+function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function doPost(e) {
+  try {
+    const m = JSON.parse(e.postData.contents);
+    if (m.k !== SCHREIB) return out_({ error: 'Schlüssel falsch' });
+    const txt = JSON.stringify(m.d || {}); if (txt.length > 400000) return out_({ error: 'zu groß' });
+    const lock = LockService.getScriptLock(); lock.waitLock(20000);
+    const ts = Math.max(Date.now(), Number(PropertiesService.getScriptProperties().getProperty('last') || 0) + 1);
+    PropertiesService.getScriptProperties().setProperty('last', String(ts)); lock.releaseLock();
+    ordner_().createFile(ts + '_' + String((m.d && m.d.helfer) || 'Helfer').replace(/[^A-Za-z0-9]/g, '_').slice(0, 30) + '.json', txt, 'application/json');
+    return out_({ ok: true, ts: ts });
+  } catch (err) { return out_({ error: String(err) }); }
+}
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  if (p.k !== CHEF) return out_({ error: 'Schlüssel falsch' });
+  if (p.ping) { ordner_(); return out_({ ok: true, ping: true }); }
+  const since = Number(p.since || 0), alt = Date.now() - 120 * 86400000, res = [];
+  const it = ordner_().getFiles();
+  while (it.hasNext()) { const f = it.next(); const ts = Number(f.getName().split('_')[0]) || 0;
+    if (ts && ts < alt) { f.setTrashed(true); continue; }          // nach 4 Monaten weg
+    if (ts > since) res.push({ ts: ts, d: JSON.parse(f.getBlob().getDataAsString()) }); }
+  res.sort(function (a, b) { return a.ts - b.ts; });
+  return out_({ ok: true, msgs: res.slice(0, 300) });
+}
+`;
+}
+const HelferBox = {
+  busy: false, last: 0,
+  async cfg() { return await DB.get('kv', 'helfer-box'); },
+  async inbox() { return (await DB.get('kv', 'helfer-inbox')) || []; },
+  async poll(manual) {
+    const c = await this.cfg(); if (!c?.u || this.busy || !navigator.onLine) return;
+    this.busy = true;
+    try {
+      const since = (await DB.get('kv', 'helfer-since')) || 0;
+      const r = await fetch(`${c.u}?k=${encodeURIComponent(c.chef)}&since=${since}`); const j = await r.json(); if (!j.ok) throw new Error(j.error || 'Fehler');
+      const msgs = (j.msgs || []).filter(m => m && m.ts > since); this.last = Date.now();
+      if (msgs.length) {
+        const inbox = await this.inbox(); for (const m of msgs) { try { inbox.push({ ts: m.ts, d: normHelfer(m.d) }); } catch { } }
+        await DB.put('kv', inbox.slice(-500), 'helfer-inbox'); await DB.put('kv', Math.max(...msgs.map(m => m.ts)), 'helfer-since');
+        const mine = this.groups(inbox).filter(g => g.pid === S.p?.id || !g.pid);
+        if (mine.length) toast(`📥 Neues von ${esc(mine.map(g => g.helfer).join(', '))} – unter Export → Helfer`, 4500);
+      } else if (manual) toast('Nichts Neues vom Helfer');
+      await this.badge(); if (S.tab === 'export' && $('#hBox')) paintHelferBox();
+    } catch (e) { console.error(e); if (manual) toast('Briefkasten nicht erreichbar: ' + esc(e.message || e), 5000); }
+    this.busy = false;
+  },
+  /** Nachrichten je Helfer + Baustelle zusammenfassen, je Eintrag die neueste Fassung */
+  groups(inbox) {
+    const g = new Map();
+    for (const m of inbox) { const k = (m.d.pid || '') + '|' + m.d.helfer; const o = g.get(k) || { key: k, pid: m.d.pid, helfer: m.d.helfer, baustelle: m.d.baustelle, items: new Map(), hours: new Map(), ts: [] };
+      for (const x of m.d.items) { const old = o.items.get(x.id); if (!old || (x.updated || 0) >= (old.updated || 0)) o.items.set(x.id, x); }
+      for (const h of m.d.hours) o.hours.set(h.date, h); o.ts.push(m.ts); g.set(k, o); }
+    return [...g.values()].map(o => ({ ...o, d: { type: 'aufmass-helfer', helfer: o.helfer, pid: o.pid, baustelle: o.baustelle, items: [...o.items.values()], hours: [...o.hours.values()] } }));
+  },
+  async badge() {
+    const n = this.groups(await this.inbox()).filter(g => g.pid === S.p?.id || !g.pid).reduce((a, g) => a + g.d.items.length + g.d.hours.length, 0);
+    const b = document.querySelector('nav.tabs button[data-tab="export"]'); if (!b) return;
+    let s = b.querySelector('.nbadge'); if (!n) { s?.remove(); return; }
+    if (!s) { s = document.createElement('span'); s.className = 'nbadge'; b.appendChild(s); } s.textContent = n > 99 ? '99+' : n;
+  },
+  start() {
+    this.poll(); setInterval(() => this.poll(), 180000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - this.last > 30000) this.poll(); });
+    window.addEventListener('online', () => this.poll());
+  }
+};
+async function openBoxSetup() {
+  const old = await HelferBox.cfg(); const c = { chef: old?.chef || rndKey(), write: old?.write || rndKey(), u: old?.u || '', name: old?.name || '' };
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Helfer automatisch übertragen</div><button class="x" id="bsx">×</button></div>
+    <p class="small muted">Ein kleiner „Briefkasten“ in <b>deinem</b> Google-Konto (kostenlos). Helfer werfen ihre Einträge ein, nur deine App kann sie lesen. Übernommen wird weiterhin erst, wenn du bestätigst. Einmal einrichten, ca. 5 Minuten – am besten am PC.</p>
+    <ol class="small" style="padding-left:20px;line-height:1.55">
+      <li>Code unten kopieren (Knopf).</li>
+      <li><b>script.google.com</b> öffnen → <b>Neues Projekt</b> → alles im Editor löschen, Code einfügen → 💾 speichern.</li>
+      <li>Oben rechts <b>Bereitstellen → Neue Bereitstellung</b> → Zahnrad: <b>Web-App</b>.<br>„Ausführen als: <b>Ich</b>“, „Zugriff: <b>Jeder</b>“ → Bereitstellen.</li>
+      <li>Google fragt nach Zugriff auf Drive → dein Konto → „Erweitert“ → „… öffnen (unsicher)“ → Zulassen. (Das ist dein eigenes Skript.)</li>
+      <li>Die <b>Web-App-URL</b> (endet auf <code>/exec</code>) kopieren und unten einfügen → Testen.</li>
+    </ol>
+    <button class="btn block" id="bsCopy">Code kopieren</button>
+    <details style="margin-top:8px"><summary class="small muted">Code anzeigen</summary><textarea class="i" id="bsCode" rows="8" readonly style="font:12px/1.3 ui-monospace,Menlo,monospace;margin-top:6px">${esc(boxScript(c.chef, c.write))}</textarea></details>
+    <label class="f">Web-App-URL</label><input class="i" id="bsU" value="${esc(c.u)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <label class="f">Dein Name <span class="muted">(sieht der Helfer)</span></label><input class="i" id="bsN" value="${esc(c.name)}" placeholder="z. B. Tjade">
+    <div class="row" style="margin-top:12px"><button class="btn grow" id="bsT">Testen</button><button class="btn primary grow" id="bsS">Speichern</button></div>
+    <div id="bsOut"></div>
+    ${old?.u ? '<button class="btn danger block" id="bsDel" style="margin-top:14px">Briefkasten abschalten</button>' : ''}
+    <p class="small muted" style="margin-top:12px">Wichtig: Nach dem Einrichten den <b>Helfer-Link neu schicken</b> – erst der neue Link überträgt automatisch. Ohne Briefkasten geht weiter alles per Zip über WhatsApp.</p>`);
+  $('#bsx').onclick = () => { closeSheet(); render(); };
+  $('#bsCopy').onclick = async () => { try { await navigator.clipboard.writeText(boxScript(c.chef, c.write)); toast('Code kopiert'); } catch { $('#bsCode').closest('details').open = true; $('#bsCode').select(); toast('Bitte markierten Code kopieren'); } };
+  const url = () => $('#bsU').value.trim();
+  const test = async () => { const u = url(); if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(u)) { $('#bsOut').innerHTML = '<p class="hint warn">Die URL muss mit https://script.google.com/ anfangen und auf /exec enden.</p>'; return false; }
+    $('#bsOut').innerHTML = '<p class="hint">Teste …</p>';
+    try { const j = await (await fetch(`${u}?k=${encodeURIComponent(c.chef)}&ping=1`)).json();
+      if (j.ok) { $('#bsOut').innerHTML = '<p class="hint ok">Briefkasten antwortet ✓</p>'; return true; }
+      $('#bsOut').innerHTML = `<p class="hint warn">${j.error === 'Schlüssel falsch' ? 'Das Skript hat einen anderen Schlüssel – bitte den Code von hier nochmal einfügen und neu bereitstellen (Bereitstellungen verwalten → Bearbeiten → Neue Version).' : 'Fehler: ' + esc(j.error || '?')}</p>`; }
+    catch (e) { $('#bsOut').innerHTML = '<p class="hint warn">Keine Antwort. Prüfe: „Zugriff: Jeder“ gewählt? URL vollständig kopiert?</p>'; }
+    return false; };
+  $('#bsT').onclick = test;
+  $('#bsS').onclick = async () => { if (!(await test())) return; await DB.put('kv', { ...c, u: url(), name: $('#bsN').value.trim() }, 'helfer-box');
+    toast('Briefkasten gespeichert – jetzt den Helfer-Link neu schicken', 4500); closeSheet(); render(); HelferBox.poll(); };
+  if ($('#bsDel')) $('#bsDel').onclick = async () => { if (!confirm('Briefkasten abschalten? Helfer müssen dann wieder per Zip schicken.')) return; await DB.del('kv', 'helfer-box'); closeSheet(); render(); };
+}
 function helferCard() {
   return `<div class="card"><h3 style="margin-top:0">Helfer</h3>
-    <p class="small muted" style="margin-top:0">Dein Helfer bekommt eine eigene, einfache Ansicht (ohne Positionsnummern, ohne Zugriff auf dein Aufmaß). Er schickt dir eine Zip per WhatsApp – du prüfst und übernimmst.</p>
-    <button class="btn block" id="hLink">Helfer-Link schicken</button>
-    <button class="btn primary block" id="hImp" style="margin-top:8px">Helfer-Datei einlesen (.zip)</button>
+    <p class="small muted" style="margin-top:0">Dein Helfer bekommt eine eigene, einfache Ansicht (ohne Positionsnummern, ohne Zugriff auf dein Aufmaß). Du prüfst und übernimmst.</p>
+    <div id="hBox"></div>
+    <button class="btn block" id="hLink" style="margin-top:8px">Helfer-Link schicken</button>
+    <button class="btn block" id="hImp" style="margin-top:8px">Helfer-Datei einlesen (.zip)</button>
     <input type="file" id="hFile" accept=".zip,.json,application/zip,application/json" style="display:none"></div>`;
+}
+async function paintHelferBox() {
+  const el = $('#hBox'); if (!el) return; const c = await HelferBox.cfg(); const inbox = await HelferBox.inbox();
+  const gs = HelferBox.groups(inbox); const mine = gs.filter(g => g.pid === S.p.id || !g.pid); const other = gs.length - mine.length;
+  el.innerHTML = (mine.length ? mine.map(g => `<button class="btn primary block hIn" data-k="${esc(g.key)}" style="margin-top:6px">📥 ${esc(g.helfer)}: ${g.d.items.length} ${g.d.items.length === 1 ? 'Eintrag' : 'Einträge'}${g.d.hours.length ? ' + Stunden' : ''} prüfen</button>`).join('') : '')
+    + (other ? `<div class="small muted" style="margin-top:6px">${other} Nachricht(en) für andere Baustellen warten dort.</div>` : '')
+    + (c?.u ? `<div class="row small" style="margin-top:8px"><span class="grow" style="color:var(--ok)">● Automatisch übertragen ist an${HelferBox.last ? ' · geprüft ' + new Date(HelferBox.last).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : ''}</span><button class="btn" id="hPoll" style="min-height:34px;padding:4px 10px;font-size:13px">Prüfen</button><button class="btn" id="hSet" style="min-height:34px;padding:4px 10px;font-size:13px">⚙</button></div>`
+      : `<button class="btn block" id="hSet" style="margin-top:6px">Automatisch übertragen einrichten (ohne Pi)</button>`);
+  el.querySelectorAll('.hIn').forEach(b => b.onclick = async () => { const g = HelferBox.groups(await HelferBox.inbox()).find(x => x.key === b.dataset.k); if (!g) return;
+    openHelferImport(g.d, async () => { const tsSet = new Set(g.ts); await DB.put('kv', (await HelferBox.inbox()).filter(m => !tsSet.has(m.ts)), 'helfer-inbox'); await HelferBox.badge(); }); });
+  if ($('#hPoll')) $('#hPoll').onclick = () => HelferBox.poll(true);
+  $('#hSet').onclick = openBoxSetup;
 }
 function wireHelferCard() {
   if (!$('#hLink')) return;
+  paintHelferBox();
   $('#hLink').onclick = shareHelferLink;
   $('#hImp').onclick = () => $('#hFile').click();
   $('#hFile').onchange = async () => { const f = $('#hFile').files[0]; $('#hFile').value = ''; if (!f) return;
     try { openHelferImport(await readHelferFile(f)); } catch (e) { console.error(e); toast('Konnte die Datei nicht lesen: ' + esc(e.message || e), 5000); } };
 }
-
 
 async function renderExport() {
   const m = $('#main'); const p = S.p; const cw = curWeek(); const cur = weekEntries(cw.key); const L = layout(p, cur);
@@ -3530,6 +3667,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
   try {
     await DB.open(); await Sync.init(); await loadAll(); render();
     setTimeout(() => Aufmass.check(), 800);
+    setTimeout(() => HelferBox.start(), 1500);
     setInterval(() => Aufmass.check(), 10 * 60 * 1000);   // auch wenn die App über Nacht offen bleibt
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Aufmass.check(); });
     if ('serviceWorker' in navigator && window.isSecureContext) {
@@ -3542,7 +3680,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>

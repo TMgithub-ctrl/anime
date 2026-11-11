@@ -15,7 +15,7 @@
 @media (prefers-color-scheme: dark){:root{--bg:#0f1115;--panel:#181b21;--panel2:#20242c;--text:#eceef1;--muted:#9aa3af;--line:#2c313a;--accent:#4dabf7;--accent-text:#0f1115;--ok:#51cf66;--warn:#ff6b6b;--shadow:none}}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
-body{padding-bottom:calc(96px + env(safe-area-inset-bottom));overflow-x:hidden}
+body{padding-bottom:calc(150px + env(safe-area-inset-bottom));overflow-x:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
 header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
 header b{display:block;font-size:17px}header small{color:var(--muted)}
@@ -50,7 +50,7 @@ label.f{display:block;font-size:13.5px;color:var(--muted);font-weight:600;margin
 <body>
 <header><b>Helfer-Aufmaß</b><small id="hb">–</small></header>
 <main id="main"></main>
-<div class="bar" id="bar"><button class="btn primary block" id="send">Abschicken</button></div>
+<div class="bar" id="bar"><div id="st" class="small muted hidden" style="text-align:center;margin:-2px 0 6px"></div><button class="btn primary block" id="send">Abschicken</button><button class="btn block hidden" id="sendZip" style="margin-top:6px;min-height:36px;font-size:14px;border:0;background:none;color:var(--muted)">oder als Datei per WhatsApp schicken</button></div>
 <div id="toast"></div>
 <script>
 /* Eigene, abgeschottete Ansicht für Helfer: eigene Datenbank, kein Zugriff auf das echte Aufmaß.
@@ -121,7 +121,9 @@ function render() {
   S.what = e.pos ? { p: e.pos, t: e.what } : null;
   wire(e);
   const n = S.items.filter(x => !x.sent).length + Object.values(S.hours).filter(x => !x.sent && numDe(x.h)).length;
-  $('#send').textContent = n ? `Abschicken (${n} neu)` : 'Alles nochmal schicken';
+  const box = !!S.cfg?.m; $('#sendZip').classList.toggle('hidden', !box); $('#st').classList.toggle('hidden', !box);
+  if (box) { $('#send').textContent = n ? `Jetzt übertragen (${n})` : '✓ Alles übertragen'; $('#send').classList.toggle('primary', !!n); $('#st').textContent = S.boxMsg || (n ? 'wird automatisch übertragen, sobald Netz da ist' : `${S.cfg?.n || 'Dein Vorarbeiter'} bekommt deine Einträge automatisch`); }
+  else $('#send').textContent = n ? `Abschicken (${n} neu)` : 'Alles nochmal schicken';
 }
 function listHTML() {
   if (!S.items.length) return '<p class="small muted" style="text-align:center;margin:24px 8px">Noch nichts eingetragen.</p>';
@@ -139,16 +141,16 @@ function wire(e) {
   document.querySelectorAll('#fu [data-u]').forEach(b => b.onclick = () => setUnit(b.dataset.u));
   rooms($('#fr'), $('#frs'));
   $('#fd').onchange = () => { if (S.edit) S.edit = { ...read(), id: S.edit.id }; else S.draft = read(); render(); };
-  $('#hh').onchange = async () => { const d = $('#fd').value || todayISO(); const v = $('#hh').value.trim(); if (v) S.hours[d] = { h: v, sent: false }; else delete S.hours[d]; await save(); render(); toast('Stunden gespeichert'); };
+  $('#hh').onchange = async () => { const d = $('#fd').value || todayISO(); const v = $('#hh').value.trim(); if (v) S.hours[d] = { h: v, sent: false }; else delete S.hours[d]; await save(); render(); toast('Stunden gespeichert'); autoSoon(); };
   $('#fs').onclick = async () => {
     const r = read(); if (!r.what) { toast('Bitte eintragen, was du gemacht hast'); return; }
     if (r.qty === '' && r.unit !== 'Std') { toast('Bitte eine Menge eintragen'); return; }
     if (S.edit?.id) { const o = S.items.find(x => x.id === S.edit.id); Object.assign(o, r, { sent: false, updated: Date.now() }); }
     else S.items.push({ id: uid(), ...r, created: Date.now(), updated: Date.now(), sent: false });
-    S.unit = r.unit; S.lastRaum = r.raum; S.edit = null; S.draft = { date: r.date, what: '', qty: '', unit: r.unit, raum: r.raum, bem: '' }; S.what = null; await save(); render(); toast('Gespeichert ✓');
+    S.unit = r.unit; S.lastRaum = r.raum; S.edit = null; S.draft = { date: r.date, what: '', qty: '', unit: r.unit, raum: r.raum, bem: '' }; S.what = null; await save(); render(); toast('Gespeichert ✓'); autoSoon();
   };
   if ($('#fx')) $('#fx').onclick = () => { S.edit = null; render(); };
-  if ($('#fdel')) $('#fdel').onclick = async () => { if (!confirm('Eintrag löschen?')) return; S.items = S.items.filter(x => x.id !== S.edit.id); S.edit = null; await save(); render(); };
+  if ($('#fdel')) $('#fdel').onclick = async () => { if (!confirm(S.items.find(x => x.id === S.edit.id)?.sent && S.cfg?.m ? `Der Eintrag ist schon übertragen. Hier löschen? (Sag ${S.cfg?.n || 'deinem Vorarbeiter'} Bescheid, falls er ihn schon übernommen hat.)` : 'Eintrag löschen?')) return; S.items = S.items.filter(x => x.id !== S.edit.id); S.edit = null; await save(); render(); };
   document.querySelectorAll('.it').forEach(el => el.onclick = () => { const x = S.items.find(y => y.id === el.dataset.id); S.edit = { ...x }; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 }
 function setUnit(u) { S.unit = u; document.querySelectorAll('#fu [data-u]').forEach(b => b.classList.toggle('on', b.dataset.u === u)); }
@@ -167,15 +169,44 @@ function rooms(inp, box) {
 }
 const standalone = () => window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
 
+function pack(items, hours) {
+  return { type: 'aufmass-helfer', v: 1, helfer: S.name, pid: S.cfg?.pid || '', baustelle: S.cfg?.b || '', created: new Date().toISOString(),
+    items: items.map(({ sent, ...x }) => x), hours };
+}
+/* --- Automatisch: in den Briefkasten (Google-Skript des Chefs) --- */
+let sending = false, again = false, timer = null;
+const autoSoon = (ms = 1200) => { clearTimeout(timer); timer = setTimeout(autoSend, ms); };
+async function autoSend(manual) {
+  const m = S.cfg?.m; if (!m || !S.name) return;
+  if (sending) { again = true; return; }
+  const items = S.items.filter(x => !x.sent); const hrs = Object.entries(S.hours).filter(([, v]) => !v.sent && numDe(v.h));
+  if (!items.length && !hrs.length) { if (manual) toast('Alles ist schon übertragen ✓'); return; }
+  if (!navigator.onLine) { S.boxMsg = 'kein Netz – wird nachgeholt'; render(); return; }
+  sending = true; const snap = new Map(items.map(x => [x.id, x.updated])); const hsnap = hrs.map(([d, v]) => [d, v.h]);
+  try {
+    const r = await fetch(m.u, { method: 'POST', body: JSON.stringify({ k: m.t, d: pack(items, hrs.map(([date, v]) => ({ date, h: v.h }))) }) });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'Fehler');
+    for (const x of S.items) if (snap.has(x.id) && snap.get(x.id) === x.updated) x.sent = true;
+    for (const [d, h] of hsnap) if (S.hours[d] && S.hours[d].h === h) S.hours[d].sent = true;
+    S.boxMsg = 'übertragen um ' + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' ✓'; await save(); if (manual) toast('Übertragen ✓');
+  } catch (e) { console.error(e); S.boxMsg = 'Übertragung klappt gerade nicht – wird nachgeholt'; if (manual) toast('Hat nicht geklappt: ' + (e.message || e)); }
+  sending = false; if (!S.edit) render(); else { const n = S.items.filter(x => !x.sent).length; $('#st').textContent = S.boxMsg; }
+  if (again) { again = false; autoSoon(); }
+}
+window.addEventListener('online', () => autoSoon(300));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') autoSoon(300); });
+setInterval(() => autoSend(), 120000);
+
 /* --- Abschicken: alles in eine Zip, über WhatsApp teilen --- */
-$('#send').onclick = async () => {
+$('#send').onclick = () => S.cfg?.m ? autoSend(true) : sendZip();
+$('#sendZip').onclick = () => sendZip();
+async function sendZip() {
   const neu = S.items.filter(x => !x.sent); const hn = Object.entries(S.hours).filter(([, v]) => !v.sent && numDe(v.h));
   const all = !neu.length && !hn.length;
   if (all && !S.items.length && !Object.keys(S.hours).length) { toast('Noch nichts eingetragen'); return; }
   if (all && !confirm('Alles ist schon geschickt. Trotzdem alles nochmal schicken?')) return;
   const items = all ? S.items : neu; const hours = (all ? Object.entries(S.hours) : hn).map(([date, v]) => ({ date, h: v.h }));
-  const data = { type: 'aufmass-helfer', v: 1, helfer: S.name, pid: S.cfg?.pid || '', baustelle: S.cfg?.b || '', created: new Date().toISOString(),
-    items: items.map(({ sent, ...x }) => x), hours };
+  const data = pack(items, hours);
   const zip = new JSZip(); zip.file('helfer.json', JSON.stringify(data, null, 1));
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/zip' });
   const name = `Helfer_${S.name.replace(/[^A-Za-z0-9äöüÄÖÜß]+/g, '_')}_${todayISO()}.zip`;
@@ -185,13 +216,13 @@ $('#send').onclick = async () => {
   if (!ok) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     ok = confirm('Datei wurde gespeichert. Hast du sie verschickt? (Dann wird alles als „geschickt“ markiert)'); }
   if (ok) { for (const x of items) x.sent = true; for (const h of hours) if (S.hours[h.date]) S.hours[h.date].sent = true; await save(); render(); toast('Als geschickt markiert ✓'); }
-};
+}
 
 (async () => {
   await DB.open();
   const c = await readCfg(); S.cfg = c || await DB.get('cfg') || null; if (c) await DB.put('cfg', c);
   S.name = (await DB.get('name')) || ''; S.items = (await DB.get('items')) || []; S.hours = (await DB.get('hours')) || {};
-  render();
+  render(); autoSoon(500);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
