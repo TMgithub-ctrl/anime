@@ -1040,11 +1040,19 @@ async function addSignatures(zip, ct, targets, sigs) {
 /* ---------------- App-Zustand ---------------- */
 const S = { projects: [], p: null, entries: [], tab: 'erfassen', listFilter: 'offen', blattSel: null, lastEntryId: null, exportRes: null };
 
+/** Büro-Vorgabe: Stunden aus Arbeitsnachweisen gehören NICHT ins Aufmaß (das erstellt der Fachplaner nach Prüfung).
+    Früher übernommene Stunden-Einträge werden einmalig entfernt – die Stunden bleiben im Arbeitsnachweis. */
+async function dropAnEntries() {
+  const old = S.entries.filter(e => e.anId); if (!old.length) return;
+  for (const e of old) await DB.del('entries', e.id); S.entries = S.entries.filter(e => !e.anId);
+  for (const n of (S.nachweise || [])) if (n.aufmassAt) { delete n.aufmassAt; delete n.aufmassCount; await DB.put('nachweise', n); }
+  S.anDropped = old.length; changed();
+}
 async function loadAll() {
   S.projects = await DB.all('projects');
   const cur = await DB.get('kv', 'current');
   S.p = S.projects.find(x => x.id === cur) || S.projects[0] || null;
-  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); S.bestellungen = await DB.bestellungenOf(S.p.id); S.berichte = await DB.berichteOf(S.p.id); S.aufgaben = await DB.aufgabenOf(S.p.id); S.plaene = null; updateUse(); } else { S.notes = []; S.nachweise = []; S.bestellungen = []; S.berichte = []; S.aufgaben = []; S.plaene = null; }
+  if (S.p) { buildIndex(S.p); S.entries = await DB.byProject(S.p.id); S.notes = await DB.notesOf(S.p.id); S.nachweise = await DB.nachweiseOf(S.p.id); S.bestellungen = await DB.bestellungenOf(S.p.id); S.berichte = await DB.berichteOf(S.p.id); S.aufgaben = await DB.aufgabenOf(S.p.id); S.plaene = null; await dropAnEntries(); updateUse(); } else { S.notes = []; S.nachweise = []; S.bestellungen = []; S.berichte = []; S.aufgaben = []; S.plaene = null; }
 }
 const stripIdx = p => ({ ...p, _roomNorm: undefined, _use: undefined, _roomVocab: undefined, positions: p.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r) });
 async function saveProject(p) { p.metaHash = null; await DB.put('projects', stripIdx(p)); Sync.dirty(p.id); }
@@ -1923,12 +1931,7 @@ function openNachweis(n, isNew) {
   };
   const sums = () => { read(); const tot = n.rows.reduce((a, r) => a + rowHours(r), 0);
     $('#anSum').textContent = tot ? `Summe: ${fmtH(tot)} Std` + (n.rows.length > 1 ? ' (' + n.rows.map(r => (r.name || '?') + ' ' + fmtH(rowHours(r))).join(', ') + ')' : '') : '';
-    const per = {}; for (const r of n.rows) { const p = rolePos(r.role); if (p && rowHours(r)) per[p.pos] = (per[p.pos] || { p, h: 0 }), per[p.pos].h += rowHours(r); }
-    const pl = Object.values(per);
-    $('#anAufm').innerHTML = `<b>Ins Aufmaß übernehmen</b><div class="small muted" style="margin:4px 0 8px">${pl.length ? pl.map(o => `${fmtH(o.h)} h → ${esc(o.p.pos)} ${esc(o.p.text.slice(0, 40))}`).join('<br>') + `<br>Raum: „Arbeitsnachweis ${esc(n.nr || 'KW' + anWeek(n).week + ' ' + anShort(n))}“, je Tag ein Eintrag` : 'Bei den Mitarbeitern eine Rolle (Obermonteur/Monteur/Helfer) wählen, dann landen die Stunden auf den Stundenlohn-Positionen.'}
-      ${n.aufmassAt ? `<br><span style="color:var(--ok)">Übernommen am ${new Date(n.aufmassAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (${n.aufmassCount} Einträge) – nochmal übernehmen ersetzt sie.</span>` : ''}</div>
-      <button class="btn block" id="anToA" ${pl.length ? '' : 'disabled'}>${n.aufmassAt ? 'Stunden im Aufmaß aktualisieren' : 'Stunden ins Aufmaß übernehmen'}</button>`;
-    if ($('#anToA')) $('#anToA').onclick = async () => { read(); try { const r = await anToAufmass(n); toast(`${fmtH(r.hours)} Std ins Aufmaß übernommen (${r.neu} Einträge${r.alt ? ', ' + r.alt + ' alte ersetzt' : ''})`); sums(); } catch (e) { toast(esc(e.message)); } };
+    $('#anAufm').innerHTML = '<div class="small muted">Stunden aus Arbeitsnachweisen kommen nicht ins Aufmaß – das erstellt der Fachplaner nach Prüfung der Nachweise.</div>';
   };
   const wire = () => {
     document.querySelectorAll('#anRows input, #anRows select').forEach(el => el.oninput = el.onchange = sums);
@@ -4114,6 +4117,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 (async () => {
   try {
     await DB.open(); await Sync.init(); await loadAll(); render();
+    if (S.anDropped) { toast(`${S.anDropped} Stunden-Einträge aus Arbeitsnachweisen aus dem Aufmaß entfernt (Vorgabe Büro). Die Stunden stehen weiter in den Arbeitsnachweisen.`, 7000); S.anDropped = 0; }
     setTimeout(() => Aufmass.check(), 800);
     setTimeout(() => HelferBox.start(), 1500);
     setInterval(() => Aufmass.check(), 10 * 60 * 1000);   // auch wenn die App über Nacht offen bleibt
