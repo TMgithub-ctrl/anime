@@ -1647,19 +1647,34 @@ function wireSugg(root, after) {
     el.querySelector('[data-act=no]').onclick = async ev => { ev.stopPropagation(); const m = n(); m.dismissed = [...(m.dismissed || []), k]; await saveNote(m); if (after) after(); else render(); };
   });
 }
+/* ---------- Wochenfilter für Notizen, Berichte, Nachweise, Bestellungen ---------- */
+function nWeek() { if (S.nWeek === undefined) { try { S.nWeek = localStorage.getItem('aufmass-nweek') || 'alle'; } catch { S.nWeek = 'alle'; } } return S.nWeek; }
+const nKeyOf = (kind, x) => kind === 'an' ? anWeek(x).key : weekOf((kind === 'notes' ? x.date : x.datum) || todayISO()).key;
+function nFilter(kind, arr) { const k = nWeek(); if (k === 'alle') return arr; const wk = k === 'aktuell' ? curWeek().key : k; return arr.filter(x => nKeyOf(kind, x) === wk); }
+function weekBar(kind, all) {
+  const k = nWeek(); const cw = curWeek(); const keys = [...new Set(all.map(x => nKeyOf(kind, x)))].filter(x => x !== cw.key).sort().reverse();
+  if (k !== 'alle' && k !== 'aktuell' && !keys.includes(k)) keys.unshift(k);
+  const shown = nFilter(kind, all).length, hidden = all.length - shown;
+  return `<div class="row" style="margin:-2px 0 12px;gap:8px"><select class="i grow" id="nwSel" style="min-height:40px;font-size:15px;padding:6px 10px">
+      <option value="alle" ${k === 'alle' ? 'selected' : ''}>Alle Wochen</option>
+      <option value="aktuell" ${k === 'aktuell' ? 'selected' : ''}>Nur diese Woche (KW ${cw.week})</option>
+      ${keys.map(x => { const w = weekByKey(x); return `<option value="${x}" ${k === x ? 'selected' : ''}>Nur KW ${w.week}/${w.year} · ${dm(w.from)}–${dm(w.to)}</option>`; }).join('')}</select>
+    ${hidden ? `<span class="small muted" style="white-space:nowrap">${hidden} ausgeblendet</span>` : ''}</div>`;
+}
+function wireWeekBar(m) { const sel = m.querySelector('#nwSel'); if (sel) sel.onchange = () => { S.nWeek = sel.value; try { localStorage.setItem('aufmass-nweek', sel.value); } catch { } renderNotizen(); }; }
 function renderNotizen() {
   const m = $('#main'); S.noteView ||= 'notes';
   const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="bt" class="${S.noteView === 'bt' ? 'on' : ''}">Berichte</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Nachweise</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellung</button></div>`;
   const wireSeg = () => m.querySelectorAll('[data-nv]').forEach(b => b.onclick = () => { S.noteView = b.dataset.nv; renderNotizen(); });
-  if (S.noteView === 'an') { m.innerHTML = seg; wireSeg(); renderNachweisListe(m); return; }
-  if (S.noteView === 'be') { m.innerHTML = seg; wireSeg(); renderBestellListe(m); return; }
-  if (S.noteView === 'bt') { m.innerHTML = seg; wireSeg(); renderBerichtListe(m); return; }
-  const list = (S.notes || []).slice().sort((a, b) => b.updated - a.updated);
-  m.innerHTML = seg + `<div class="card" style="padding:12px">
+  if (S.noteView === 'an') { m.innerHTML = seg + weekBar('an', S.nachweise || []); wireSeg(); wireWeekBar(m); renderNachweisListe(m); return; }
+  if (S.noteView === 'be') { m.innerHTML = seg + weekBar('be', S.bestellungen || []); wireSeg(); wireWeekBar(m); renderBestellListe(m); return; }
+  if (S.noteView === 'bt') { m.innerHTML = seg + weekBar('bt', S.berichte || []); wireSeg(); wireWeekBar(m); renderBerichtListe(m); return; }
+  const allN = S.notes || []; const list = nFilter('notes', allN).slice().sort((a, b) => b.updated - a.updated);
+  m.innerHTML = seg + weekBar('notes', allN) + `<div class="card" style="padding:12px">
       <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
       <div class="row" style="margin-top:8px"><input class="i" id="nDate" type="date" value="${todayISO()}" style="width:52%"><button class="btn primary grow" id="nAdd">Speichern</button></div>
       <div id="nLive"></div></div>
-    ${list.length ? '' : '<div class="empty">Noch keine Notizen. Schreib einfach los – erkennt die App Material und Menge, schlägt sie dir den Eintrag vor.</div>'}
+    ${list.length ? '' : allN.length ? '<div class="empty">In dieser Woche keine Notizen.</div>' : '<div class="empty">Noch keine Notizen. Schreib einfach los – erkennt die App Material und Menge, schlägt sie dir den Eintrag vor.</div>'}
     ${list.map(n => `<div class="card note" data-id="${n.id}" style="padding:12px 14px">
       <div class="row"><b class="grow small muted">${fmtDate(n.date || todayISO())}</b><span class="small muted">${new Date(n.updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span></div>
       <div class="ntext">${esc(n.text)}</div>${suggHTML(n)}
@@ -1670,7 +1685,7 @@ function renderNotizen() {
   ta.oninput = () => { clearTimeout(tm); tm = setTimeout(live, 300); };
   $('#nAdd').onclick = async () => { const t = ta.value.trim(); if (!t) return;
     await saveNote({ id: uid(), projectId: S.p.id, text: t, date: $('#nDate').value || todayISO(), created: Date.now() }); renderNotizen(); toast('Notiz gespeichert'); };
-  wireSeg();
+  wireSeg(); wireWeekBar(m);
   m.querySelectorAll('.note').forEach(el => el.querySelector('.ntext').onclick = () => openNote(el.dataset.id));
   m.querySelectorAll('[data-an-make],[data-an-open]').forEach(b => b.onclick = () => noteToNachweis(b.dataset.anMake || b.dataset.anOpen));
   wireSugg(m, renderNotizen);
@@ -1844,12 +1859,12 @@ async function noteToNachweis(noteId) {
 
 /* ---------- Liste ---------- */
 function renderNachweisListe(m) {
-  const list = (S.nachweise || []).slice().sort((a, b) => (b.week || '').localeCompare(a.week || '') || (+b.nr || 0) - (+a.nr || 0));
+  const list = nFilter('an', S.nachweise || []).slice().sort((a, b) => (b.week || '').localeCompare(a.week || '') || (+b.nr || 0) - (+a.nr || 0));
   m.insertAdjacentHTML('beforeend', vorlagenCard('an') + `<button class="btn primary block" id="anNew" style="margin-bottom:12px">+ Neuer Arbeitsnachweis</button>
     ${list.length ? list.map(n => { const w = anWeek(n); const h = n.rows.reduce((a, r) => a + rowHours(r), 0);
       return `<div class="card entry" data-an="${n.id}" style="padding:12px 14px"><div class="grow"><b>${esc(anLabel(n))}</b> <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span>
         <div class="w">${esc(n.kunde || n.bauvorhaben || '')}${h ? ' · ' + fmtH(h) + ' Std' : ''}${n.sig ? ' · unterschrieben' : ''}${n.aufmassAt ? ' · im Aufmaß' : ''}${n.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
-      : '<div class="empty">Noch keine Arbeitsnachweise. Lege einen neuen an – oder öffne eine Notiz und tippe auf „Als Arbeitsnachweis“.</div>'}
+      : (S.nachweise || []).length ? '<div class="empty">In dieser Woche keine Arbeitsnachweise.</div>' : '<div class="empty">Noch keine Arbeitsnachweise. Lege einen neuen an – oder öffne eine Notiz und tippe auf „Als Arbeitsnachweis“.</div>'}
     <button class="btn block" id="anFirma" style="margin-top:6px">Firmenkopf &amp; Texte</button>`);
   $('#anNew').onclick = async () => openNachweis(await newNachweis(), true);
   m.querySelectorAll('[data-an]').forEach(el => el.onclick = () => openNachweis(S.nachweise.find(x => x.id === el.dataset.an)));
@@ -2133,12 +2148,12 @@ async function newBestellung() {
 }
 async function saveBestellung(b) { b.updated = Date.now(); await DB.put('bestellungen', b); S.bestellungen = (S.bestellungen || []).filter(x => x.id !== b.id).concat(b); changed(); }
 function renderBestellListe(m) {
-  const list = (S.bestellungen || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
+  const list = nFilter('be', S.bestellungen || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
   m.insertAdjacentHTML('beforeend', vorlagenCard('be') + `<button class="btn primary block" id="beNew" style="margin-bottom:12px">+ Neuer Bestellschein</button>
     ${list.length ? list.map(b => { const n = (b.rows || []).filter(r => r.menge || r.text).length;
       return `<div class="card entry" data-be="${b.id}" style="padding:12px 14px"><div class="grow"><b>${fmtDateShort(b.datum)}</b> <span class="muted small">${esc(b.bauvorhaben || '')}</span>
         <div class="w">${n} ${n === 1 ? 'Artikel' : 'Artikel'}${b.liefertermin ? ' · Liefertermin ' + fmtDateShort(b.liefertermin) : ''}${b.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')
-      : '<div class="empty">Noch keine Bestellscheine.</div>'}
+      : (S.bestellungen || []).length ? '<div class="empty">In dieser Woche keine Bestellscheine.</div>' : '<div class="empty">Noch keine Bestellscheine.</div>'}
     <button class="btn block" id="beBlank" style="margin-top:6px">Leeren Bestellschein als PDF</button>`);
   $('#beNew').onclick = async () => openBestellung(await newBestellung(), true);
   m.querySelectorAll('[data-be]').forEach(el => el.onclick = () => openBestellung(S.bestellungen.find(x => x.id === el.dataset.be)));
@@ -2867,16 +2882,16 @@ function entriesToRows(datum) {
 
 /* ---------- Bautagesberichte: Liste ---------- */
 function renderBerichtListe(m) {
-  const list = (S.berichte || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
+  const list = nFilter('bt', S.berichte || []).slice().sort((a, b) => (b.datum || '').localeCompare(a.datum || '') || b.created - a.created);
   const weeks = new Map(); for (const b of list) { const w = weekOf(b.datum); (weeks.get(w.key) || weeks.set(w.key, { w, items: [] }).get(w.key)).items.push(b); }
-  const today = list.find(b => b.datum === todayISO());
+  const today = (S.berichte || []).find(b => b.datum === todayISO());
   m.insertAdjacentHTML('beforeend', vorlagenCard('btb') + `<button class="btn primary block" id="btNew" style="margin-bottom:12px">${today ? 'Bericht von heute öffnen' : '+ Bautagesbericht für heute'}</button>
     ${list.length ? [...weeks.values()].map(({ w, items }) => `<div class="row" style="margin:14px 2px 6px"><b class="grow">KW ${w.week} <span class="muted small">${dm(w.from)}–${dm(w.to)}${w.to.slice(0, 4)}</span></b>
         <button class="btn" data-btw="${w.key}" style="min-height:34px;padding:4px 10px;font-size:13px">Woche als Excel</button></div>
       ${items.map(b => { const h = berichtHours(b); const n = (b.rows || []).filter(r => r.text).length;
         return `<div class="card entry" data-bt="${b.id}" style="padding:12px 14px"><div class="grow"><b>${WOCHENTAG[new Date(b.datum + 'T12:00:00').getDay()]}, ${fmtDateShort(b.datum)}</b>
           <div class="w">${n} ${n === 1 ? 'Leistung' : 'Leistungen'}${h ? ' · ' + fmtH(h) + ' Std' : ''}${(b.people || []).length ? ' · ' + b.people.length + ' Pers.' : ''}${b.sent?.length ? ' · versendet ✓' : ''}</div></div></div>`; }).join('')}`).join('')
-      : '<div class="empty">Noch keine Bautagesberichte. Einer pro Tag – Leistungen, beendet ja/nein und die Stunden je Mitarbeiter.</div>'}
+      : (S.berichte || []).length ? '<div class="empty">In dieser Woche keine Bautagesberichte.</div>' : '<div class="empty">Noch keine Bautagesberichte. Einer pro Tag – Leistungen, beendet ja/nein und die Stunden je Mitarbeiter.</div>'}
     <div id="btWOut"></div>`);
   wireVorlagenCard('btb', renderNotizen);
   $('#btNew').onclick = async () => openBericht(today || await newBericht(), !today);
