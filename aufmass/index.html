@@ -478,13 +478,13 @@ async function parseTemplate(buf) {
   const wb = await openWorkbook(buf);
   const find = n => wb.sheets.find(s => s.name === n);
   const ad = find('Aufmaßdaten');
-  if (!ad) throw new Error('Blatt „Aufmaßdaten“ fehlt – ist das eine Aufmaß-Datei aus der Handwerkersoftware?');
+  // Manche Dateien vom Büro kommen ohne „Aufmaßdaten“/„Übersicht“/„Raumbuch“ (ohne Zeiten/Preise) – dann nur die Blätter
+  let headerRow = 16, header = ''; const positions = [], seen = new Map(); const adVals = new Map();
+  if (ad) {
   const adDoc = parseXml(await wb.zip.file(ad.path).async('string'));
   const cm = cellMap(adDoc);
   const rowsNums = Array.from(adDoc.getElementsByTagName('row')).map(r => +r.getAttribute('r'));
-  let headerRow = 16;
   for (const r of rowsNums) if (str(cellVal(cm.get('A' + r), wb.ss)).startsWith('Pos')) { headerRow = r; break; }
-  const positions = [], seen = new Map();
   for (const r of rowsNums) {
     if (r <= headerRow + 2) continue;
     const pos = str(cellVal(cm.get('A' + r), wb.ss)); if (!pos) continue;
@@ -498,15 +498,16 @@ async function parseTemplate(buf) {
     seen.set(pos, x); positions.push(x);
   }
   if (!positions.length) throw new Error('Keine Positionen in „Aufmaßdaten“ gefunden.');
-  const header = cleanText(cellVal(cm.get('A1'), wb.ss));
+  header = cleanText(cellVal(cm.get('A1'), wb.ss));
   // Bereits vorhandene Blatt/Raum/Stromkreis-Spalten (ab Spalte R) – das, was in der Excel aktuell gezählt wird
-  const adVals = new Map(); const firstRow = new Map(positions.map(x => [x.row, x.pos]));
+  const firstRow = new Map(positions.map(x => [x.row, x.pos]));
   const brsKey = new Map();
   for (const [ref, c] of cm) { const [col, r] = splitRef(ref); if (colNum(col) < BRS_START_COL || r !== headerRow) continue;
     const b = cellVal(c, wb.ss); if (b === null || b === '') continue;
     brsKey.set(col, String(b) + '\u0001' + rawStr(cellVal(cm.get(col + (headerRow + 1)), wb.ss)) + '\u0001' + rawStr(cellVal(cm.get(col + (headerRow + 2)), wb.ss))); }
   for (const [ref, c] of cm) { const [col, r] = splitRef(ref); if (!brsKey.has(col) || !firstRow.has(r)) continue;
     const v = num(cellVal(c, wb.ss)); if (v) { const k = brsKey.get(col) + '\u0001' + firstRow.get(r); adVals.set(k, (adVals.get(k) || 0) + v); } }
+  }
   // Raumbuch
   const rooms = [], sks = [];
   const rb = find('Raumbuch');
@@ -524,6 +525,9 @@ async function parseTemplate(buf) {
     if (str(cellVal(m.get('O3'), wb.ss)) !== 'Blatt') continue;
     const nr = str(cellVal(m.get('O2'), wb.ss));
     const pos = BLATT_COLS.map(c => str(cellVal(m.get(c + POS_ROW), wb.ss)));
+    if (!ad) { if (!header) header = cleanText(cellVal(m.get('A1'), wb.ss));
+      pos.forEach((x, i) => { if (!x || seen.has(x)) return; const t = cleanText(cellVal(m.get(BLATT_COLS[i] + (POS_ROW + 1)), wb.ss) || '');
+        const o = { pos: x, row: 0, text: firstLine(t).split(/\s{2,}/)[0].trim(), fullText: t, unit: '', D: 0, E: 0, F: 0, G: 0, H: 0, K: 0, L: 0, rK: 0, rL: 0, O: 0 }; seen.set(x, o); positions.push(o); }); }
     const existing = [];
     for (let r = DATA_ROW_FIRST; r <= DATA_ROW_LAST; r++) {
       const raum = rawStr(cellVal(m.get('A' + r), wb.ss)), sk = rawStr(cellVal(m.get('B' + r), wb.ss));
@@ -532,7 +536,7 @@ async function parseTemplate(buf) {
         const el = m.get(c + r); const v = cellVal(el, wb.ss);
         if (v !== null && v !== '' && !isNaN(num(v)) && num(v) !== 0) {
           const f = el && kid(el, 'f');
-          const counted = (adVals.get(nr + '\u0001' + raum + '\u0001' + sk + '\u0001' + pos[i]) || 0) > 0;
+          const counted = !ad || (adVals.get(nr + '\u0001' + raum + '\u0001' + sk + '\u0001' + pos[i]) || 0) > 0;
           cells[i] = { v: num(v), f: (f && f.textContent) ? f.textContent : null, counted };
         }
       });
@@ -545,7 +549,16 @@ async function parseTemplate(buf) {
   const inBlatt = new Set(blaetter.flatMap(b => b.positions).filter(Boolean));
   for (const x of positions) x.inBlatt = inBlatt.has(x.pos);
   const uncounted = blaetter.flatMap(b => b.existing.flatMap(e => Object.values(e.cells).filter(c => !c.counted).map(() => b.nr)));
-  return { positions, rooms, sks, blaetter, header, headerRow, uncounted: [...new Set(uncounted)], uncountedCells: uncounted.length };
+  if (!positions.length) throw new Error('Keine Positionen gefunden – ist das eine Aufmaß-Datei aus der Handwerkersoftware?');
+  return { positions, rooms, sks, blaetter, header, headerRow, uncounted: [...new Set(uncounted)], uncountedCells: uncounted.length, blattOnly: !ad };
+}
+/** Neue Datei ohne Aufmaßdaten: Einheit, Zeiten, LV-Mengen von der bisherigen Datei derselben Baustelle übernehmen */
+function mergeOldPositions(tpl, oldP) {
+  if (!tpl.blattOnly || !oldP?.positions) return tpl;
+  const old = new Map(oldP.positions.map(x => [x.pos, x])); let hit = 0;
+  tpl.positions = tpl.positions.map(x => { const o = old.get(x.pos); if (!o) return x; hit++; return { ...o, row: 0, inBlatt: x.inBlatt, text: x.text || o.text, fullText: o.fullText || x.fullText }; });
+  if (!tpl.rooms.length) tpl.rooms = oldP.rooms || []; if (!tpl.sks.length) tpl.sks = oldP.sks || [];
+  tpl.merged = hit; return tpl;
 }
 
 /* ---------------- LV-PDF lesen ---------------- */
@@ -801,10 +814,12 @@ async function buildXlsm(p, entries, opts = {}) {
   // 2) Aufmaßdaten fortschreiben – genau wie die Makros beim Eintippen: vorhandene
   //    Blatt/Raum/Stromkreis-Spalte suchen, sonst rechts neue anhängen, Menge addieren.
   const ad = wb.sheets.find(s => s.name === 'Aufmaßdaten');
+  const brs = new Map(); let newCols = 0;
+  if (ad) {
   const adDoc = parseXml(await zip.file(ad.path).async('string'));
   const sd = adDoc.getElementsByTagName('sheetData')[0];
   const hr = p.headerRow || 16;
-  const brs = new Map(); let lastCol = 17;
+  let lastCol = 17;
   const cv = (row, col) => { const c = getCell(adDoc, sd, col + row, false); return c ? cellVal(c, wb.ss) : null; };
   for (const row of kids(sd, 'row')) {
     row.removeAttribute('spans');
@@ -816,7 +831,6 @@ async function buildXlsm(p, entries, opts = {}) {
     const key = String(b) + '\u0001' + rawStr(cv(hr + 1, L_)) + '\u0001' + rawStr(cv(hr + 2, L_));
     if (!brs.has(key)) brs.set(key, ci);
   }
-  let newCols = 0;
   const perBlatt = new Map();   // nr -> Zuwachs {bz, lohn, mat}
   const addMenge = (b, raum, sk, pos, v) => {
     const x = posByNr.get(pos); if (!x || !v) return;
@@ -867,6 +881,7 @@ async function buildXlsm(p, entries, opts = {}) {
   const dim = adDoc.getElementsByTagName('dimension')[0];
   if (dim) dim.setAttribute('ref', 'A1:' + colLetter(Math.max(17, nextCol - 1)) + lastRow);
   zip.file(ad.path, serXml(adDoc));
+  }
 
   // 3) Übersicht (Bauzeit / Lohn / Material je Blatt)
   const ub = wb.sheets.find(s => s.name === 'Übersicht');
@@ -921,12 +936,14 @@ async function buildXlsm(p, entries, opts = {}) {
   }
   // aktives Blatt = Aufmaßdaten (ein ausgeblendetes Blatt darf nicht aktiv sein)
   const order = Array.from(sheetsEl.getElementsByTagName('sheet')).map(sh => sh.getAttribute('name'));
-  const adIdx = order.indexOf('Aufmaßdaten');
+  let adIdx = order.indexOf('Aufmaßdaten');
+  if (adIdx < 0) { const vis = Array.from(sheetsEl.getElementsByTagName('sheet')); adIdx = Math.max(0, vis.findIndex(sh => usedNames.has(sh.getAttribute('name')))); }
+  const activeName = order[adIdx];
   for (const bv of wb.wbDoc.getElementsByTagName('workbookView')) { bv.setAttribute('activeTab', String(adIdx)); bv.setAttribute('firstSheet', String(adIdx)); }
   for (const sinfo of wb.sheets) {
     if (!sinfo.path || !zip.file(sinfo.path)) continue;
     let x = await zip.file(sinfo.path).async('string');
-    const want = sinfo.name === 'Aufmaßdaten';
+    const want = sinfo.name === activeName;
     if (!want && !x.includes('tabSelected="1"')) continue;
     const d = parseXml(x);
     for (const sv of d.getElementsByTagName('sheetView')) { if (want) sv.setAttribute('tabSelected', '1'); else sv.removeAttribute('tabSelected'); }
@@ -937,7 +954,7 @@ async function buildXlsm(p, entries, opts = {}) {
   if (opts.sigs && (opts.sigs.erstellt || opts.sigs.ag)) {
     const targets = [];
     for (const b of L.blaetter) if (usedNames.has(b.name) && b.path) targets.push({ path: b.path, areas: { erstellt: [0, 4, 33, 36], ag: [5, 9, 33, 36] } });
-    targets.push({ path: ad.path, areas: { erstellt: [6, 10, 6, 9], ag: [6, 10, 10, 13] } });
+    if (ad) targets.push({ path: ad.path, areas: { erstellt: [6, 10, 6, 9], ag: [6, 10, 10, 13] } });
     await addSignatures(zip, ct, targets, opts.sigs);
   }
 
@@ -1385,19 +1402,19 @@ function renderSetup(opts = {}) {
       let p;
       if (opts.replace) {
         p = S.p;
-        if (tpl) { Object.assign(p, { template: buf, templateName: xf.name, templateDate: Date.now(), positions: tpl.positions, rooms: tpl.rooms, sks: tpl.sks, blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false }); }
+        if (tpl) { mergeOldPositions(tpl, p); Object.assign(p, { blattOnly: !!tpl.blattOnly, template: buf, templateName: xf.name, templateDate: Date.now(), positions: tpl.positions, rooms: tpl.rooms, sks: tpl.sks, blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false }); }
         if (lv) { p.lv = lv; p.lvName = pf.name; p.lvPdf = pdfBuf; p.lvHash = null; }
       } else {
         p = { id: uid(), name: ($('#sName').value.trim() || xf.name.replace(/\.[^.]+$/, '')), created: Date.now(),
           template: buf, templateName: xf.name, templateDate: Date.now(), positions: tpl.positions, rooms: tpl.rooms, sks: tpl.sks,
-          blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false, lv: lv || null, lvName: pf?.name || null, lvPdf: lv ? pdfBuf : null, titleAlias: {} };
+          blaetter: tpl.blaetter, header: tpl.header, headerRow: tpl.headerRow, uncounted: tpl.uncounted, uncountedCells: tpl.uncountedCells, countExisting: false, blattOnly: !!tpl.blattOnly, lv: lv || null, lvName: pf?.name || null, lvPdf: lv ? pdfBuf : null, titleAlias: {} };
       }
       await saveProject(p); bar.style.width = '100%';
       const nT = p.lv ? p.positions.filter(x => posTitle(p, x.pos).titel || posTitle(p, x.pos).bereich).length : 0;
       const exist = p.uncountedCells || 0;
       await DB.put('kv', p.id, 'current'); await loadAll(); S.tab = 'erfassen';
       render();
-      toast(`<b>Eingelesen:</b> ${p.positions.length} Positionen, ${p.blaetter.length} Blätter, ${p.rooms.length} Räume${p.lv ? `, ${nT} mit LV-Titel` : ''}${exist ? `<br>Achtung: ${exist} Altwerte auf ${p.uncounted.map(n => 'Blatt ' + n).join(', ')} (siehe Export)` : ''}`, 5000);
+      toast(`<b>Eingelesen:</b> ${p.positions.length} Positionen, ${p.blaetter.length} Blätter, ${p.rooms.length} Räume${p.lv ? `, ${nT} mit LV-Titel` : ''}${tpl?.blattOnly ? `<br>Datei ohne „Aufmaßdaten“: ${tpl.merged != null ? `Einheiten & Zeiten von der bisherigen Datei übernommen (${tpl.merged} Pos.)` : 'Einheiten & Zeiten fehlen'} – es werden nur die Blätter ausgefüllt.` : ''}${exist ? `<br>Achtung: ${exist} Altwerte auf ${p.uncounted.map(n => 'Blatt ' + n).join(', ')} (siehe Export)` : ''}`, 5000);
     } catch (err) {
       console.error(err); msg.className = 'hint warn';
       msg.textContent = 'Fehler: ' + (err.message || err) + (String(err).includes('import') || String(err).includes('fetch') ? ' (Für das LV wird beim ersten Mal Internet benötigt.)' : '');
