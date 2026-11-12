@@ -101,6 +101,7 @@ nav.tabs button{font-size:11px}
 .pv.placing{outline:3px solid var(--accent);outline-offset:-3px;cursor:crosshair}
 .pvin{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 .pvin img{display:block;pointer-events:none;-webkit-user-drag:none}
+.pvhi{position:absolute;display:none;pointer-events:none}
 .pin{position:absolute;width:0;height:0}
 .pin span{position:absolute;left:0;top:0;transform:translate(-1px,-100%) scale(var(--inv,1));transform-origin:1px 100%;min-width:28px;height:28px;padding:0 6px;border-radius:14px 14px 14px 2px;color:#fff;font:700 13px/28px -apple-system,system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.35);border:2px solid #fff;cursor:pointer}
 .pin.hl span{box-shadow:0 0 0 4px rgba(28,126,214,.55),0 2px 6px rgba(0,0,0,.35)}
@@ -3416,7 +3417,8 @@ async function canvasToJpeg(cv, q = 0.85) { return await new Promise(r => cv.toB
 async function planFromFile(file, onProg) {
   const out = []; const MAX = 4096;
   if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
-    const lib = await loadPdfJs(); const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const lib = await loadPdfJs(); const pdfBuf = await file.arrayBuffer(); const pdfBlob = new Blob([pdfBuf], { type: 'application/pdf' });
+    const pdf = await lib.getDocument({ data: new Uint8Array(pdfBuf.slice(0)) }).promise;
     let pages = [...Array(pdf.numPages).keys()].map(i => i + 1);
     if (pages.length > 1) { const a = prompt(`Die PDF hat ${pages.length} Seiten. Welche als Plan übernehmen? (z. B. „1“, „1-3“ oder „alle“)`, pages.length > 6 ? '1' : 'alle'); if (a == null) return [];
       if (!/^\s*alle\s*$/i.test(a)) { const sel = new Set(); for (const part of a.split(/[,;\s]+/)) { const m = /^(\d+)(?:-(\d+))?$/.exec(part.trim()); if (m) for (let i = +m[1]; i <= +(m[2] || m[1]); i++) if (i >= 1 && i <= pdf.numPages) sel.add(i); } pages = [...sel].sort((x, y) => x - y); } }
@@ -3426,7 +3428,7 @@ async function planFromFile(file, onProg) {
       const vp = page.getViewport({ scale: sc }); const cv = document.createElement('canvas'); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
       const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      out.push({ blob: await canvasToJpeg(cv), w: cv.width, h: cv.height, name: file.name.replace(/\.pdf$/i, '') + (pdf.numPages > 1 ? ` – S. ${n}` : '') });
+      out.push({ blob: await canvasToJpeg(cv), w: cv.width, h: cv.height, name: file.name.replace(/\.pdf$/i, '') + (pdf.numPages > 1 ? ` – S. ${n}` : ''), pdf: pdfBlob, page: n, sc });
       cv.width = cv.height = 0;
     }
     return out;
@@ -3440,7 +3442,7 @@ async function addPlanFiles(files) {
   let n = 0; const st = $('#plOut');
   for (const f of files) {
     try { for (const r of await planFromFile(f, t => { if (st) st.innerHTML = `<p class="hint">${esc(t)}</p>`; })) {
-      const pl = { id: uid(), projectId: S.p.id, name: r.name, blob: r.blob, w: r.w, h: r.h, created: Date.now() + n, order: Date.now() + n };
+      const pl = { id: uid(), projectId: S.p.id, name: r.name, blob: r.blob, w: r.w, h: r.h, created: Date.now() + n, order: Date.now() + n, ...(r.pdf ? { pdf: r.pdf, page: r.page, sc: r.sc } : {}) };
       await DB.put('plaene', pl); S.plaene.push(pl); S.planId = pl.id; n++; } }
     catch (e) { console.error(e); toast('Konnte „' + esc(f.name) + '“ nicht lesen: ' + esc(e.message || e), 5000); }
   }
@@ -3464,7 +3466,7 @@ async function renderPlaene() {
   m.innerHTML = `
   <div class="row" style="margin-bottom:8px"><select class="i grow" id="plSel">${S.plaene.map(x => `<option value="${x.id}" ${x.id === pl.id ? 'selected' : ''}>${esc(x.name)} (${aufgabenOf(x.id).filter(a => a.status !== 'erledigt').length})</option>`).join('')}</select>
     <button class="btn" id="plMenu" style="padding:6px 12px" title="Pläne verwalten">⋯</button></div>
-  <div id="pv" class="pv"><div id="pvIn" class="pvin"><img id="pvImg" alt=""><div id="pvPins"></div></div>
+  <div id="pv" class="pv"><div id="pvIn" class="pvin"><img id="pvImg" alt=""><canvas id="pvHi" class="pvhi"></canvas><div id="pvPins"></div></div>
     <div class="pvctl"><button id="pvP" title="vergrößern">+</button><button id="pvM" title="verkleinern">−</button><button id="pvF" title="ganzer Plan">⤢</button></div>
     <div class="pvhint hidden" id="pvHint"></div></div>
   <div class="row" style="margin:10px 0 4px"><button class="btn primary grow" id="pvAdd">＋ Aufgabe auf dem Plan</button></div>
@@ -3495,14 +3497,36 @@ async function pvInit(pl) {
   if (PV.plan !== pl.id) { if (PV.url) URL.revokeObjectURL(PV.url); PV.url = URL.createObjectURL(pl.blob); PV.plan = pl.id; PV.s = 0; }
   img.src = PV.url; img.width = pl.w; img.height = pl.h; inner.style.width = pl.w + 'px'; inner.style.height = pl.h + 'px';
   const fit = () => { const r = box.getBoundingClientRect(); PV.fit = Math.min(r.width / pl.w, r.height / pl.h); return r; };
-  const apply = () => { const r = box.getBoundingClientRect(); const min = PV.fit * 0.6, max = Math.max(PV.fit * 2, 3);
+  const maxS = () => pl.pdf ? Math.max(PV.fit * 2, 16) : Math.max(PV.fit * 2, 3);
+  const apply = () => { const r = box.getBoundingClientRect(); const min = PV.fit * 0.6, max = maxS();
     PV.s = Math.min(max, Math.max(min, PV.s)); const W = pl.w * PV.s, H = pl.h * PV.s;
     // nicht ganz aus dem Bild schieben
     PV.tx = W < r.width ? (r.width - W) / 2 : Math.min(40, Math.max(r.width - W - 40, PV.tx)); PV.ty = H < r.height ? (r.height - H) / 2 : Math.min(40, Math.max(r.height - H - 40, PV.ty));
-    inner.style.transform = `translate(${PV.tx}px,${PV.ty}px) scale(${PV.s})`; inner.style.setProperty('--inv', 1 / PV.s); };
+    inner.style.transform = `translate(${PV.tx}px,${PV.ty}px) scale(${PV.s})`; inner.style.setProperty('--inv', 1 / PV.s); hiSoon(); };
+  // Vektor-Plan: sichtbaren Ausschnitt nach dem Zoomen frisch aus der PDF zeichnen → beliebig scharf
+  let hiT = null, hiTask = null;
+  const hiSoon = () => { if (!pl.pdf) return; clearTimeout(hiT); hiT = setTimeout(hiRender, 180); };
+  const hiRender = async () => {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3); const cv = $('#pvHi'); if (!cv || PV.plan !== pl.id) return;
+    if (PV.s * dpr <= 1.05) { cv.style.display = 'none'; return; }       // Grundbild reicht
+    const r = box.getBoundingClientRect(); const s = PV.s;
+    const vx0 = Math.max(0, -PV.tx / s), vy0 = Math.max(0, -PV.ty / s), vx1 = Math.min(pl.w, (r.width - PV.tx) / s), vy1 = Math.min(pl.h, (r.height - PV.ty) / s);
+    if (vx1 <= vx0 || vy1 <= vy0) return;
+    const pw = Math.min(4096, Math.ceil((vx1 - vx0) * s * dpr)), ph = Math.min(4096, Math.ceil((vy1 - vy0) * s * dpr)); const k = pw / ((vx1 - vx0) * s * dpr);
+    try {
+      if (!PV.doc || PV.docId !== pl.id) { const lib = await loadPdfJs(); PV.doc = await lib.getDocument({ data: new Uint8Array(await pl.pdf.arrayBuffer()) }).promise; PV.docId = pl.id; }
+      const page = await PV.doc.getPage(pl.page || 1); const R = pl.sc * s * dpr * k;
+      const off = document.createElement('canvas'); off.width = pw; off.height = ph; const ctx = off.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pw, ph);
+      if (hiTask) { try { hiTask.cancel(); } catch { } }
+      hiTask = page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: R }), transform: [1, 0, 0, 1, -vx0 * s * dpr * k, -vy0 * s * dpr * k] });
+      await hiTask.promise; hiTask = null; if (PV.plan !== pl.id) return;
+      cv.width = pw; cv.height = ph; cv.getContext('2d').drawImage(off, 0, 0);
+      Object.assign(cv.style, { display: 'block', left: vx0 + 'px', top: vy0 + 'px', width: (vx1 - vx0) + 'px', height: (vy1 - vy0) + 'px' });
+    } catch (e) { if (e?.name !== 'RenderingCancelledException') console.error(e); }
+  };
   PV.apply = apply; PV.reset = () => { fit(); PV.s = PV.fit; PV.tx = 0; PV.ty = 0; apply(); };
   const r0 = fit(); if (!PV.s) PV.reset(); else apply();
-  const zoomAt = (f, cx, cy) => { const ns = Math.min(Math.max(PV.fit * 2, 3), Math.max(PV.fit * 0.6, PV.s * f)); const k = ns / PV.s; PV.tx = cx - (cx - PV.tx) * k; PV.ty = cy - (cy - PV.ty) * k; PV.s = ns; apply(); };
+  const zoomAt = (f, cx, cy) => { const ns = Math.min(maxS(), Math.max(PV.fit * 0.6, PV.s * f)); const k = ns / PV.s; PV.tx = cx - (cx - PV.tx) * k; PV.ty = cy - (cy - PV.ty) * k; PV.s = ns; apply(); };
   PV.zoomAt = zoomAt;
   // Pins
   const pins = $('#pvPins'); pins.innerHTML = aufgabenOf(pl.id).filter(a => (S.aufgFilter || 'offen') === 'alle' || a.status === (S.aufgFilter || 'offen') || a.id === PV.hl)
@@ -3596,7 +3620,8 @@ function openPlanMenu(pl) {
   openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:17px">Pläne</div><button class="x" id="pmx">×</button></div>
     <label class="f">Name dieses Plans</label><div class="row"><input class="i grow" id="pmN" value="${esc(pl.name)}"><button class="btn" id="pmNs">OK</button></div>
     <button class="btn primary block" id="pmAdd" style="margin-top:14px">Weiteren Plan hochladen (PDF oder Bild)</button>
-    <p class="small muted" style="margin-top:8px">Aus Dalux: Plan als PDF herunterladen bzw. teilen – oder einen Screenshot vom Plan machen und den hochladen. PDFs mit mehreren Seiten: du wählst, welche Seiten.</p>
+    <p class="small muted" style="margin-top:8px">${pl.pdf ? '✓ Dieser Plan ist eine PDF – bleibt beim Reinzoomen gestochen scharf.' : '⚠ Dieser Plan ist ein Bild/Screenshot – beim starken Reinzoomen wird er unscharf. Mit der Original-PDF bleibt er scharf.'}<br>
+      Am besten die Original-PDF vom Planer/Bauleiter bzw. aus Dalux. PDFs mit mehreren Seiten: du wählst, welche Seiten.</p>
     <button class="btn danger block" id="pmDel" style="margin-top:14px">Diesen Plan löschen (mit ${aufgabenOf(pl.id).length} Aufgaben)</button>
     <input type="file" id="pmF" accept="application/pdf,image/*" multiple style="display:none"><div id="plOut"></div>`);
   $('#pmx').onclick = () => { closeSheet(); renderPlaene(); };
@@ -4047,7 +4072,7 @@ function bufToB64(buf) { const b = new Uint8Array(buf); let s = ''; for (let i =
 function b64ToBuf(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b.buffer; }
 async function saveBackup() {
   const { template, lvPdf, ...rest } = S.p;
-  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), bestellungen: (S.bestellungen || []).map(({ pdf, ...r }) => r), berichte: S.berichte || [], aufgaben: await DB.aufgabenOf(p.id), plaene: await Promise.all((await DB.plaeneOf(p.id)).map(async ({ blob, ...r }) => ({ ...r, jpg: bufToB64(await blob.arrayBuffer()) }))), firma: await DB.get('kv', 'firma'),
+  const data = { app: 'aufmass', version: 1, saved: new Date().toISOString(), project: { ...rest, positions: rest.positions.map(({ _hay, _hayText, _words, _nospace, _posc, ...r }) => r), _use: undefined, _roomNorm: undefined, template: bufToB64(template), lvPdf: lvPdf ? bufToB64(lvPdf) : null }, entries: S.entries, notes: S.notes || [], nachweise: (S.nachweise || []).map(({ pdf, ...r }) => r), bestellungen: (S.bestellungen || []).map(({ pdf, ...r }) => r), berichte: S.berichte || [], aufgaben: await DB.aufgabenOf(p.id), plaene: await Promise.all((await DB.plaeneOf(p.id)).map(async ({ blob, pdf, ...r }) => ({ ...r, jpg: bufToB64(await blob.arrayBuffer()), ...(pdf ? { pdfB64: bufToB64(await pdf.arrayBuffer()) } : {}) }))), firma: await DB.get('kv', 'firma'),
     vorlagen: Object.fromEntries(Object.entries(await getVorlagen()).map(([k, v]) => [k, { ...v, buf: bufToB64(v.buf) }])) };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `Aufmass-Backup_${S.p.name.replace(/[^\wäöüÄÖÜß-]+/g, '_')}_${todayISO()}.json`;
@@ -4072,7 +4097,7 @@ function restoreBackup() {
       for (const n of (data.bestellungen || [])) await DB.put('bestellungen', { ...n, projectId: p.id });
       for (const n of (data.berichte || [])) await DB.put('berichte', { ...n, projectId: p.id });
       for (const n of (data.aufgaben || [])) await DB.put('aufgaben', { ...n, projectId: p.id });
-      for (const { jpg, ...n } of (data.plaene || [])) await DB.put('plaene', { ...n, projectId: p.id, blob: new Blob([b64ToBuf(jpg)], { type: 'image/jpeg' }) });
+      for (const { jpg, pdfB64, ...n } of (data.plaene || [])) await DB.put('plaene', { ...n, projectId: p.id, blob: new Blob([b64ToBuf(jpg)], { type: 'image/jpeg' }), ...(pdfB64 ? { pdf: new Blob([b64ToBuf(pdfB64)], { type: 'application/pdf' }) } : {}) });
       if (data.vorlagen && Object.keys(data.vorlagen).length) await DB.put('kv', Object.fromEntries(Object.entries(data.vorlagen).map(([k, v]) => [k, { ...v, buf: b64ToBuf(v.buf) }])), 'vorlagen:' + p.id);
       if (data.firma && !(await DB.get('kv', 'firma'))) await DB.put('kv', data.firma, 'firma');
       Sync.dirty(p.id);
