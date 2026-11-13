@@ -815,6 +815,7 @@ async function buildXlsm(p, entries, opts = {}) {
   //    Blatt/Raum/Stromkreis-Spalte suchen, sonst rechts neue anhängen, Menge addieren.
   const ad = wb.sheets.find(s => s.name === 'Aufmaßdaten');
   const brs = new Map(); let newCols = 0;
+  const perBlatt = new Map();   // nr -> Zuwachs {bz, lohn, mat}
   if (ad) {
   const adDoc = parseXml(await zip.file(ad.path).async('string'));
   const sd = adDoc.getElementsByTagName('sheetData')[0];
@@ -831,7 +832,6 @@ async function buildXlsm(p, entries, opts = {}) {
     const key = String(b) + '\u0001' + rawStr(cv(hr + 1, L_)) + '\u0001' + rawStr(cv(hr + 2, L_));
     if (!brs.has(key)) brs.set(key, ci);
   }
-  const perBlatt = new Map();   // nr -> Zuwachs {bz, lohn, mat}
   const addMenge = (b, raum, sk, pos, v) => {
     const x = posByNr.get(pos); if (!x || !v) return;
     const key = b.nr + '\u0001' + raum + '\u0001' + sk;
@@ -954,9 +954,12 @@ async function buildXlsm(p, entries, opts = {}) {
   if (opts.sigs && (opts.sigs.erstellt || opts.sigs.ag)) {
     const targets = [];
     for (const b of L.blaetter) if (usedNames.has(b.name) && b.path) targets.push({ path: b.path, areas: { erstellt: [0, 4, 33, 36], ag: [5, 9, 33, 36] } });
-    if (ad) targets.push({ path: ad.path, areas: { erstellt: [6, 10, 6, 9], ag: [6, 10, 10, 13] } });
+    if (ad && opts.keepData) targets.push({ path: ad.path, areas: { erstellt: [6, 10, 6, 9], ag: [6, 10, 10, 13] } });
     await addSignatures(zip, ct, targets, opts.sigs);
   }
+
+  // 3d) Vorgabe Büro: ins Büro gehen NUR die Aufmaß-Blätter – „Aufmaßdaten“ (Zeiten/Preise), „Übersicht“, „Raumbuch“ raus
+  if (!opts.keepData) await stripDataSheets(wb, zip, ct, usedNames);
 
   // 4) calcChain entfernen (Excel baut ihn beim Öffnen neu auf)
   if (zip.file('xl/calcChain.xml')) {
@@ -972,6 +975,44 @@ async function buildXlsm(p, entries, opts = {}) {
   return { blob, layout: L, brsCount: brs.size, newCols, hidden, visible: usedNames.size };
 }
 
+/** Entfernt die Daten-Blätter wie in der Büro-Datei ohne Zeiten: Blätter + Bezüge raus, Namen → #REF!, Ansicht auf erstes benutztes Blatt */
+const DATA_SHEETS = ['Aufmaßdaten', 'Übersicht', 'Raumbuch'];
+async function stripDataSheets(wb, zip, ct, usedNames) {
+  const sheetsEl = wb.wbDoc.getElementsByTagName('sheets')[0]; const relsRoot = wb.relDoc.documentElement;
+  for (const sh of Array.from(sheetsEl.getElementsByTagName('sheet'))) {
+    const name = sh.getAttribute('name'); if (!DATA_SHEETS.includes(name)) continue;
+    const rid = sh.getAttributeNS(NS_R, 'id') || sh.getAttribute('r:id');
+    const rel = Array.from(relsRoot.getElementsByTagName('Relationship')).find(r => r.getAttribute('Id') === rid);
+    if (rel) { const path = 'xl/' + rel.getAttribute('Target').replace(/^\/?xl\//, '').replace(/^\//, '');
+      const relsPath = path.replace(/([^/]+)$/, '_rels/$1.rels');
+      if (zip.file(relsPath)) {   // Zeichnungen/Druckeinstellungen dieses Blatts mit entfernen
+        const rd = parseXml(await zip.file(relsPath).async('string'));
+        for (const r of Array.from(rd.getElementsByTagName('Relationship'))) { const t = r.getAttribute('Target') || ''; if (/^https?:/.test(t)) continue;
+          const tp = new URL(t, 'http://x/' + path).pathname.slice(1); if (/drawings\/|printerSettings\//.test(tp) && zip.file(tp)) { zip.remove(tp); const rp = tp.replace(/([^/]+)$/, '_rels/$1.rels'); if (zip.file(rp)) zip.remove(rp);
+            for (const o of Array.from(ct.getElementsByTagName('Override'))) if (o.getAttribute('PartName') === '/' + tp) o.parentNode.removeChild(o); } }
+        zip.remove(relsPath); }
+      zip.remove(path);
+      for (const o of Array.from(ct.getElementsByTagName('Override'))) if (o.getAttribute('PartName') === '/' + path) o.parentNode.removeChild(o);
+      relsRoot.removeChild(rel); }
+    sheetsEl.removeChild(sh);
+  }
+  // Namen, die auf die entfernten Blätter zeigen → #REF! (so macht es Excel beim Löschen auch)
+  const re = new RegExp("(^|[^A-Za-z0-9_])'?(" + DATA_SHEETS.join('|') + ")'?!");
+  for (const dn of Array.from(wb.wbDoc.getElementsByTagName('definedName'))) if (re.test(dn.textContent)) dn.textContent = '#REF!';
+  // Ansicht: erstes benutztes (sichtbares) Blatt aktiv
+  const list = Array.from(sheetsEl.getElementsByTagName('sheet'));
+  let idx = list.findIndex(sh => usedNames.has(sh.getAttribute('name')) && !sh.getAttribute('state'));
+  if (idx < 0) idx = Math.max(0, list.findIndex(sh => !sh.getAttribute('state')));
+  for (const bv of wb.wbDoc.getElementsByTagName('workbookView')) { bv.setAttribute('activeTab', String(idx)); bv.setAttribute('firstSheet', String(idx)); }
+  for (let i = 0; i < list.length; i++) {
+    const rid = list[i].getAttributeNS(NS_R, 'id') || list[i].getAttribute('r:id'); const rel = Array.from(relsRoot.getElementsByTagName('Relationship')).find(r => r.getAttribute('Id') === rid);
+    const path = rel && 'xl/' + rel.getAttribute('Target').replace(/^\/?xl\//, '').replace(/^\//, ''); if (!path || !zip.file(path)) continue;
+    const x = await zip.file(path).async('string'); if (i !== idx && !x.includes('tabSelected="1"')) continue;
+    const d = parseXml(x); for (const sv of d.getElementsByTagName('sheetView')) { if (i === idx) sv.setAttribute('tabSelected', '1'); else sv.removeAttribute('tabSelected'); } zip.file(path, serXml(d));
+  }
+  if (zip.file('docProps/app.xml')) { const ad = parseXml(await zip.file('docProps/app.xml').async('string'));
+    for (const n of ['HeadingPairs', 'TitlesOfParts']) for (const e of Array.from(ad.getElementsByTagNameNS('*', n))) e.parentNode.removeChild(e); zip.file('docProps/app.xml', serXml(ad)); }
+}
 
 /* ---------------- Unterschrift als Bild in die Excel ----------------
    Bild wird in die verbundenen Felder gesetzt (Blatt: A34:E37 / F34:J37, Aufmaßdaten: G7:K10 / G11:K14),
@@ -1229,6 +1270,7 @@ const curWeek = () => weekOf(todayISO());
 const weekEntries = key => S.entries.filter(e => weekOf(e.date).key === key);
 const safeName = s => s.replace(/[^\wäöüÄÖÜß-]+/g, '_').replace(/^_+|_+$/g, '');
 function aufmassFileName(p, w) { return `Aufmass_${safeName(p.name)}_KW${String(w.week).padStart(2, '0')}_${w.year}_${dm(w.from)}-${dm(w.to)}${w.to.slice(0, 4)}.xlsm`; }
+const AUFMASS_FMT = 2;   // 2 = ohne Aufmaßdaten/Übersicht/Raumbuch
 function weekHash(p, list) {
   if (!p.templateHash) p.templateHash = hashBuf(p.template);
   return hashStr(JSON.stringify([p.templateHash, !!p.countExisting, list.map(e => [e.id, e.pos, e.qty, e.raum, e.sk, e.date]).sort((a, b) => a[0] < b[0] ? -1 : 1)]));
@@ -1249,13 +1291,14 @@ const Aufmass = {
       for (const k of recs.keys()) if (k < cw) weeks.add(k);
       for (const wk of [...weeks].sort()) {
         const list = weekEntries(wk); const rec = recs.get(wk); const sm = sigMeta(p, wk, rec?.created || Date.now()); const h = weekHash(p, list) + sigHash(sm);
-        if (rec && rec.hash === h) continue;
+        if (rec && rec.hash === h && rec.fmt === AUFMASS_FMT) continue;
+        const onlyFmt = !!(rec && rec.hash === h);   // nur neues Dateiformat (ohne Zeiten-Blätter), Inhalt gleich
         if (!rec && !list.length) continue;
         const w = weekByKey(wk); const res = await buildXlsm(p, list, { sigs: await renderSigs(sm) });
         const nr = { key: p.id + '|' + wk, pid: p.id, week: wk, from: w.from, to: w.to, label: weekLabel(w), fileName: aufmassFileName(p, w),
           file: await res.blob.arrayBuffer(), hash: h, count: list.length, created: rec?.created || Date.now(), updated: Date.now(),
-          version: (rec?.version || 0) + 1, sent: rec?.sent || [], changedAfterSend: !!(rec?.sent?.length), uploaded: null };
-        await DB.put('aufmasse', nr); made.push(nr);
+          version: onlyFmt ? rec.version : (rec?.version || 0) + 1, sent: rec?.sent || [], changedAfterSend: onlyFmt ? !!rec.changedAfterSend : !!(rec?.sent?.length), uploaded: null, fmt: AUFMASS_FMT };
+        await DB.put('aufmasse', nr); if (!onlyFmt) made.push(nr);
       }
     } catch (e) { console.error('Aufmaß-Abschluss', e); }
     finally { this.busy = false; }
@@ -3370,7 +3413,7 @@ async function packZip(w, files) {
 function weekPackCard() {
   const ws = packWeeks(); const sel = S.packWeek && ws.includes(S.packWeek) ? S.packWeek : ws[0];
   return `<div class="card" id="wpCard"><h2 style="margin-bottom:4px">Woche ans Büro</h2>
-    <div class="muted small" style="margin-bottom:10px">Aufmaß, Arbeitsnachweise und Bautagesberichte einer Woche zusammen verschicken oder speichern.</div>
+    <div class="muted small" style="margin-bottom:10px">Aufmaß-Blätter (ohne Zeiten), Arbeitsnachweise und Bautagesberichte einer Woche zusammen verschicken oder speichern.</div>
     <select class="i" id="wpW">${ws.map(k => { const w = weekByKey(k); return `<option value="${k}" ${k === sel ? 'selected' : ''}>KW ${w.week}/${w.year} · ${dm(w.from)}–${dm(w.to)}${k === curWeek().key ? ' (läuft)' : ''}</option>`; }).join('')}</select>
     <div id="wpList" style="margin-top:8px"></div>
     <div class="row" style="margin-top:10px"><button class="btn primary grow" id="wpMail">✉ Alles per E-Mail ans Büro</button></div>
@@ -3379,7 +3422,7 @@ function weekPackCard() {
 }
 function wireWeekPack() {
   if (!$('#wpW')) return;
-  const opt = S.packOpt ||= { auf: true, an: true, bt: true, be: false };
+  const opt = S.packOpt ||= { auf: true, an: true, bt: true }; opt.be = false;   // Vorgabe Büro: nur Aufmaß-Blätter, Nachweise, Berichte
   const paint = () => {
     const wk = $('#wpW').value; S.packWeek = wk; const c = packContents(wk);
     const row = (k, label, n, extra) => `<label class="row small" style="gap:10px;margin:7px 2px;${n ? '' : 'opacity:.5'}"><input type="checkbox" data-po="${k}" ${opt[k] && n ? 'checked' : ''} ${n ? '' : 'disabled'} style="width:22px;height:22px"><span class="grow">${label}</span><span class="muted">${extra}</span></label>`;
@@ -3387,8 +3430,7 @@ function wireWeekPack() {
     $('#wpList').innerHTML =
       row('auf', c.cur ? 'Aufmaß (Zwischenstand)' : 'Aufmaß', c.entries.length, c.entries.length ? `${c.entries.length} Einträge · ${fmtMin(sumMinutes(c.entries))}` : 'keine Einträge') +
       row('an', 'Arbeitsnachweise', c.an.length, c.an.length ? `${c.an.length} · ${fmtH(c.an.reduce((a, n) => a + anHours(n), 0)) || 0} Std${sentAll(c.an) ? ' · versendet ✓' : ''}` : 'keine') +
-      row('bt', 'Bautagesberichte', c.bt.length, c.bt.length ? `${c.bt.length} ${c.bt.length === 1 ? 'Tag' : 'Tage'}${c.bt.reduce((a, b) => a + berichtHours(b), 0) ? ' · ' + fmtH(c.bt.reduce((a, b) => a + berichtHours(b), 0)) + ' Std' : ''}${sentAll(c.bt) ? ' · versendet ✓' : ''}` : 'keine') +
-      row('be', 'Bestellscheine', c.be.length, c.be.length ? String(c.be.length) : 'keine');
+      row('bt', 'Bautagesberichte', c.bt.length, c.bt.length ? `${c.bt.length} ${c.bt.length === 1 ? 'Tag' : 'Tage'}${c.bt.reduce((a, b) => a + berichtHours(b), 0) ? ' · ' + fmtH(c.bt.reduce((a, b) => a + berichtHours(b), 0)) + ' Std' : ''}${sentAll(c.bt) ? ' · versendet ✓' : ''}` : 'keine');
     $('#wpList').querySelectorAll('[data-po]').forEach(i => i.onchange = () => { opt[i.dataset.po] = i.checked; });
     $('#wpOut').innerHTML = '';
   };
