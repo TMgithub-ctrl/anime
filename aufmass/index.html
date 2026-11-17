@@ -149,6 +149,14 @@ details.long div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:a
 .seg{display:flex;background:var(--panel2);border-radius:11px;padding:3px;gap:3px;margin-bottom:12px}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 4px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
 .seg button.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.seg:has(> button:nth-child(5)) button{font-size:12px;padding:8px 1px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.segn{display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:var(--accent-text);font-size:11px;line-height:16px}
+.td{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer}.td:first-child{border-top:0}
+.tdc{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--muted);background:none;color:#fff;font-weight:800;font-size:15px;line-height:1;padding:0;cursor:pointer}
+.tdc.on{background:#2f9e44;border-color:#2f9e44}
+.tdt .done{text-decoration:line-through;color:var(--muted)}
+.tdph{position:relative;flex:none}.tdph img{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.tdph span{position:absolute;right:-4px;bottom:-4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;font-size:11px;padding:0 4px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;-webkit-overflow-scrolling:touch}
 .chips button{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
 .chips button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
@@ -1733,11 +1741,12 @@ function weekBar(kind, all) {
 function wireWeekBar(m) { const sel = m.querySelector('#nwSel'); if (sel) sel.onchange = () => { S.nWeek = sel.value; try { localStorage.setItem('aufmass-nweek', sel.value); } catch { } renderNotizen(); }; }
 function renderNotizen() {
   const m = $('#main'); S.noteView ||= 'notes';
-  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="bt" class="${S.noteView === 'bt' ? 'on' : ''}">Berichte</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Nachweise</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellung</button></div>`;
+  const seg = `<div class="seg"><button data-nv="notes" class="${S.noteView === 'notes' ? 'on' : ''}">Notizen</button><button data-nv="bt" class="${S.noteView === 'bt' ? 'on' : ''}">Berichte</button><button data-nv="an" class="${S.noteView === 'an' ? 'on' : ''}">Nachweise</button><button data-nv="be" class="${S.noteView === 'be' ? 'on' : ''}">Bestellung</button><button data-nv="todo" class="${S.noteView === 'todo' ? 'on' : ''}">To-do${(S.aufgaben || []).some(a => a.status !== 'erledigt') ? ` <span class="segn">${(S.aufgaben || []).filter(a => a.status !== 'erledigt').length}</span>` : ''}</button></div>`;
   const wireSeg = () => m.querySelectorAll('[data-nv]').forEach(b => b.onclick = () => { S.noteView = b.dataset.nv; renderNotizen(); });
   if (S.noteView === 'an') { m.innerHTML = seg + weekBar('an', S.nachweise || []); wireSeg(); wireWeekBar(m); renderNachweisListe(m); return; }
   if (S.noteView === 'be') { m.innerHTML = seg + weekBar('be', S.bestellungen || []); wireSeg(); wireWeekBar(m); renderBestellListe(m); return; }
   if (S.noteView === 'bt') { m.innerHTML = seg + weekBar('bt', S.berichte || []); wireSeg(); wireWeekBar(m); renderBerichtListe(m); return; }
+  if (S.noteView === 'todo') { m.innerHTML = seg; wireSeg(); renderTodo(m); return; }
   const allN = S.notes || []; const list = nFilter('notes', allN).slice().sort((a, b) => b.updated - a.updated);
   m.innerHTML = seg + weekBar('notes', allN) + `<div class="card" style="padding:12px">
       <textarea class="i" id="nNew" rows="4" placeholder="Notiz … z. B. „UV 1.OG: 3 LS B16 gesetzt, 25 m NYM 3x1,5 gezogen“"></textarea>
@@ -3642,10 +3651,11 @@ async function photoToDataUrl(file, max = 1400) {
   return cv.toDataURL('image/jpeg', 0.72);
 }
 async function openAufgabe(a, isNew) {
+  const back = () => S.tab === 'plaene' ? renderPlaene() : render(); const L = a.planId ? 'Aufgabe' : 'To-do';
   a = JSON.parse(JSON.stringify(a)); a.fotos ||= [];
   const names = [...new Set([...(await btbNames()), ...(S.aufgaben || []).map(x => x.wer).filter(Boolean)])];
   const draw = () => {
-    openSheet(`<div class="head"><span class="pnum" style="background:${AUFG_ST[a.status].c};margin-right:10px">${a.nr}</span><div class="grow"><div style="font-weight:700;font-size:18px">${isNew ? 'Neue Aufgabe' : 'Aufgabe ' + a.nr}</div><div class="muted small">${esc(S.plaene.find(p => p.id === a.planId)?.name || '')}</div></div><button class="x" id="agx">×</button></div>
+    openSheet(`<div class="head"><span class="pnum" style="background:${AUFG_ST[a.status].c};margin-right:10px">${a.nr}</span><div class="grow"><div style="font-weight:700;font-size:18px">${isNew ? (a.planId ? 'Neue Aufgabe' : 'Neues To-do') : L + ' ' + a.nr}</div><div class="muted small">${a.planId ? '📍 ' + esc((S.plaene || []).find(p => p.id === a.planId)?.name || 'Plan') : 'To-do-Liste'}</div></div><button class="x" id="agx">×</button></div>
       <label class="f">Was ist zu tun?</label><input class="i" id="agT" value="${esc(a.titel)}" placeholder="z. B. Steckdose fehlt, Brandschott schließen">
       <label class="f">Beschreibung</label><textarea class="i" id="agB" rows="3">${esc(a.text)}</textarea>
       <label class="f">Status</label><div class="seg" id="agS">${Object.entries(AUFG_ST).map(([k, v]) => `<button data-s="${k}" class="${a.status === k ? 'on' : ''}">${v.t}</button>`).join('')}</div>
@@ -3655,26 +3665,67 @@ async function openAufgabe(a, isNew) {
       <label class="f">Fotos</label><div class="agph">${a.fotos.map((f, i) => `<div><img src="${f}" data-big="${i}"><button class="nsx" data-fdel="${i}">✕</button></div>`).join('')}
         <label class="agadd">📷<input type="file" id="agP" accept="image/*" multiple style="display:none"></label></div>
       <div class="row" style="margin-top:14px"><button class="btn primary grow" id="agSave">Speichern</button></div>
-      ${isNew ? '' : `<div class="row" style="margin-top:8px"><button class="btn grow" id="agMove">Pin verschieben</button><button class="btn grow" id="agShow">Auf dem Plan</button></div>
+      ${isNew ? '' : `${a.planId ? '<div class="row" style="margin-top:8px"><button class="btn grow" id="agMove">Pin verschieben</button><button class="btn grow" id="agShow">Auf dem Plan</button></div>' : ''}
       <button class="btn block" id="agNote" style="margin-top:8px">Als Notiz übernehmen</button>
       <button class="btn danger block" id="agDel" style="margin-top:14px">Aufgabe löschen</button>`}`);
     const read = () => { a.titel = $('#agT').value.trim(); a.text = $('#agB').value.trim(); a.wer = $('#agW').value.trim(); a.faellig = $('#agD').value; a.raum = $('#agR').value.trim(); };
-    $('#agx').onclick = () => { closeSheet(); renderPlaene(); };
+    $('#agx').onclick = () => { closeSheet(); back(); };
     document.querySelectorAll('#agS [data-s]').forEach(b => b.onclick = () => { read(); a.status = b.dataset.s; if (a.status === 'erledigt' && !a.done) a.done = Date.now(); draw(); });
     $('#agP').onchange = async () => { read(); for (const f of Array.from($('#agP').files).slice(0, 10)) { try { a.fotos.push(await photoToDataUrl(f)); } catch (e) { console.error(e); } } draw(); };
     document.querySelectorAll('[data-fdel]').forEach(b => b.onclick = () => { if (!confirm('Foto entfernen?')) return; read(); a.fotos.splice(+b.dataset.fdel, 1); draw(); });
     document.querySelectorAll('[data-big]').forEach(im => im.onclick = () => { const w = window.open(); if (w) { w.document.write(`<title>Foto</title><body style="margin:0;background:#000"><img src="${im.src}" style="width:100%">`); } });
-    $('#agSave').onclick = async () => { read(); if (!a.titel) { toast('Bitte kurz eintragen, was zu tun ist'); $('#agT').focus(); return; } await saveAufgabe(a); closeSheet(); PV.hl = a.id; renderPlaene(); toast('Aufgabe gespeichert'); };
+    $('#agSave').onclick = async () => { read(); if (!a.titel) { toast('Bitte kurz eintragen, was zu tun ist'); $('#agT').focus(); return; } await saveAufgabe(a); closeSheet(); if (a.planId) PV.hl = a.id; back(); toast(L + ' gespeichert'); };
     if (!isNew) {
-      $('#agMove').onclick = async () => { read(); await saveAufgabe(a); closeSheet(); await renderPlaene(); pvMode('move', a.id); pvFocus(a); };
-      $('#agShow').onclick = async () => { read(); await saveAufgabe(a); closeSheet(); await renderPlaene(); pvFocus(a); };
+      if (a.planId) {
+      $('#agMove').onclick = async () => { read(); await saveAufgabe(a); closeSheet(); if (S.tab !== 'plaene') { S.planId = a.planId; document.querySelector('nav.tabs button[data-tab="plaene"]').click(); await new Promise(r => setTimeout(r, 500)); } else await renderPlaene(); pvMode('move', a.id); pvFocus(a); };
+      $('#agShow').onclick = async () => { read(); await saveAufgabe(a); closeSheet(); if (S.tab === 'plaene') { await renderPlaene(); pvFocus(a); } else { S.planId = a.planId; PV.focusNext = a; document.querySelector('nav.tabs button[data-tab="plaene"]').click(); } };
+      }
       $('#agNote').onclick = async () => { read(); await saveAufgabe(a);
         await saveNote({ id: uid(), projectId: S.p.id, text: `Aufgabe ${a.nr}: ${a.titel}${a.raum ? ' (' + a.raum + ')' : ''}${a.text ? '\n' + a.text : ''}`, date: todayISO(), created: Date.now() }); toast('Als Notiz gespeichert'); };
-      $('#agDel').onclick = async () => { if (!confirm(`Aufgabe ${a.nr} löschen?`)) return; await DB.del('aufgaben', a.id); S.aufgaben = S.aufgaben.filter(x => x.id !== a.id); changed(); closeSheet(); renderPlaene(); };
+      $('#agDel').onclick = async () => { if (!confirm(`${L} ${a.nr} löschen?`)) return; await DB.del('aufgaben', a.id); S.aufgaben = S.aufgaben.filter(x => x.id !== a.id); changed(); closeSheet(); back(); };
     }
     if (isNew) setTimeout(() => $('#agT')?.focus(), 250);
   };
   draw();
+}
+
+
+/* ---------- To-do-Liste (eigene Kategorie, mit Fotos). Technisch Aufgaben ohne Plan – Aufgaben aus Plänen erscheinen mit 📍 ---------- */
+async function renderTodo(m) {
+  if (!S.plaene) await loadPlaene();
+  const f = S.todoFilter || 'offen';
+  const all = (S.aufgaben || []); const open = x => x.status !== 'erledigt';
+  const list = all.filter(x => f === 'alle' || (f === 'offen' ? open(x) : !open(x)))
+    .sort((a, b) => (open(b) - open(a)) || (a.faellig || '9999').localeCompare(b.faellig || '9999') || (open(a) ? b.created - a.created : (b.done || b.updated) - (a.done || a.updated)));
+  const planName = id => (S.plaene || []).find(p => p.id === id)?.name || 'Plan';
+  m.insertAdjacentHTML('beforeend', `
+    <div class="card" style="padding:10px 12px"><div class="row" style="gap:6px"><input class="i grow" id="tdIn" placeholder="Neues To-do …" enterkeyhint="done" autocomplete="off">
+      <label class="btn" style="padding:6px 12px;display:flex;align-items:center" title="mit Foto">📷<input type="file" id="tdPh" accept="image/*" multiple style="display:none"></label>
+      <button class="btn primary" id="tdAdd" style="padding:6px 14px">+</button></div></div>
+    <div class="seg" style="margin:4px 0 10px">${[['offen', 'Offen'], ['erledigt', 'Erledigt'], ['alle', 'Alle']].map(([k, t]) => `<button data-tf="${k}" class="${f === k ? 'on' : ''}">${t} ${all.filter(x => k === 'alle' || (k === 'offen' ? open(x) : !open(x))).length}</button>`).join('')}</div>
+    ${list.length ? `<div class="card" style="padding:2px 12px">${list.map(a => `<div class="td" data-td="${a.id}">
+        <button class="tdc ${open(a) ? '' : 'on'}" data-tdc="${a.id}" style="${a.status === 'arbeit' ? 'border-color:' + AUFG_ST.arbeit.c : ''}" title="erledigt">${open(a) ? '' : '✓'}</button>
+        <div class="grow tdt"><div class="${open(a) ? '' : 'done'}">${esc(a.titel || 'To-do')}</div>
+          <div class="small muted">${[a.planId ? '📍 ' + esc(planName(a.planId)) + ' #' + a.nr : '', a.status === 'arbeit' ? '<span style="color:' + AUFG_ST.arbeit.c + '">in Arbeit</span>' : '', esc(a.raum || ''), esc(a.wer || ''),
+            a.faellig ? `<span style="${open(a) && a.faellig < todayISO() ? 'color:var(--neg,#e03131);font-weight:600' : ''}">bis ${fmtDateShort(a.faellig)}</span>` : '', a.text ? esc(a.text.split('\n')[0].slice(0, 60)) : ''].filter(Boolean).join(' · ')}</div></div>
+        ${(a.fotos || []).length ? `<div class="tdph"><img src="${a.fotos[0]}" alt="">${a.fotos.length > 1 ? `<span>${a.fotos.length}</span>` : ''}</div>` : ''}</div>`).join('')}</div>`
+      : `<div class="empty">${f === 'offen' ? (all.length ? 'Alles erledigt 👍' : 'Noch keine To-dos. Oben eintippen – mit 📷 gleich ein Foto dazu.') : 'Nichts in diesem Filter.'}</div>`}
+    ${all.some(x => !x.planId && !open(x)) && f !== 'offen' ? '<button class="btn danger block" id="tdClr" style="margin-top:12px">Erledigte To-dos löschen</button>' : ''}`);
+  const nr = () => Math.max(0, ...(S.aufgaben || []).map(a => a.nr || 0)) + 1;
+  const mk = (titel, fotos = []) => ({ id: uid(), projectId: S.p.id, planId: null, x: 0, y: 0, nr: nr(), titel, text: '', status: 'offen', wer: '', faellig: '', raum: '', fotos, created: Date.now() });
+  const add = async () => { const t = $('#tdIn').value.trim(); if (!t) { $('#tdIn').focus(); return; } await saveAufgabe(mk(t)); S.todoFilter = 'offen'; renderNotizen(); setTimeout(() => $('#tdIn')?.focus(), 50); };
+  $('#tdAdd').onclick = add; $('#tdIn').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+  $('#tdPh').onchange = async () => { const fs = []; for (const fl of Array.from($('#tdPh').files).slice(0, 10)) { try { fs.push(await photoToDataUrl(fl)); } catch (e) { console.error(e); } }
+    if (!fs.length) return; const t = $('#tdIn').value.trim();
+    const a = mk(t || '', fs); if (t) { await saveAufgabe(a); renderNotizen(); toast('To-do mit Foto gespeichert'); } else openAufgabe(a, true); };
+  m.querySelectorAll('[data-tf]').forEach(b => b.onclick = () => { S.todoFilter = b.dataset.tf; renderNotizen(); });
+  m.querySelectorAll('[data-tdc]').forEach(b => b.onclick = async e => { e.stopPropagation(); const a = S.aufgaben.find(x => x.id === b.dataset.tdc); if (!a) return;
+    const done = a.status !== 'erledigt'; a.status = done ? 'erledigt' : 'offen'; a.done = done ? Date.now() : null; await saveAufgabe(a);
+    b.classList.toggle('on', done); b.textContent = done ? '✓' : ''; b.closest('.td').querySelector('.tdt > div').classList.toggle('done', done);
+    if (done) toast(`Erledigt: ${esc(a.titel || 'To-do')}`, 1800); setTimeout(() => { if (S.tab === 'notizen' && S.noteView === 'todo') renderNotizen(); }, 900); });
+  m.querySelectorAll('[data-td]').forEach(el => el.onclick = () => openAufgabe(S.aufgaben.find(x => x.id === el.dataset.td)));
+  if ($('#tdClr')) $('#tdClr').onclick = async () => { const del = S.aufgaben.filter(x => !x.planId && x.status === 'erledigt'); if (!confirm(`${del.length} erledigte To-dos löschen? (Aufgaben auf Plänen bleiben)`)) return;
+    for (const a of del) await DB.del('aufgaben', a.id); S.aufgaben = S.aufgaben.filter(x => !del.includes(x)); changed(); renderNotizen(); };
 }
 
 /* ---------- Pläne verwalten ---------- */
@@ -4191,7 +4242,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { addPlanFiles, exportPlanPdf, PV, buildWeekPack, packWeeks, HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { renderTodo, addPlanFiles, exportPlanPdf, PV, buildWeekPack, packWeeks, HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
