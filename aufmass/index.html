@@ -1515,6 +1515,12 @@ function renderErfassen() {
 }
 
 /* ----- Eingabeformular (neu / bearbeiten) ----- */
+/** Räume für Vorschläge: zuletzt benutzte (Einträge, To-dos) zuerst, dann das Raumbuch */
+function roomsRecentFirst() {
+  const recent = [...(S.entries || []).map(e => [e.raum, e.created || 0]), ...(S.aufgaben || []).map(a => [a.raum, a.updated || a.created || 0])]
+    .filter(x => x[0]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  return [...new Set([...recent, ...(S.p.rooms || [])])];
+}
 function roomSuggest(input, box, list, onPick) {
   const show = () => {
     const v = norm(input.value);
@@ -3661,13 +3667,16 @@ async function openAufgabe(a, isNew) {
       <label class="f">Status</label><div class="seg" id="agS">${Object.entries(AUFG_ST).map(([k, v]) => `<button data-s="${k}" class="${a.status === k ? 'on' : ''}">${v.t}</button>`).join('')}</div>
       <div class="row"><div class="grow"><label class="f">Zuständig</label><input class="i" id="agW" list="agWl" value="${esc(a.wer)}"><datalist id="agWl">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
         <div style="width:44%"><label class="f">Fällig</label><input class="i" id="agD" type="date" value="${esc(a.faellig)}"></div></div>
-      <label class="f">Raum</label><input class="i" id="agR" list="agRl" value="${esc(a.raum)}" placeholder="z. B. B104"><datalist id="agRl">${(S.p.rooms || []).slice(0, 1500).map(r => `<option value="${esc(r)}">`).join('')}</datalist>
+      <label class="f">Raum</label><input class="i" id="agR" value="${esc(a.raum)}" placeholder="z. B. B104" autocomplete="off"><div class="sugg hidden" id="agRs"></div>
       <label class="f">Fotos</label><div class="agph">${a.fotos.map((f, i) => `<div><img src="${f}" data-big="${i}"><button class="nsx" data-fdel="${i}">✕</button></div>`).join('')}
         <label class="agadd">📷<input type="file" id="agP" accept="image/*" multiple style="display:none"></label></div>
       <div class="row" style="margin-top:14px"><button class="btn primary grow" id="agSave">Speichern</button></div>
       ${isNew ? '' : `${a.planId ? '<div class="row" style="margin-top:8px"><button class="btn grow" id="agMove">Pin verschieben</button><button class="btn grow" id="agShow">Auf dem Plan</button></div>' : ''}
       <button class="btn block" id="agNote" style="margin-top:8px">Als Notiz übernehmen</button>
       <button class="btn danger block" id="agDel" style="margin-top:14px">Aufgabe löschen</button>`}`);
+    roomSuggest($('#agR'), $('#agRs'), roomsRecentFirst());
+    if (!a.raum) $('#agT').addEventListener('input', () => { if ($('#agR').dataset.touched) return; const r = findRoom(S.p, $('#agT').value + ' ' + $('#agB').value); $('#agR').value = r ? r.raum : ''; });
+    $('#agR').addEventListener('input', () => { $('#agR').dataset.touched = '1'; });
     const read = () => { a.titel = $('#agT').value.trim(); a.text = $('#agB').value.trim(); a.wer = $('#agW').value.trim(); a.faellig = $('#agD').value; a.raum = $('#agR').value.trim(); };
     $('#agx').onclick = () => { closeSheet(); back(); };
     document.querySelectorAll('#agS [data-s]').forEach(b => b.onclick = () => { read(); a.status = b.dataset.s; if (a.status === 'erledigt' && !a.done) a.done = Date.now(); draw(); });
@@ -3701,7 +3710,8 @@ async function renderTodo(m) {
   m.insertAdjacentHTML('beforeend', `
     <div class="card" style="padding:10px 12px"><div class="row" style="gap:6px"><input class="i grow" id="tdIn" placeholder="Neues To-do …" enterkeyhint="done" autocomplete="off">
       <label class="btn" style="padding:6px 12px;display:flex;align-items:center" title="mit Foto">📷<input type="file" id="tdPh" accept="image/*" multiple style="display:none"></label>
-      <button class="btn primary" id="tdAdd" style="padding:6px 14px">+</button></div></div>
+      <button class="btn primary" id="tdAdd" style="padding:6px 14px">+</button></div>
+      <input class="i" id="tdR" placeholder="Raum (optional – wird aus dem Text erkannt)" autocomplete="off" style="margin-top:6px;min-height:40px;font-size:15px"><div class="sugg hidden" id="tdRs"></div></div>
     <div class="seg" style="margin:4px 0 10px">${[['offen', 'Offen'], ['erledigt', 'Erledigt'], ['alle', 'Alle']].map(([k, t]) => `<button data-tf="${k}" class="${f === k ? 'on' : ''}">${t} ${all.filter(x => k === 'alle' || (k === 'offen' ? open(x) : !open(x))).length}</button>`).join('')}</div>
     ${list.length ? `<div class="card" style="padding:2px 12px">${list.map(a => `<div class="td" data-td="${a.id}">
         <button class="tdc ${open(a) ? '' : 'on'}" data-tdc="${a.id}" style="${a.status === 'arbeit' ? 'border-color:' + AUFG_ST.arbeit.c : ''}" title="erledigt">${open(a) ? '' : '✓'}</button>
@@ -3713,11 +3723,15 @@ async function renderTodo(m) {
     ${all.some(x => !x.planId && !open(x)) && f !== 'offen' ? '<button class="btn danger block" id="tdClr" style="margin-top:12px">Erledigte To-dos löschen</button>' : ''}`);
   const nr = () => Math.max(0, ...(S.aufgaben || []).map(a => a.nr || 0)) + 1;
   const mk = (titel, fotos = []) => ({ id: uid(), projectId: S.p.id, planId: null, x: 0, y: 0, nr: nr(), titel, text: '', status: 'offen', wer: '', faellig: '', raum: '', fotos, created: Date.now() });
-  const add = async () => { const t = $('#tdIn').value.trim(); if (!t) { $('#tdIn').focus(); return; } await saveAufgabe(mk(t)); S.todoFilter = 'offen'; renderNotizen(); setTimeout(() => $('#tdIn')?.focus(), 50); };
+  const raumNow = () => $('#tdR').value.trim();
+  roomSuggest($('#tdR'), $('#tdRs'), roomsRecentFirst());
+  $('#tdR').addEventListener('input', () => { $('#tdR').dataset.touched = $('#tdR').value ? '1' : ''; });
+  $('#tdIn').addEventListener('input', () => { if ($('#tdR').dataset.touched) return; const r = findRoom(S.p, $('#tdIn').value); $('#tdR').value = r ? r.raum : ''; });
+  const add = async () => { const t = $('#tdIn').value.trim(); if (!t) { $('#tdIn').focus(); return; } const a = mk(t); a.raum = raumNow(); await saveAufgabe(a); S.todoFilter = 'offen'; renderNotizen(); setTimeout(() => $('#tdIn')?.focus(), 50); };
   $('#tdAdd').onclick = add; $('#tdIn').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
   $('#tdPh').onchange = async () => { const fs = []; for (const fl of Array.from($('#tdPh').files).slice(0, 10)) { try { fs.push(await photoToDataUrl(fl)); } catch (e) { console.error(e); } }
     if (!fs.length) return; const t = $('#tdIn').value.trim();
-    const a = mk(t || '', fs); if (t) { await saveAufgabe(a); renderNotizen(); toast('To-do mit Foto gespeichert'); } else openAufgabe(a, true); };
+    const a = mk(t || '', fs); a.raum = raumNow(); if (t) { await saveAufgabe(a); renderNotizen(); toast('To-do mit Foto gespeichert'); } else openAufgabe(a, true); };
   m.querySelectorAll('[data-tf]').forEach(b => b.onclick = () => { S.todoFilter = b.dataset.tf; renderNotizen(); });
   m.querySelectorAll('[data-tdc]').forEach(b => b.onclick = async e => { e.stopPropagation(); const a = S.aufgaben.find(x => x.id === b.dataset.tdc); if (!a) return;
     const done = a.status !== 'erledigt'; a.status = done ? 'erledigt' : 'offen'; a.done = done ? Date.now() : null; await saveAufgabe(a);
