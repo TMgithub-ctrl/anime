@@ -164,6 +164,9 @@ details.long div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:a
 .lvn{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600;font-size:13px;white-space:nowrap}
 .lvc{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}.lvc b{color:var(--ok)}
 .lvlong{white-space:pre-wrap;font-size:13.5px;line-height:1.45;margin:8px 0 2px;max-height:260px;overflow:auto}
+.lvwg{border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--panel)}
+.lvwg>summary{display:flex;align-items:center;gap:6px;padding:9px 11px;cursor:pointer;list-style:none;font-size:14.5px}.lvwg>summary::-webkit-details-marker{display:none}
+.lvwe{display:flex;gap:10px;align-items:center;padding:8px 11px;border-top:1px solid var(--line);font-size:13.5px;cursor:pointer}
 .lvbar{height:4px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden;max-width:180px}.lvbar i{display:block;height:100%;background:var(--ok)}
 .seg:has(> button:nth-child(5)) button{font-size:12px;padding:8px 1px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .segn{display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:var(--accent-text);font-size:11px;line-height:16px}
@@ -1543,6 +1546,7 @@ function openLvBrowser(state = S.lvb || (S.lvb = { q: '', f: 'alle', open: {} })
         <div class="small muted">${x.L ? `LV ${fmt(x.L)} ${esc(x.unit)}` : esc(x.unit || '')}${d ? ` · <b style="color:var(--ok)">erfasst ${fmt(d)}</b>` : ''}${lv.pos?.[x.pos]?.page ? ` · S. ${pr(lv.pos[x.pos].page)}` : ''}</div>
         ${d && x.L ? `<div class="lvbar"><i style="width:${pct}%"></i></div>` : ''}</div></summary>
       ${lt ? `<div class="lvlong">${esc(lt)}</div>` : '<div class="small muted" style="margin:6px 0">Kein Langtext im LV.</div>'}
+      ${d ? `<div class="lvwo" data-wo="${esc(x.pos)}"></div>` : ''}
       <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary grow lvgo" data-pos="${esc(x.pos)}">Erfassen</button><button class="btn lvti" data-pos="${esc(x.pos)}">Titel ›</button></div></details>`; };
   let total = 0;
   const html = tree.map(B => {
@@ -1571,7 +1575,24 @@ function openLvBrowser(state = S.lvb || (S.lvb = { q: '', f: 'alle', open: {} })
   $('#lvbNone').onclick = () => { document.querySelectorAll('#lvbBody details').forEach(d => d.open = false); state.open = {}; };
   wireLvBody(state);
 }
+/** Wo wurde die Position schon aufgemessen? – nach Raum oder Stromkreis gruppiert, Einträge antippbar */
+function lvWhere(box, pos, state) {
+  const x = posMap().get(pos); const by = state.wo || 'raum';
+  const es = S.entries.filter(e => e.pos === pos).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+  const key = e => by === 'raum' ? (e.raum || 'ohne Raum') : (e.sk || 'ohne Stromkreis');
+  const g = new Map(); for (const e of es) { const k = key(e); (g.get(k) || g.set(k, []).get(k)).push(e); }
+  const groups = [...g.entries()].sort((a, b) => a[0].localeCompare(b[0], 'de', { numeric: true }));
+  box.innerHTML = `<div class="row" style="margin:10px 0 6px;gap:8px"><b class="grow small">Aufgemessen in ${groups.length} ${by === 'raum' ? (groups.length === 1 ? 'Raum' : 'Räumen') : (groups.length === 1 ? 'Stromkreis' : 'Stromkreisen')}</b>
+      <div class="seg" style="margin:0;flex:none"><button data-wb="raum" class="${by === 'raum' ? 'on' : ''}" style="padding:5px 10px;font-size:12.5px;white-space:nowrap">Raum</button><button data-wb="sk" class="${by === 'sk' ? 'on' : ''}" style="padding:5px 10px;font-size:12.5px;white-space:nowrap">Stromkreis</button></div></div>
+    ${groups.map(([k, list]) => { const sum = list.reduce((a, e) => a + e.qty, 0);
+      return `<details class="lvwg"><summary><span class="grow">${esc(k)}</span><b>${fmt(sum)} ${esc(x?.unit || '')}</b><span class="muted small" style="margin-left:6px">${list.length}×</span></summary>
+        ${list.map(e => `<div class="lvwe" data-eid="${e.id}"><span class="muted">${fmtDateShort(e.date)}</span><span class="grow">${esc(by === 'raum' ? (e.sk ? 'SK ' + e.sk : '') : e.raum)}${e.note ? ` <span class="muted">· ${esc(e.note.slice(0, 40))}</span>` : ''}</span><b>${fmt(e.qty)}</b></div>`).join('')}</details>`; }).join('')}`;
+  box.querySelectorAll('[data-wb]').forEach(b => b.onclick = ev => { ev.preventDefault(); state.wo = b.dataset.wb; document.querySelectorAll('#lvbBody .lvwo').forEach(o => o.dataset.done = ''); lvWhere(box, pos, state); });
+  box.querySelectorAll('[data-eid]').forEach(el => el.onclick = () => openEntryForm({ entry: S.entries.find(e => e.id === el.dataset.eid), onSaved: () => openLvBrowser(state) }));
+  box.dataset.done = by;
+}
 function wireLvBody(state) {
+  document.querySelectorAll('#lvbBody details.lvp').forEach(d => d.addEventListener('toggle', () => { const w = d.querySelector('.lvwo'); if (d.open && w && w.dataset.done !== (state.wo || 'raum')) lvWhere(w, d.dataset.p, state); }));
   document.querySelectorAll('#lvbBody details.lvb, #lvbBody details.lvt').forEach(d => d.addEventListener('toggle', () => { if (!state.q) state.open[d.dataset.k] = d.open; }));
   document.querySelectorAll('#lvbBody .lvgo').forEach(b => b.onclick = () => openEntryForm({ pos: b.dataset.pos, onSaved: () => openLvBrowser(state) }));
   document.querySelectorAll('#lvbBody .lvti').forEach(b => b.onclick = () => openTitle(posTitle(S.p, b.dataset.pos).key, () => openLvBrowser(state)));
