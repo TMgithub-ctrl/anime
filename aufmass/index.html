@@ -149,6 +149,22 @@ details.long div{white-space:pre-wrap;margin-top:6px;max-height:260px;overflow:a
 .seg{display:flex;background:var(--panel2);border-radius:11px;padding:3px;gap:3px;margin-bottom:12px}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 4px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
 .seg button.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.lvbtop{position:sticky;top:-18px;z-index:3;background:var(--panel);padding:8px 0 10px;margin:0 0 6px;border-bottom:1px solid var(--line)}
+#lvbBody details>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px}
+#lvbBody details>summary::-webkit-details-marker{display:none}
+#lvbBody details.lvb{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--panel);overflow:hidden}
+#lvbBody details.lvb>summary{padding:12px;font-weight:700;background:var(--panel2)}
+#lvbBody details.lvt{border-top:1px solid var(--line)}
+#lvbBody details.lvt>summary{padding:11px 12px 11px 20px;font-weight:600}
+#lvbBody details.lvb>summary::before,#lvbBody details.lvt>summary::before{content:'›';display:inline-block;transition:transform .15s;color:var(--muted);font-weight:700;width:10px}
+#lvbBody details[open].lvb>summary::before,#lvbBody details[open].lvt>summary::before{transform:rotate(90deg)}
+#lvbBody details.lvp{border-top:1px solid var(--line);padding:9px 12px 9px 32px}
+#lvbBody details.lvp>summary{align-items:flex-start}
+#lvbBody details[open].lvp{background:var(--panel2)}
+.lvn{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600;font-size:13px;white-space:nowrap}
+.lvc{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}.lvc b{color:var(--ok)}
+.lvlong{white-space:pre-wrap;font-size:13.5px;line-height:1.45;margin:8px 0 2px;max-height:260px;overflow:auto}
+.lvbar{height:4px;border-radius:2px;background:var(--line);margin-top:5px;overflow:hidden;max-width:180px}.lvbar i{display:block;height:100%;background:var(--ok)}
 .seg:has(> button:nth-child(5)) button{font-size:12px;padding:8px 1px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .segn{display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:var(--accent-text);font-size:11px;line-height:16px}
 .td{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer}.td:first-child{border-top:0}
@@ -1483,13 +1499,92 @@ function resultHTML(x) {
     <div class="q">${e ? `<b>${fmt(e)} ${esc(x.unit)}</b>jetzt<br>` : ''}Rest <span class="${rest < 0 ? 'neg' : ''}">${fmt(rest)}</span><br>LV ${fmt(x.L)} ${esc(x.unit)}</div>
   </div>`;
 }
+
+/* ---------- LV von Hand durchblättern: Bereich → Titel → Position, mit Filter ---------- */
+function lvTree(p) {
+  const lv = p.lv || {}; const tree = new Map();
+  for (const x of p.positions) {
+    const t = posTitle(p, x.pos); const parts = x.pos.split('.');
+    const bk = parts[0] + '.', tk = parts.length > 2 && parts[1] !== '00' ? parts[0] + '.' + parts[1] + '.' : null;
+    if (!tree.has(bk)) tree.set(bk, { key: bk, name: t.bereich || '', titles: new Map(), direct: [] });
+    const B = tree.get(bk);
+    if (tk) { if (!B.titles.has(tk)) B.titles.set(tk, { key: tk, name: t.titel || '', items: [] }); B.titles.get(tk).items.push(x); }
+    else B.direct.push(x);
+  }
+  const byPos = (a, b) => a.pos.localeCompare(b.pos, 'de', { numeric: true });
+  const out = [...tree.values()].sort((a, b) => a.key.localeCompare(b.key, 'de', { numeric: true }));
+  for (const B of out) { B.direct.sort(byPos); B.titles = [...B.titles.values()].sort((a, b) => a.key.localeCompare(b.key, 'de', { numeric: true })); B.titles.forEach(T => T.items.sort(byPos)); }
+  return out;
+}
+const LVB_HAY = new WeakMap();
+function openLvBrowser(state = S.lvb || (S.lvb = { q: '', f: 'alle', open: {} })) {
+  const p = S.p, lv = p.lv || {};
+  const pr = n => lv.printed?.[n] ?? n;
+  const done = new Map(); for (const e of S.entries) done.set(e.pos, (done.get(e.pos) || 0) + e.qty);
+  const use = p._use || new Map();
+  // Filter: Suche (mit Synonymen wie oben im Suchfeld) + Positionsnummer + Titelnamen
+  let hit = null;
+  const q = state.q.trim();
+  if (q) {
+    hit = new Set();
+    const nq = norm(q);
+    if (/^\d{1,2}(\.\d{0,2}){0,2}/.test(q.trim())) for (const x of p.positions) if (x.pos.startsWith(q.trim())) hit.add(x.pos);
+    // erst streng: alle Wörter müssen in Nummer, Text, Langtext oder Titel vorkommen – sonst die unscharfe Suche (Synonyme, Tippfehler)
+    const toks = nq.split(' ').filter(Boolean); const hay = x => { const t = posTitle(p, x.pos);
+      if (!LVB_HAY.has(x)) LVB_HAY.set(x, norm([x.pos, x.text, x.fullText, lv.pos?.[x.pos]?.long || lv.pos?.[x.pos.replace(/[a-z]+$/i, '')]?.long || ''].join(' '))); return LVB_HAY.get(x) + ' ' + norm(t.titel + ' ' + t.bereich); };
+    const strict = p.positions.filter(x => toks.every(tk => hay(x).includes(tk)));
+    if (strict.length) strict.forEach(x => hit.add(x.pos)); else for (const o of searchPositions(p, q, 1000).results) hit.add(o.x.pos);
+  }
+  const keep = x => (!hit || hit.has(x.pos)) && (state.f === 'alle' || (state.f === 'erfasst' ? done.has(x.pos) : state.f === 'offen' ? !done.has(x.pos) : (use.get(x.pos) || 0) >= 2));
+  const tree = lvTree(p);
+  const posRow = x => { const d = done.get(x.pos) || 0; const lt = lv.pos?.[x.pos]?.long || lv.pos?.[x.pos.replace(/[a-z]+$/i, '')]?.long || (x.fullText !== x.text ? x.fullText : '');
+    const pct = x.L ? Math.min(100, Math.round(d / x.L * 100)) : 0;
+    return `<details class="lvp" data-p="${esc(x.pos)}"><summary><div class="grow"><span class="lvn">${esc(x.pos)}</span> ${esc(x.text)}
+        <div class="small muted">${x.L ? `LV ${fmt(x.L)} ${esc(x.unit)}` : esc(x.unit || '')}${d ? ` · <b style="color:var(--ok)">erfasst ${fmt(d)}</b>` : ''}${lv.pos?.[x.pos]?.page ? ` · S. ${pr(lv.pos[x.pos].page)}` : ''}</div>
+        ${d && x.L ? `<div class="lvbar"><i style="width:${pct}%"></i></div>` : ''}</div></summary>
+      ${lt ? `<div class="lvlong">${esc(lt)}</div>` : '<div class="small muted" style="margin:6px 0">Kein Langtext im LV.</div>'}
+      <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary grow lvgo" data-pos="${esc(x.pos)}">Erfassen</button><button class="btn lvti" data-pos="${esc(x.pos)}">Titel ›</button></div></details>`; };
+  let total = 0;
+  const html = tree.map(B => {
+    const tParts = B.titles.map(T => { const its = T.items.filter(keep); if (!its.length) return ''; total += its.length; const dn = its.filter(x => done.has(x.pos)).length;
+      const op = q || state.open[T.key];
+      return `<details class="lvt" data-k="${T.key}" ${op ? 'open' : ''}><summary><span class="lvn">${esc(T.key.replace(/\.$/, ''))}</span><span class="grow">${esc(T.name || 'Titel ' + T.key)}</span><span class="lvc">${dn ? `<b>${dn}</b>/` : ''}${its.length}</span></summary>${its.map(posRow).join('')}</details>`; }).join('');
+    const dir = B.direct.filter(keep); total += dir.length;
+    if (!tParts && !dir.length) return '';
+    const cnt = B.titles.reduce((a, T) => a + T.items.filter(keep).length, 0) + dir.length;
+    const op = q || state.open[B.key] || tree.length === 1;
+    return `<details class="lvb" data-k="${B.key}" ${op ? 'open' : ''}><summary><span class="lvn">${esc(B.key.replace(/\.$/, ''))}</span><span class="grow">${esc(B.name || 'Bereich ' + B.key)}</span><span class="lvc">${cnt}</span></summary>${dir.map(posRow).join('')}${tParts}</details>`;
+  }).join('');
+  const sc = document.querySelector('#sheet')?.scrollTop || 0; const wasOpen = document.querySelector('#sheet.open #lvbQ');
+  const body = `<div class="muted small" style="margin:2px 0 8px">${total} von ${p.positions.length} Positionen${lv.titles ? '' : ' · ohne LV-PDF nur nach Nummern gegliedert'}</div>${html || '<div class="empty">Nichts gefunden.</div>'}`;
+  if (wasOpen) { $('#lvbBody').innerHTML = body; wireLvBody(state); return; }
+  openSheet(`<div class="head"><div class="grow" style="font-weight:700;font-size:18px">Leistungsverzeichnis</div><button class="x" id="lvbx">×</button></div>
+    <div class="lvbtop"><input class="i" id="lvbQ" type="search" placeholder="Filtern: Wort, Nummer (03.02) oder Titel" value="${esc(state.q)}" autocomplete="off" autocorrect="off" spellcheck="false">
+      <div class="seg" style="margin:8px 0 0">${[['alle', 'Alle'], ['erfasst', 'Erfasst'], ['offen', 'Noch nicht'], ['haeufig', 'Häufig']].map(([k, t]) => `<button data-lf="${k}" class="${state.f === k ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <div class="row" style="gap:6px;margin-top:6px"><button class="btn grow" id="lvbAll" style="min-height:34px;font-size:13px">Alle aufklappen</button><button class="btn grow" id="lvbNone" style="min-height:34px;font-size:13px">Alle zuklappen</button></div></div>
+    <div id="lvbBody" style="min-height:70vh">${body}</div>`);
+  $('#sheet').scrollTop = sc;
+  $('#lvbx').onclick = closeSheet;
+  let t = null; $('#lvbQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { state.q = $('#lvbQ').value; openLvBrowser(state); }, 200); };
+  document.querySelectorAll('[data-lf]').forEach(b => b.onclick = () => { state.f = b.dataset.lf; document.querySelectorAll('[data-lf]').forEach(y => y.classList.toggle('on', y === b)); openLvBrowser(state); });
+  $('#lvbAll').onclick = () => { document.querySelectorAll('#lvbBody details.lvb, #lvbBody details.lvt').forEach(d => { d.open = true; state.open[d.dataset.k] = true; }); };
+  $('#lvbNone').onclick = () => { document.querySelectorAll('#lvbBody details').forEach(d => d.open = false); state.open = {}; };
+  wireLvBody(state);
+}
+function wireLvBody(state) {
+  document.querySelectorAll('#lvbBody details.lvb, #lvbBody details.lvt').forEach(d => d.addEventListener('toggle', () => { if (!state.q) state.open[d.dataset.k] = d.open; }));
+  document.querySelectorAll('#lvbBody .lvgo').forEach(b => b.onclick = () => openEntryForm({ pos: b.dataset.pos, onSaved: () => openLvBrowser(state) }));
+  document.querySelectorAll('#lvbBody .lvti').forEach(b => b.onclick = () => openTitle(posTitle(S.p, b.dataset.pos).key, () => openLvBrowser(state)));
+}
+
 function renderErfassen() {
   const m = $('#main');
   m.innerHTML = `
     <div class="search"><input class="i" id="q" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Position suchen, z. B. nym 3x1,5" value="${esc(S.q || '')}"></div>
     <div id="qInfo"></div>
     <div id="res"></div>
-    <div class="row" style="margin-top:14px"><button class="btn block" id="impBtn">Text einfügen (Bautagesbericht / Live Text)</button></div>`;
+    <div class="row" style="margin-top:14px;gap:8px"><button class="btn grow" id="lvbBtn">📖 LV durchblättern</button><button class="btn grow" id="impBtn">Text einfügen</button></div>`;
+  $('#lvbBtn').onclick = () => openLvBrowser();
   const q = $('#q');
   const run = () => {
     S.q = q.value; const box = $('#res'), info = $('#qInfo');
@@ -4256,7 +4351,7 @@ $('#syncPill').onclick = () => { S.tab = 'export'; render(); setTimeout(() => $(
 })();
 // für Tests
 window.__aufmass_getFirma = () => getFirma();
-window.__aufmass = { renderTodo, addPlanFiles, exportPlanPdf, PV, buildWeekPack, packWeeks, HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
+window.__aufmass = { openLvBrowser, renderTodo, addPlanFiles, exportPlanPdf, PV, buildWeekPack, packWeeks, HelferBox, boxScript, normHelfer, readHelferFile, openHelferImport, helferLink, buildNachweisDocx, buildBestellDocx, buildBerichtXlsx, addVorlagen, getVorlage, readVorlageInfo, noteToRows, newBericht, saveBericht, btbOpen, S, Sync, Aufmass, buildBestellPdf, parseNoteHours, noteToNachweis, buildNachweisPdf, getFirma, newNachweis, genBeschreibung, anToAufmass, noteSuggestions, parseImportLine, weekOf, weekByKey, parseTemplate, parseLVLines, layout, buildXlsm, searchPositions, norm };
 </script>
 </body>
 </html>
